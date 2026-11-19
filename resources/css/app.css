@@ -1,0 +1,293 @@
+@import "bootstrap/dist/css/bootstrap.min.css";
+@import "bootstrap-icons/font/bootstrap-icons.css";
+@import "jquery-ui-dist/jquery-ui.min.css";
+@import "select2/dist/css/select2.min.css";
+@import "select2-bootstrap-5-theme/dist/select2-bootstrap-5-theme.min.css";
+
+body {
+    font-family: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: #f4f6f9;
+    color: #1e293b;
+}
+
+/* jQuery UI Datepicker z-index au-dessus des modals Bootstrap */
+.ui-datepicker {
+    z-index: 2000 !important;
+    font-family: "Poppins", sans-serif !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.12) !important;
+}
+
+/* Cartes & formulaires professionnels */
+.card {
+    border-radius: 0.75rem;
+}
+
+.form-control,
+.form-select {
+    border-radius: 0.5rem;
+    border-color: #cbd5e1;
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.15);
+}
+
+.input-group-text {
+    border-radius: 0.5rem;
+    border-color: #cbd5e1;
+    background-color: #f8fafc;
+    color: #64748b;
+}
+
+.form-label {
+    font-weight: 600;
+    color: #334155;
+    margin-bottom: 0.35rem;
+}
+
+.btn {
+    border-radius: 0.5rem;
+    font-weight: 500;
+}
+
+/* Sidebar active state */
+.sidebar-link {
+    border-radius: 0.5rem;
+    color: #475569;
+    transition: all 0.15s ease;
+}
+
+.sidebar-link:hover {
+    background-color: #f1f5f9;
+    color: #0f172a;
+}
+
+.sidebar-link.active {
+    background-color: #eff6ff !important;
+    color: #1d4ed8 !important;
+    font-weight: 600;
+    border-left: 3px solid #1d4ed8;
+}
+
+/* Animations globales */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(28px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes floatSlow {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-6px);
+    }
+}
+
+@keyframes pulseSoft {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.45);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+    }
+}
+
+.hero-animate {
+    animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hero-animate-delay-1 {
+    animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+}
+
+.hero-animate-delay-2 {
+    animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both;
+}
+
+.hero-animate-delay-3 {
+    animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.45s both;
+}
+
+.float-slow {
+    animation: floatSlow 4.5s ease-in-out infinite;
+}
+
+.pulse-badge {
+    animation: pulseSoft 2.5s infinite;
+}
+
+.reveal-on-scroll {
+    opacity: 0;
+    transform: translateY(28px);
+    transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.reveal-on-scroll.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.hover-lift {
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hover-lift:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 1rem 2.25rem rgba(15, 23, 42, 0.12) !important;
+}
+
+.navbar-overlay-transition {
+    transition: background-color 0.35s ease, box-shadow 0.35s ease, padding 0.35s ease, backdrop-filter 0.35s ease;
+}
+
+.back-to-top-btn {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    width: 48px;
+    height: 48px;
+    z-index: 1050;
+    transition: transform 0.25s ease, background-color 0.25s ease;
+}
+
+.back-to-top-btn:hover {
+    transform: translateY(-4px) scale(1.06);
+}
+
+[dir="rtl"] .back-to-top-btn {
+    right: auto;
+    left: 1.5rem;
+}
+
+.fade-scale-enter-active,
+.fade-scale-leave-active {
+    transition: opacity 0.28s ease, transform 0.28s ease;
+}
+
+.fade-scale-enter-from,
+.fade-scale-leave-to {
+    opacity: 0;
+    transform: scale(0.75) translateY(10px);
+}
+
+/* Fix menu mobile illisible lorsqu'il est déplié sur le Hero */
+@media (max-width: 991.98px) {
+    .mobile-nav-collapse {
+        background: rgba(15, 23, 42, 0.97);
+        backdrop-filter: blur(14px);
+        border-radius: 1rem;
+        padding: 1rem 1.25rem;
+        margin-top: 0.75rem;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+    }
+}
+
+/* Témoignages empilés (inspiré du design moderne) */
+.testimonial-stack {
+    position: relative;
+    padding-bottom: 1rem;
+}
+
+.testimonial-card-back {
+    position: absolute;
+    inset: 0;
+    background: #ffffff;
+    border-radius: 1.25rem;
+    border: 1px solid rgba(99, 102, 241, 0.15);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+    pointer-events: none;
+}
+
+.testimonial-card-back-1 {
+    transform: translate(14px, 10px) rotate(1.5deg);
+    opacity: 0.85;
+    z-index: 1;
+}
+
+.testimonial-card-back-2 {
+    transform: translate(26px, 20px) rotate(3deg);
+    opacity: 0.55;
+    z-index: 0;
+}
+
+.testimonial-card-active {
+    position: relative;
+    z-index: 2;
+    border-radius: 1.25rem;
+    border: 1.5px solid transparent;
+    background:
+        linear-gradient(#ffffff, #ffffff) padding-box,
+        linear-gradient(135deg, rgba(245, 158, 11, 0.45), rgba(99, 102, 241, 0.75)) border-box;
+    box-shadow: 0 22px 48px rgba(79, 70, 229, 0.12);
+    transform: rotate(-1deg);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.testimonial-card-active:hover {
+    transform: rotate(0deg) translateY(-2px);
+}
+
+.avatar-stack-item {
+    width: 36px;
+    height: 36px;
+    border: 2px solid #ffffff;
+    margin-left: -10px;
+    font-size: 0.75rem;
+}
+
+.avatar-stack-item:first-child {
+    margin-left: 0;
+}
+
+.testi-fade-enter-active,
+.testi-fade-leave-active {
+    transition: opacity 0.38s ease, transform 0.38s ease;
+}
+
+.testi-fade-enter-from {
+    opacity: 0;
+    transform: translateX(16px);
+}
+
+.testi-fade-leave-to {
+    opacity: 0;
+    transform: translateX(-16px);
+}
+
+.search-dark-input::placeholder {
+    color: #94a3b8;
+    opacity: 1;
+}
+
+.mp-product-card {
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease;
+    border: 1px solid #e2e8f0 !important;
+}
+
+.mp-product-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 1rem 2rem rgba(15, 23, 42, 0.1) !important;
+    border-color: #93c5fd !important;
+}
+
+.mp-product-card .mp-card-img {
+    transition: transform 0.35s ease;
+}
+
+.mp-product-card:hover .mp-card-img {
+    transform: scale(1.04);
+}

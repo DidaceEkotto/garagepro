@@ -1,0 +1,31 @@
+<?php
+
+namespace App\Policies;
+
+use App\Models\Appointment;
+use App\Models\User;
+
+class AppointmentPolicy
+{
+    public function viewAny(User $user): bool
+    {
+        return $user->can('appointments.view');
+    }
+
+    public function view(User $user, Appointment $appointment): bool
+    {
+        return (int) $user->tenant_id === (int) $appointment->tenant_id
+            && $user->can('appointments.view');
+    }
+
+    public function create(User $user): bool
+    {
+        return $user->can('appointments.manage');
+    }
+
+    public function update(User $user, Appointment $appointment): bool
+    {
+        return (int) $user->tenant_id === (int) $appointment->tenant_id
+            && $user->can('appointments.manage');
+    }
+}
