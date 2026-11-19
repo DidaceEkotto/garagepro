@@ -4,8 +4,8 @@ import MarketplaceQuickViewModal from '@/Components/MarketplaceQuickViewModal.vu
 import { useI18n } from '@/composables/useI18n';
 import MarketplaceLayout from '@/Layouts/MarketplaceLayout.vue';
 import { useMarketplaceCart } from '@/composables/useMarketplaceCart';
-import { Head, Link } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { computed, reactive, ref } from 'vue';
 
 const { t } = useI18n();
 
@@ -24,6 +24,20 @@ const props = defineProps({
 const { addToCart } = useMarketplaceCart();
 
 const quickProduct = ref(null);
+const vehicleFilter = reactive({
+    vehicle_brand: props.filters?.vehicle_brand || '',
+    vehicle_model: props.filters?.vehicle_model || '',
+    vehicle_year: props.filters?.vehicle_year || '',
+});
+
+function applyVehicleFilter() {
+    router.get('/marketplace', {
+        ...props.filters,
+        vehicle_brand: vehicleFilter.vehicle_brand || undefined,
+        vehicle_model: vehicleFilter.vehicle_model || undefined,
+        vehicle_year: vehicleFilter.vehicle_year || undefined,
+    }, { preserveScroll: true });
+}
 
 const topBanner = computed(() => {
     if (props.banners?.top) {
@@ -87,6 +101,34 @@ function fmt(n) {
         </section>
 
         <div class="container py-4">
+            <!-- Recherche par véhicule (Marque / Modèle / Année) -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-3">
+                    <form class="row g-2 align-items-end" @submit.prevent="applyVehicleFilter">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold mb-1"><i class="bi bi-car-front text-primary me-1"></i>Marque</label>
+                            <input v-model="vehicleFilter.vehicle_brand" type="text" class="form-control form-control-sm" placeholder="Ex: Toyota, Peugeot..." />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold mb-1">Modèle</label>
+                            <input v-model="vehicleFilter.vehicle_model" type="text" class="form-control form-control-sm" placeholder="Ex: Corolla, 308..." />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-semibold mb-1">Année</label>
+                            <input v-model="vehicleFilter.vehicle_year" type="number" min="1950" max="2100" class="form-control form-control-sm" placeholder="2018" />
+                        </div>
+                        <div class="col-md-4 d-flex gap-2">
+                            <button type="submit" class="btn btn-primary btn-sm px-3 fw-semibold">
+                                <i class="bi bi-search me-1"></i>Filtrer par véhicule
+                            </button>
+                            <Link v-if="hasActiveFilters" href="/marketplace" class="btn btn-outline-secondary btn-sm">
+                                Réinitialiser
+                            </Link>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             <!-- Bannière publicitaire principale (gérée par l'Admin ou par défaut) -->
             <div v-if="topBanner" class="rounded-4 text-white p-4 p-md-5 mb-4 shadow-sm overflow-hidden" :style="bannerStyle(topBanner)">
                 <div class="row align-items-center g-3">

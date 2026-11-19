@@ -13,6 +13,8 @@ use App\Models\Product;
 use App\Models\ProductReview;
 use App\Models\SubCategory;
 use App\Models\Tenant;
+use App\Services\TenantContext;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -38,6 +40,9 @@ class MarketplaceController extends Controller
         $subCategoryId = $request->query('sub_category');
         $countryCode = $request->query('country');
         $condition = $request->query('condition');
+        $vehicleBrand = trim((string) $request->query('vehicle_brand', ''));
+        $vehicleModel = trim((string) $request->query('vehicle_model', ''));
+        $vehicleYear = $request->query('vehicle_year');
         $sort = $request->query('sort', 'recent');
 
         $query = Product::withoutTenantScope()
@@ -56,7 +61,31 @@ class MarketplaceController extends Controller
             ->when($categoryId, fn ($q) => $q->where('category_id', $categoryId))
             ->when($subCategoryId, fn ($q) => $q->where('sub_category_id', $subCategoryId))
             ->when($countryCode, fn ($q) => $q->where('country_code', strtoupper((string) $countryCode)))
-            ->when($condition, fn ($q) => $q->where('condition', $condition));
+            ->when($condition, fn ($q) => $q->where('condition', $condition))
+            ->when($vehicleBrand !== '', function ($q) use ($vehicleBrand) {
+                $q->where(function ($sub) use ($vehicleBrand) {
+                    $sub->where('vehicle_brand', 'like', "%{$vehicleBrand}%")
+                        ->orWhere('vehicle_compatibility', 'like', "%{$vehicleBrand}%");
+                });
+            })
+            ->when($vehicleModel !== '', function ($q) use ($vehicleModel) {
+                $q->where(function ($sub) use ($vehicleModel) {
+                    $sub->where('vehicle_model', 'like', "%{$vehicleModel}%")
+                        ->orWhere('vehicle_compatibility', 'like', "%{$vehicleModel}%");
+                });
+            })
+            ->when($vehicleYear && is_numeric($vehicleYear), function ($q) use ($vehicleYear) {
+                $y = (int) $vehicleYear;
+                $q->where(function ($sub) use ($y) {
+                    $sub->where(function ($range) use ($y) {
+                        $range->whereNotNull('vehicle_year_from')
+                            ->where('vehicle_year_from', '<=', $y)
+                            ->where(function ($end) use ($y) {
+                                $end->whereNull('vehicle_year_to')->orWhere('vehicle_year_to', '>=', $y);
+                            });
+                    })->orWhere('vehicle_compatibility', 'like', "%{$y}%");
+                });
+            });
 
         match ($sort) {
             'price_asc' => $query->orderBy('price'),
@@ -71,7 +100,7 @@ class MarketplaceController extends Controller
             ->orderBy('name')
             ->get();
 
-        $hasActiveFilters = $search !== '' || $categoryId || $subCategoryId || $countryCode || $condition;
+        $hasActiveFilters = $search !== '' || $categoryId || $subCategoryId || $countryCode || $condition || $vehicleBrand !== '' || $vehicleModel !== '' || ($vehicleYear !== null && $vehicleYear !== '');
 
         $bestSellers = Product::withoutTenantScope()
             ->with(['category', 'subCategory', 'tenant:id,name,city,country', 'country:code,name'])
@@ -134,6 +163,9 @@ class MarketplaceController extends Controller
                 'sub_category' => $subCategoryId ? (int) $subCategoryId : '',
                 'country' => $countryCode ?: '',
                 'condition' => $condition ?: '',
+                'vehicle_brand' => $vehicleBrand,
+                'vehicle_model' => $vehicleModel,
+                'vehicle_year' => $vehicleYear ?: '',
                 'sort' => $sort,
             ],
         ]);
@@ -254,6 +286,45 @@ class MarketplaceController extends Controller
                 'sort' => $sort,
             ],
         ]);
+    }
+
+    public function b2bSearch(Request $request, TenantContext $tenantContext): JsonResponse
+    {
+        $q = trim((string) $request->query('q', ''));
+        if (mb_strlen($q) < 2) {
+            return response()->json(['items' => []]);
+        }
+
+        $tenantId = $tenantContext->id();
+
+        $items = Product::withoutTenantScope()
+            ->with(['tenant:id,name,city,phone'])
+            ->where('is_published', true)
+            ->where('stock_quantity', '>', 0)
+            ->when($tenantId, fn ($query) => $query->where('tenant_id', '!=', $tenantId))
+            ->where(function ($sub) use ($q) {
+                $sub->where('title', 'like', "%{$q}%")
+                    ->orWhere('brand', 'like', "%{$q}%")
+                    ->orWhere('sku', 'like', "%{$q}%")
+                    ->orWhere('vehicle_compatibility', 'like', "%{$q}%");
+            })
+            ->orderByDesc('stock_quantity')
+            ->take(6)
+            ->get()
+            ->map(fn (Product $p) => [
+                'id' => $p->id,
+                'slug' => $p->slug,
+                'title' => $p->title,
+                'price' => $p->price,
+                'stock_quantity' => $p->stock_quantity,
+                'condition' => $p->condition,
+                'garage_name' => $p->tenant?->name,
+                'garage_city' => $p->tenant?->city,
+                'url' => route('marketplace.show', ['product' => $p->slug]),
+            ])
+            ->values();
+
+        return response()->json(['items' => $items]);
     }
 
     public function show(string $product): Response|RedirectResponse

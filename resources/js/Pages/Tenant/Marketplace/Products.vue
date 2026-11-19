@@ -25,6 +25,10 @@ const form = useForm({
     sku: '',
     brand: '',
     vehicle_compatibility: '',
+    vehicle_brand: '',
+    vehicle_model: '',
+    vehicle_year_from: '',
+    vehicle_year_to: '',
     condition: 'neuf',
     price: 15000,
     stock_quantity: 5,
@@ -42,7 +46,7 @@ function createProduct() {
     form.post('/marketplace-gestion/produits', {
         forceFormData: true,
         onSuccess: () => {
-            form.reset('title', 'sku', 'brand', 'vehicle_compatibility', 'description', 'images');
+            form.reset('title', 'sku', 'brand', 'vehicle_compatibility', 'vehicle_brand', 'vehicle_model', 'vehicle_year_from', 'vehicle_year_to', 'description', 'images');
             window.bootstrap?.Modal.getInstance(document.getElementById('modalAddMarketplaceProduct'))?.hide();
         },
     });
@@ -211,8 +215,27 @@ function deleteProduct(id) {
                         <input v-model="form.sku" type="text" class="form-control" />
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label small">Compatibilité véhicules</label>
+                        <label class="form-label small">Compatibilité véhicules (texte)</label>
                         <input v-model="form.vehicle_compatibility" type="text" class="form-control" placeholder="Toyota Hilux, Corolla..." />
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label small">Marque véhicule compatible</label>
+                        <input v-model="form.vehicle_brand" type="text" class="form-control" placeholder="Ex: Toyota" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Modèle véhicule compatible</label>
+                        <input v-model="form.vehicle_model" type="text" class="form-control" placeholder="Ex: Corolla" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Année min</label>
+                        <input v-model="form.vehicle_year_from" type="number" min="1950" max="2100" class="form-control" placeholder="2015" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Année max</label>
+                        <input v-model="form.vehicle_year_to" type="number" min="1950" max="2100" class="form-control" placeholder="2024" />
                     </div>
                 </div>
 

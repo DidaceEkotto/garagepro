@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 /**
  * Ordre de réparation (OR) avec suivi de diagnostic, tâches et totaux en FCFA.
@@ -33,6 +34,7 @@ class RepairOrder extends Model
         'reception_id',
         'assigned_mechanic_id',
         'order_number',
+        'tracking_token',
         'status',
         'priority',
         'diagnostic_started_at',
@@ -45,6 +47,24 @@ class RepairOrder extends Model
         'vat_amount',
         'total_ttc',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (RepairOrder $order) {
+            if (empty($order->tracking_token)) {
+                $order->tracking_token = Str::random(24);
+            }
+        });
+    }
+
+    public function ensureTrackingToken(): string
+    {
+        if (empty($this->tracking_token)) {
+            $this->update(['tracking_token' => Str::random(24)]);
+        }
+
+        return $this->tracking_token;
+    }
 
     protected function casts(): array
     {

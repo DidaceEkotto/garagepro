@@ -3,7 +3,7 @@ import FileDropzone from '@/Components/FileDropzone.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { computed, nextTick, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 const props = defineProps({
     receptions: Object,
@@ -73,10 +73,131 @@ watch(
     },
 );
 
+const OFFLINE_QUEUE_KEY = 'mboacar_offline_receptions_queue';
+const OFFLINE_DRAFT_KEY = 'mboacar_offline_reception_draft';
+const isOffline = ref(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+const offlineQueueCount = ref(0);
+const syncingOffline = ref(false);
+
+function loadQueue() {
+    try {
+        const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+        const list = raw ? JSON.parse(raw) : [];
+        return Array.isArray(list) ? list : [];
+    } catch {
+        return [];
+    }
+}
+
+function refreshQueueCount() {
+    offlineQueueCount.value = loadQueue().length;
+}
+
+function syncOfflineQueue() {
+    if (isOffline.value || syncingOffline.value) return;
+    const queue = loadQueue();
+    if (!queue.length) return;
+
+    syncingOffline.value = true;
+    const [nextItem, ...rest] = queue;
+    router.post('/receptions', nextItem, {
+        preserveScroll: true,
+        onSuccess: () => {
+            localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(rest));
+            refreshQueueCount();
+            syncingOffline.value = false;
+            if (rest.length > 0) syncOfflineQueue();
+        },
+        onError: () => {
+            syncingOffline.value = false;
+        },
+    });
+}
+
+function handleOnline() {
+    isOffline.value = false;
+    syncOfflineQueue();
+}
+
+function handleOffline() {
+    isOffline.value = true;
+}
+
+onMounted(() => {
+    refreshQueueCount();
+    try {
+        const draftRaw = localStorage.getItem(OFFLINE_DRAFT_KEY);
+        if (draftRaw) {
+            const draft = JSON.parse(draftRaw);
+            if (draft && typeof draft === 'object') {
+                Object.keys(draft).forEach((k) => {
+                    if (k in form && k !== 'photos') form[k] = draft[k];
+                });
+            }
+        }
+    } catch {
+        // Ignore corrupted draft
+    }
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    if (!isOffline.value && offlineQueueCount.value > 0) {
+        syncOfflineQueue();
+    }
+});
+
+onBeforeUnmount(() => {
+    window.removeEventListener('online', handleOnline);
+    window.removeEventListener('offline', handleOffline);
+});
+
+watch(
+    () => ({
+        agency_id: form.agency_id,
+        customer_id: form.customer_id,
+        vehicle_id: form.vehicle_id,
+        visit_reason: form.visit_reason,
+        mileage_in: form.mileage_in,
+        fuel_level: form.fuel_level,
+        belongings_left: form.belongings_left,
+        notes: form.notes,
+    }),
+    (val) => {
+        try {
+            localStorage.setItem(OFFLINE_DRAFT_KEY, JSON.stringify(val));
+        } catch {
+            // Ignore quota errors
+        }
+    },
+    { deep: true }
+);
+
 function submitReception() {
+    if (isOffline.value) {
+        const queue = loadQueue();
+        queue.push({
+            agency_id: form.agency_id,
+            customer_id: form.customer_id,
+            vehicle_id: form.vehicle_id,
+            visit_reason: form.visit_reason,
+            mileage_in: form.mileage_in,
+            fuel_level: form.fuel_level,
+            belongings_left: form.belongings_left,
+            courtesy_vehicle_id: form.courtesy_vehicle_id || null,
+            courtesy_deposit_amount: form.courtesy_deposit_amount || 0,
+            notes: form.notes,
+        });
+        localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+        localStorage.removeItem(OFFLINE_DRAFT_KEY);
+        refreshQueueCount();
+        form.reset('belongings_left', 'notes', 'photos');
+        window.bootstrap?.Modal.getInstance(document.getElementById('modalAddReception'))?.hide();
+        return;
+    }
+
     form.post('/receptions', {
         forceFormData: true,
         onSuccess: () => {
+            localStorage.removeItem(OFFLINE_DRAFT_KEY);
             form.reset('belongings_left', 'notes', 'photos');
             window.bootstrap?.Modal.getInstance(document.getElementById('modalAddReception'))?.hide();
         },
@@ -98,6 +219,21 @@ function returnCourtesy(id) {
             </div>
             <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAddReception">
                 <i class="bi bi-clipboard-plus me-1"></i>Nouvelle réception
+            </button>
+        </div>
+
+        <div v-if="isOffline || offlineQueueCount > 0" class="alert border-0 shadow-sm d-flex justify-content-between align-items-center mb-3 py-2 small" :class="isOffline ? 'alert-warning' : 'alert-info'">
+            <div>
+                <i class="bi me-2" :class="isOffline ? 'bi-wifi-off' : 'bi-cloud-arrow-up'"></i>
+                <span v-if="isOffline">
+                    <strong>Mode hors-ligne actif :</strong> votre brouillon est sauvegardé localement et les réceptions saisies seront synchronisées dès le retour d'internet.
+                </span>
+                <span v-else>
+                    <strong>{{ offlineQueueCount }} réception(s) hors-ligne en attente</strong> de synchronisation.
+                </span>
+            </div>
+            <button v-if="!isOffline && offlineQueueCount > 0" type="button" class="btn btn-primary btn-sm" :disabled="syncingOffline" @click="syncOfflineQueue">
+                {{ syncingOffline ? 'Synchronisation...' : 'Synchroniser maintenant' }}
             </button>
         </div>
 

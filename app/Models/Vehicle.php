@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -32,7 +33,26 @@ class Vehicle extends Model
         'next_service_date',
         'next_service_mileage',
         'notes',
+        'public_token',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Vehicle $vehicle) {
+            if (empty($vehicle->public_token)) {
+                $vehicle->public_token = Str::random(24);
+            }
+        });
+    }
+
+    public function ensurePublicToken(): string
+    {
+        if (empty($this->public_token)) {
+            $this->update(['public_token' => Str::random(24)]);
+        }
+
+        return $this->public_token;
+    }
 
     protected function casts(): array
     {

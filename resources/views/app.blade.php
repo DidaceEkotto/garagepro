@@ -110,7 +110,7 @@
                             ->find((int) $productParam);
                     }
                     if ($seoProduct) {
-                        $seoTitle = $seoProduct->name . ' | Marketplace ' . $siteName;
+                        $seoTitle = $seoProduct->title . ' | Marketplace ' . $siteName;
                         $seoDesc = $formatText($seoProduct->description ?: ($marketplaceDescriptions[$locale] ?? $marketplaceDescriptions['fr']));
                         if (! empty($seoProduct->images) && is_array($seoProduct->images)) {
                             $seoImg = $buildAbsoluteImageUrl(route('marketplace.product.image', ['product' => $seoProduct->id, 'index' => 0], false)) ?: $defaultImg;

@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\TenantRegistrationController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\DemoController;
 use App\Http\Controllers\MarketplaceController;
+use App\Http\Controllers\PublicTrackingController;
 use App\Http\Controllers\Tenant\AccountingController;
 use App\Http\Controllers\Tenant\AffiliationController;
 use App\Http\Controllers\Tenant\AfterSalesController;
@@ -93,6 +94,11 @@ Route::get('/politique-confidentialite', function () {
 Route::get('/demo', [DemoController::class, 'enter'])->name('demo.enter');
 Route::post('/demo/reinitialiser', [DemoController::class, 'reset'])->name('demo.reset');
 
+// Carnet d'entretien numérique & Suivi client en direct
+Route::get('/carnet/{token}', [PublicTrackingController::class, 'vehiclePassport'])->name('public.vehicle.passport');
+Route::get('/suivi/{token}', [PublicTrackingController::class, 'repairOrderTracking'])->name('public.repair_order.tracking');
+Route::post('/suivi/{token}/devis/{quoteId}/repondre', [PublicTrackingController::class, 'respondQuote'])->name('public.repair_order.quote_respond');
+
 // Changement de langue (fr, en, es, pt, ar, zh)
 Route::post('/langue/{locale}', function (string $locale) {
     $supported = array_keys(config('garagepro.supported_locales', ['fr' => []]));
@@ -129,6 +135,7 @@ Route::post('/deconnexion', [TenantAuthController::class, 'logout'])
 Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
     Route::get('/tableau-de-bord', [DashboardController::class, 'index'])->name('tenant.dashboard');
     Route::get('/tutoriel', fn () => \Inertia\Inertia::render('Tenant/Tutorial/Index'))->name('tenant.tutorial');
+    Route::get('/marketplace-b2b/rechercher', [MarketplaceController::class, 'b2bSearch'])->name('tenant.marketplace.b2b_search');
 
     Route::get('/agences', [AgencyController::class, 'index'])->name('tenant.agencies.index');
     Route::post('/agences', [AgencyController::class, 'store'])->name('tenant.agencies.store');

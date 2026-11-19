@@ -33,8 +33,11 @@ class RepairOrderController extends Controller
             $query->where('assigned_mechanic_id', $user->id);
         }
 
+        $orders = $query->latest()->paginate(20);
+        $orders->getCollection()->each->ensureTrackingToken();
+
         return Inertia::render('Tenant/RepairOrders/Index', [
-            'repairOrders' => $query->latest()->paginate(20),
+            'repairOrders' => $orders,
             'agencies' => Agency::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'customers' => Customer::orderBy('name')->get(['id', 'name']),
             'vehicles' => Vehicle::orderBy('license_plate')->get(['id', 'customer_id', 'license_plate', 'brand', 'model']),

@@ -48,6 +48,7 @@ const sections = [
             'Cliquez sur « Nouveau client » pour enregistrer le nom, téléphone, email, adresse et type (Particulier / Entreprise).',
             'Ouvrez la fiche d\'un client puis cliquez sur « Ajouter un véhicule » pour associer une immatriculation, marque, modèle, année, numéro VIN et kilométrage actuel.',
             'Utilisez la barre de recherche pour retrouver instantanément un client par son nom, téléphone ou plaque d\'immatriculation.',
+            'Sur la fiche d\'un véhicule, ouvrez son « Carnet numérique & QR Code » (/carnet/{token}) pour l\'historique certifié ou envoyez une « Relance entretien WhatsApp » en 1 clic.',
         ],
         fields: [
             { name: 'Immatriculation', desc: 'Identifiant unique affiché partout dans les RDV, réceptions, OR et devis.' },
@@ -111,6 +112,7 @@ const sections = [
             'Cliquez sur « Nouvel OR », choisissez l\'agence, le client (le véhicule suit automatiquement), le mécanicien et la priorité.',
             'Directement dans la même fenêtre, vous pouvez renseigner le « Diagnostic initial (optionnel) » (codes défauts, chrono, notes) et ajouter une ou plusieurs « Tâches à planifier » (+ Ajouter une tâche) en une seule opération.',
             'Dans la liste des OR, cliquez sur « Diagnostic / Tâches » pour afficher le panneau atelier d\'un OR existant, et cliquez sur « Fermer Diagnostic / Tâches » pour le refermer.',
+            'Utilisez les boutons « Suivi client » (œil) ou « WhatsApp » sur chaque ligne pour partager le lien de suivi en direct (/suivi/{token}) où le client suit l\'avancement et valide son devis en 1 clic.',
         ],
         fields: [
             { name: 'Codes défauts', desc: 'Codes valise OBD séparés par des virgules (ex : P0300, C1201).' },
@@ -419,7 +421,8 @@ const sections = [
         badge: 'Vente en ligne',
         summary: 'Vendez vos pièces détachées et accessoires sur la Marketplace publique et gérez les commandes reçues de vos clients.',
         steps: [
-            'Ouvrez « Marketplace > Mes produits » pour publier des articles avec photos, description, prix et stock.',
+            'Ouvrez « Marketplace > Mes produits » pour publier des articles avec photos, description, prix, stock et compatibilité véhicule (Marque, Modèle, Années) pour la recherche par véhicule.',
+            'Depuis « Stock & Pièces » (alerte stock) ou « Devis » (ligne Pièce), utilisez le bouton « B2B » pour trouver immédiatement des pièces en stock chez d\'autres garages MboaCar.',
             'Lorsqu\'un acheteur passe une commande contenant vos produits, vous recevez uniquement les articles qui appartiennent à votre garage (même si le panier du client contenait plusieurs garages).',
             'Ouvrez « Marketplace > Commandes » pour confirmer, préparer et expédier vos commandes.',
         ],

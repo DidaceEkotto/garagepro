@@ -30,6 +30,7 @@ class VehicleController extends Controller
     {
         $this->authorize('view', $vehicle);
 
+        $vehicle->ensurePublicToken();
         $vehicle->load(['customer', 'receptions', 'appointments']);
 
         return Inertia::render('Tenant/Vehicles/Show', [

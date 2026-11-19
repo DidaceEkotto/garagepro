@@ -2,7 +2,7 @@
 import StaticModal from '@/Components/StaticModal.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { computed, nextTick, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 
 const props = defineProps({
     quotes: Object,
@@ -67,6 +67,16 @@ function addItem() {
 
 function removeItem(idx) {
     if (form.items.length > 1) form.items.splice(idx, 1);
+}
+
+const b2bMatches = ref({});
+async function lookupB2B(idx, query) {
+    if (!query || query.trim().length < 2) return;
+    const res = await fetch(`/marketplace-b2b/rechercher?q=${encodeURIComponent(query.trim())}`, {
+        headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    b2bMatches.value = { ...b2bMatches.value, [idx]: data.items || [] };
 }
 
 function submitQuote() {
@@ -182,7 +192,25 @@ function newVersion(id) {
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <input v-model="item.description" type="text" class="form-control form-control-sm" placeholder="Description..." required />
+                            <div class="input-group input-group-sm">
+                                <input v-model="item.description" type="text" class="form-control" placeholder="Description..." required />
+                                <button
+                                    v-if="item.type === 'piece'"
+                                    type="button"
+                                    class="btn btn-outline-warning"
+                                    title="Rechercher chez d'autres garages (Marketplace B2B)"
+                                    @click="lookupB2B(idx, item.description)"
+                                >
+                                    <i class="bi bi-shop"></i> B2B
+                                </button>
+                            </div>
+                            <div v-if="b2bMatches[idx]?.length" class="mt-1 small">
+                                <span v-for="m in b2bMatches[idx].slice(0, 2)" :key="m.id" class="badge bg-warning text-dark me-1">
+                                    <a :href="m.url" target="_blank" class="text-dark text-decoration-none">
+                                        {{ m.garage_name }} : {{ m.price }} FCFA ({{ m.stock_quantity }} en stock)
+                                    </a>
+                                </span>
+                            </div>
                         </div>
                     </div>
                     <div class="row g-2 align-items-center">

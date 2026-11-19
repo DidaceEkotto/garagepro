@@ -23,6 +23,17 @@ function toggleOrderPanel(orderId) {
     selectedOrderId.value = selectedOrderId.value === orderId ? null : orderId;
 }
 
+function trackingUrl(order) {
+    return order?.tracking_token ? `${window.location.origin}/suivi/${order.tracking_token}` : '';
+}
+
+function whatsappShareUrl(order) {
+    const url = trackingUrl(order);
+    const plate = order?.vehicle?.license_plate || '';
+    const msg = `Bonjour ${order?.customer?.name ?? ''}, suivez l'intervention sur votre véhicule ${plate} (${order.order_number}) et validez votre devis en direct ici : ${url}`;
+    return `https://wa.me/?text=${encodeURIComponent(msg)}`;
+}
+
 const createForm = useForm({
     agency_id: props.agencies?.[0]?.id ?? '',
     customer_id: '',
@@ -176,15 +187,36 @@ function submitTask() {
                                 <td>{{ o.mechanic?.name ?? 'Non affecté' }}</td>
                                 <td><span class="badge bg-primary">{{ o.status }}</span></td>
                                 <td class="text-end">
-                                    <button
-                                        type="button"
-                                        class="btn btn-sm"
-                                        :class="selectedOrderId === o.id ? 'btn-primary' : 'btn-outline-primary'"
-                                        @click="toggleOrderPanel(o.id)"
-                                    >
-                                        <i class="bi me-1" :class="selectedOrderId === o.id ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
-                                        {{ selectedOrderId === o.id ? 'Fermer Diagnostic / Tâches' : 'Diagnostic / Tâches' }}
-                                    </button>
+                                    <div class="d-inline-flex gap-1">
+                                        <a
+                                            v-if="o.tracking_token"
+                                            :href="`/suivi/${o.tracking_token}`"
+                                            target="_blank"
+                                            class="btn btn-outline-secondary btn-sm"
+                                            title="Suivi client en direct"
+                                        >
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <a
+                                            v-if="o.tracking_token"
+                                            :href="whatsappShareUrl(o)"
+                                            target="_blank"
+                                            rel="noopener"
+                                            class="btn btn-outline-success btn-sm"
+                                            title="Envoyer le suivi sur WhatsApp"
+                                        >
+                                            <i class="bi bi-whatsapp"></i>
+                                        </a>
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm"
+                                            :class="selectedOrderId === o.id ? 'btn-primary' : 'btn-outline-primary'"
+                                            @click="toggleOrderPanel(o.id)"
+                                        >
+                                            <i class="bi me-1" :class="selectedOrderId === o.id ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+                                            {{ selectedOrderId === o.id ? 'Fermer Diagnostic / Tâches' : 'Diagnostic / Tâches' }}
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         </tbody>

@@ -15,6 +15,24 @@ const props = defineProps({
 });
 
 const selectedPart = ref(null);
+const b2bResults = ref([]);
+const b2bQuery = ref('');
+const b2bLoading = ref(false);
+
+async function searchB2B(query) {
+    if (!query || query.trim().length < 2) return;
+    b2bQuery.value = query.trim();
+    b2bLoading.value = true;
+    try {
+        const res = await fetch(`/marketplace-b2b/rechercher?q=${encodeURIComponent(b2bQuery.value)}`, {
+            headers: { Accept: 'application/json' },
+        });
+        const data = await res.json();
+        b2bResults.value = data.items || [];
+    } finally {
+        b2bLoading.value = false;
+    }
+}
 
 const partForm = useForm({
     agency_id: props.agencies?.[0]?.id ?? '',
@@ -134,13 +152,49 @@ function submitMovement() {
                                 <td>{{ p.quantity_reserved }}</td>
                                 <td class="text-end">{{ new Intl.NumberFormat('fr-FR').format(p.selling_price) }} FCFA</td>
                                 <td class="text-end">
-                                    <button type="button" class="btn btn-outline-primary btn-sm" @click="selectedPart = p">
-                                        Sortie / Transfert
-                                    </button>
+                                    <div class="d-inline-flex gap-1">
+                                        <button
+                                            v-if="p.quantity_on_hand <= p.min_threshold"
+                                            type="button"
+                                            class="btn btn-outline-warning btn-sm"
+                                            title="Chercher cette pièce chez un autre garage (B2B)"
+                                            @click="searchB2B(p.name)"
+                                        >
+                                            <i class="bi bi-shop me-1"></i>B2B
+                                        </button>
+                                        <button type="button" class="btn btn-outline-primary btn-sm" @click="selectedPart = p">
+                                            Sortie / Transfert
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="b2bQuery" class="card border-0 shadow-sm border-start border-4 border-warning mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                <span class="fw-bold"><i class="bi bi-shop text-warning me-2"></i>Approvisionnement Marketplace B2B pour « {{ b2bQuery }} »</span>
+                <button type="button" class="btn btn-outline-secondary btn-sm" @click="b2bQuery = ''; b2bResults = []">&times;</button>
+            </div>
+            <div class="card-body p-3">
+                <div v-if="b2bLoading" class="small text-muted">Recherche chez les autres garages...</div>
+                <div v-else-if="!b2bResults.length" class="small text-muted">Aucun autre garage n'a cette pièce en stock pour le moment.</div>
+                <div v-else class="row g-2">
+                    <div v-for="item in b2bResults" :key="item.id" class="col-md-4">
+                        <div class="border rounded p-2 bg-light small h-100 d-flex flex-column justify-content-between">
+                            <div>
+                                <div class="fw-bold">{{ item.title }}</div>
+                                <div class="text-muted">{{ item.garage_name }} ({{ item.garage_city || 'Cameroun' }}) · Stock : {{ item.stock_quantity }}</div>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <span class="fw-bold text-primary">{{ new Intl.NumberFormat('fr-FR').format(item.price) }} FCFA</span>
+                                <a :href="item.url" target="_blank" class="btn btn-warning btn-sm py-0 px-2">Voir / Commander</a>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
