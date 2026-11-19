@@ -26,6 +26,16 @@ class ResolveTenantFromSubdomain
                 ? ($request->session()->get('active_tenant_id') ?? $request->session()->get('demo_tenant_id'))
                 : null;
 
+            $demoTenantId = $request->hasSession() ? $request->session()->get('demo_tenant_id') : null;
+            if ($user && $demoTenantId && (int) $user->tenant_id === (int) $demoTenantId) {
+                $demoTenant = Tenant::find($demoTenantId);
+                if ($demoTenant && $demoTenant->slug === 'demo-douala' && $demoTenant->status !== Tenant::STATUS_SUSPENDED) {
+                    $this->tenantContext->setTenant($demoTenant);
+
+                    return $next($request);
+                }
+            }
+
             // En environnement local sans sous-domaine (ex: 127.0.0.1:5675 ou localhost),
             // on résout le tenant de l'utilisateur authentifié (en vérifiant la correspondance si active_tenant_id est en session).
             if ($user && $this->isLocalOrIpHost($request->getHost()) && (! $sessionTenantId || (int) $user->tenant_id === (int) $sessionTenantId)) {

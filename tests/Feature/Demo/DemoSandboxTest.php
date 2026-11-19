@@ -40,5 +40,11 @@ class DemoSandboxTest extends TestCase
         // Réinitialisation de la démo
         $this->post('/demo/reinitialiser')
             ->assertRedirect(route('tenant.dashboard'));
+
+        // Vérification sur un domaine de production sans sous-domaine (ex: mboacar.com)
+        $this->get('https://mboacar.com/demo')
+            ->assertRedirect('https://mboacar.com/tableau-de-bord');
+        $this->get('https://mboacar.com/tableau-de-bord')
+            ->assertStatus(200);
     }
 }
