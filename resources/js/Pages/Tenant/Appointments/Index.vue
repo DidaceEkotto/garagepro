@@ -4,7 +4,8 @@ import FileDropzone from '@/Components/FileDropzone.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import TimePickerInput from '@/Components/TimePickerInput.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { useConfirm } from '@/Composables/useConfirm';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -17,9 +18,12 @@ const props = defineProps({
     countries: { type: Array, default: () => [] },
 });
 
+const { confirm } = useConfirm();
 const isNewCustomer = ref(false);
 const scheduleDate = ref('');
 const scheduleTime = ref('09:00');
+const searchQuery = ref('');
+const activeFilter = ref('tous');
 
 const form = useForm({
     agency_id: props.agencies?.[0]?.id ?? '',
@@ -107,22 +111,97 @@ function submitAppointment() {
     });
 }
 
-function updateStatus(id, status) {
-    router.patch(`/rendez-vous/${id}/statut`, { status });
+const filteredAppointments = computed(() => {
+    const list = props.appointments?.data ?? [];
+    const today = new Date().toISOString().slice(0, 10);
+    const q = searchQuery.value.trim().toLowerCase();
+
+    return list.filter((a) => {
+        if (activeFilter.value === 'aujourdhui') {
+            if (!a.scheduled_at || !String(a.scheduled_at).startsWith(today)) return false;
+        } else if (activeFilter.value === 'a_venir') {
+            if (!a.scheduled_at || a.status === 'recu' || a.status === 'annule') return false;
+        } else if (activeFilter.value === 'sans_rdv') {
+            if (a.scheduled_at && a.channel !== 'sans_rdv') return false;
+        } else if (activeFilter.value === 'termines') {
+            if (a.status !== 'recu' && a.status !== 'annule') return false;
+        }
+
+        if (!q) return true;
+        const haystack = [
+            a.customer?.name,
+            a.customer?.phone,
+            a.vehicle?.license_plate,
+            a.reason,
+            a.bay_name,
+        ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+
+        return haystack.includes(q);
+    });
+});
+
+async function updateStatus(id, status) {
+    if (status === 'annule') {
+        const ok = await confirm({
+            title: 'Annuler ce rendez-vous',
+            message: 'Voulez-vous vraiment annuler ce rendez-vous ? Le client ne recevra plus de rappel automatique.',
+            confirmLabel: 'Oui, annuler',
+            variant: 'danger',
+        });
+        if (!ok) return;
+    }
+    router.patch(`/rendez-vous/${id}/statut`, { status }, { preserveScroll: true });
+}
+
+async function sendWhatsappReminder(appointment) {
+    const ok = await confirm({
+        title: 'Envoyer un rappel WhatsApp',
+        message: `Envoyer un rappel WhatsApp maintenant à ${appointment.customer?.name ?? 'ce client'} (${appointment.customer?.phone ?? 'sans numéro'}) ?`,
+        confirmLabel: 'Envoyer sur WhatsApp',
+        variant: 'success',
+    });
+    if (!ok) return;
+    router.post(`/rendez-vous/${appointment.id}/rappel-whatsapp`, {}, { preserveScroll: true });
 }
 </script>
 
 <template>
     <Head title="Rendez-vous" />
     <TenantLayout>
-        <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
             <div>
                 <h1 class="h4 fw-bold mb-0">Rendez-vous &amp; File d'attente</h1>
-                <p class="text-muted small mb-0">Prise de rendez-vous, ponts disponibles, file sans rendez-vous et rappels</p>
+                <p class="text-muted small mb-0">Module facultatif — planification des ponts, file sans rendez-vous et rappels WhatsApp automatiques</p>
             </div>
             <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAddAppointment">
                 <i class="bi bi-calendar-plus me-1"></i>Nouveau rendez-vous
             </button>
+        </div>
+
+        <div class="alert alert-info d-flex align-items-start gap-2 small mb-3" role="alert">
+            <i class="bi bi-info-circle-fill fs-5 mt-1"></i>
+            <div>
+                <strong>Module facultatif :</strong> Votre garage fonctionne parfaitement sans prise de rendez-vous préalable — vous pouvez accueillir un véhicule directement depuis
+                <Link href="/receptions" class="alert-link">Réceptions</Link> ou créer un <Link href="/ordres-reparation" class="alert-link">Ordre de réparation</Link>.
+                Lorsqu'un rendez-vous est planifié, MboaCar envoie automatiquement un rappel WhatsApp multilingue (FR, EN, ES, AR, ZH) <strong>2 heures</strong> puis <strong>30 minutes</strong> avant l'heure prévue, sans bloquer l'application en cas d'indisponibilité de WhatsApp.
+            </div>
+        </div>
+
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn" :class="activeFilter === 'tous' ? 'btn-primary' : 'btn-outline-secondary'" @click="activeFilter = 'tous'">Tous</button>
+                <button type="button" class="btn" :class="activeFilter === 'aujourdhui' ? 'btn-primary' : 'btn-outline-secondary'" @click="activeFilter = 'aujourdhui'">Aujourd'hui</button>
+                <button type="button" class="btn" :class="activeFilter === 'a_venir' ? 'btn-primary' : 'btn-outline-secondary'" @click="activeFilter = 'a_venir'">À venir</button>
+                <button type="button" class="btn" :class="activeFilter === 'sans_rdv' ? 'btn-primary' : 'btn-outline-secondary'" @click="activeFilter = 'sans_rdv'">File sans RDV</button>
+                <button type="button" class="btn" :class="activeFilter === 'termines' ? 'btn-primary' : 'btn-outline-secondary'" @click="activeFilter = 'termines'">Terminés</button>
+            </div>
+            <div class="input-group input-group-sm" style="max-width: 280px;">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input v-model="searchQuery" type="text" class="form-control" placeholder="Rechercher client, plaque, pont..." />
+            </div>
         </div>
 
         <div class="card border-0 shadow-sm">
@@ -140,10 +219,10 @@ function updateStatus(id, status) {
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-if="!appointments.data?.length">
-                                <td colspan="6" class="text-center text-muted py-4 small">Aucun rendez-vous enregistré.</td>
+                            <tr v-if="!filteredAppointments.length">
+                                <td colspan="6" class="text-center text-muted py-4 small">Aucun rendez-vous correspondant.</td>
                             </tr>
-                            <tr v-for="a in appointments.data" :key="a.id">
+                            <tr v-for="a in filteredAppointments" :key="a.id">
                                 <td>
                                     <div class="fw-semibold">{{ a.customer?.name }}</div>
                                     <div class="small text-muted">{{ a.vehicle?.license_plate ?? 'Véhicule à préciser' }}</div>
@@ -153,9 +232,25 @@ function updateStatus(id, status) {
                                     <span class="text-muted">{{ a.bay_name ?? '-' }}</span>
                                 </td>
                                 <td>{{ a.reason }}</td>
-                                <td class="small">{{ a.scheduled_at ?? 'File sans RDV' }}</td>
+                                <td class="small">
+                                    <div>{{ a.scheduled_at ?? 'File sans RDV' }}</div>
+                                    <div class="d-flex gap-1 mt-1" v-if="a.reminder_2h_sent_at || a.reminder_30m_sent_at">
+                                        <span v-if="a.reminder_2h_sent_at" class="badge bg-success-subtle text-success border border-success-subtle">Rappel 2h ✓</span>
+                                        <span v-if="a.reminder_30m_sent_at" class="badge bg-success-subtle text-success border border-success-subtle">Rappel 30m ✓</span>
+                                    </div>
+                                </td>
                                 <td><span class="badge bg-info text-dark">{{ a.status }}</span></td>
                                 <td class="text-end text-nowrap">
+                                    <button
+                                        v-if="a.customer?.phone && a.status !== 'recu' && a.status !== 'annule'"
+                                        type="button"
+                                        class="btn btn-outline-success btn-sm me-1"
+                                        title="Envoyer un rappel WhatsApp"
+                                        @click="sendWhatsappReminder(a)"
+                                    >
+                                        <i class="bi bi-whatsapp"></i>
+                                    </button>
+                                    <Link href="/receptions" class="btn btn-outline-primary btn-sm me-1">Réception</Link>
                                     <button v-if="a.status !== 'recu' && a.status !== 'annule'" type="button" class="btn btn-outline-success btn-sm me-1" @click="updateStatus(a.id, 'recu')">Reçu</button>
                                     <button v-if="a.status !== 'annule' && a.status !== 'recu'" type="button" class="btn btn-outline-danger btn-sm" @click="updateStatus(a.id, 'annule')">Annuler</button>
                                 </td>

@@ -10,6 +10,26 @@ body {
     color: #1e293b;
 }
 
+/* Fix Select2 à l'intérieur des .input-group Bootstrap (indicatif téléphone, icône horloge, etc.) */
+.input-group {
+    flex-wrap: nowrap;
+}
+.input-group > .select2-container {
+    flex: 1 1 auto;
+    width: auto !important;
+    min-width: 0;
+}
+.input-group > select[style*="max-width"] + .select2-container {
+    flex: 0 0 auto !important;
+    min-width: 105px;
+    max-width: 120px;
+}
+.input-group > .select2-container .select2-selection--single {
+    height: 100%;
+    display: flex;
+    align-items: center;
+}
+
 /* jQuery UI Datepicker z-index au-dessus des modals Bootstrap */
 .ui-datepicker {
     z-index: 2000 !important;

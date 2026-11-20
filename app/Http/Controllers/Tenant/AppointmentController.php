@@ -4,13 +4,13 @@ namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Tenant\StoreAppointmentRequest;
-use App\Jobs\SendAppointmentReminderJob;
 use App\Models\Agency;
 use App\Models\Appointment;
 use App\Models\Country;
 use App\Models\Customer;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\AppointmentReminderService;
 use App\Services\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -115,11 +115,29 @@ class AppointmentController extends Controller
             ]);
         });
 
-        if ($appointment->status === Appointment::STATUS_CONFIRMED) {
-            SendAppointmentReminderJob::dispatch($appointment->id);
+        if ($appointment->status === Appointment::STATUS_CONFIRMED && $appointment->scheduled_at) {
+            app()->terminating(function () {
+                app(AppointmentReminderService::class)->triggerAutomaticCheck();
+            });
         }
 
         return back()->with('success', 'Rendez-vous enregistré avec succès.');
+    }
+
+    public function sendWhatsappReminder(Appointment $appointment, AppointmentReminderService $reminderService): RedirectResponse
+    {
+        $this->authorize('update', $appointment);
+
+        $appointment->loadMissing(['customer', 'vehicle', 'tenant']);
+        $sent = $reminderService->sendSingleReminder($appointment, '2h', app()->getLocale());
+
+        if (! $sent) {
+            return back()->with('warning', 'Le message WhatsApp n\'a pas pu être remis pour le moment (le rendez-vous reste actif).');
+        }
+
+        $appointment->update(['reminder_sent_at' => now()]);
+
+        return back()->with('success', 'Rappel WhatsApp envoyé au client.');
     }
 
     public function updateStatus(Request $request, Appointment $appointment): RedirectResponse

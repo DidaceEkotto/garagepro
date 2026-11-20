@@ -37,9 +37,10 @@ function initSelect2() {
         }
 
         const $modal = $el.closest('.modal');
+        const isInInputGroup = $el.closest('.input-group').length > 0;
         const options = {
             theme: 'bootstrap-5',
-            width: '100%',
+            width: isInInputGroup ? 'resolve' : '100%',
         };
         if ($modal.length) {
             options.dropdownParent = $modal;

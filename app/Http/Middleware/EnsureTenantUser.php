@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\AppointmentReminderService;
 use App\Services\TenantContext;
 use Closure;
 use Illuminate\Http\Request;
@@ -34,6 +35,8 @@ class EnsureTenantUser
                 'email' => 'Votre compte utilisateur est désactivé.',
             ]);
         }
+
+        app()->terminating(fn () => app(AppointmentReminderService::class)->triggerAutomaticCheck());
 
         return $next($request);
     }

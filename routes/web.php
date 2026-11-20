@@ -184,6 +184,7 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
     Route::get('/rendez-vous', [AppointmentController::class, 'index'])->name('tenant.appointments.index');
     Route::post('/rendez-vous', [AppointmentController::class, 'store'])->name('tenant.appointments.store');
     Route::patch('/rendez-vous/{appointment}/statut', [AppointmentController::class, 'updateStatus'])->name('tenant.appointments.status');
+    Route::post('/rendez-vous/{appointment}/rappel-whatsapp', [AppointmentController::class, 'sendWhatsappReminder'])->name('tenant.appointments.whatsapp_reminder');
 
     // Réception & Véhicules de courtoisie
     Route::get('/receptions', [VehicleReceptionController::class, 'index'])->name('tenant.receptions.index');

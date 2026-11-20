@@ -78,23 +78,23 @@ const sections = [
     {
         id: 'appointments',
         category: 'atelier',
-        title: 'Rendez-vous',
+        title: 'Rendez-vous (Facultatif)',
         route: '/rendez-vous',
         icon: 'bi-calendar-check',
         badge: 'Planification',
-        summary: 'Planifiez les passages à l\'atelier, attribuez un pont et un mécanicien à l\'avance, ou gérez les clients arrivés sans rendez-vous.',
+        summary: 'Module entièrement facultatif : planifiez les passages à l\'atelier, attribuez un pont et un mécanicien à l\'avance, ou gérez la file sans rendez-vous. Des rappels WhatsApp automatiques sont envoyés 2h et 30min avant le passage (FR, EN, ES, AR, ZH).',
         steps: [
-            'Cliquez sur « Nouveau rendez-vous ».',
+            'Cliquez sur « Nouveau rendez-vous » (ou passez directement à Réceptions si le client arrive sans RDV).',
             'Choisissez un client existant (ses véhicules se chargent automatiquement) ou cochez « Nouveau client » pour créer un client rapide.',
             'Sélectionnez le canal (Téléphone, WhatsApp, En ligne ou Sans RDV), la date, l\'heure, le pont (« Pont 1 ») et le motif (Entretien, Panne, Contrôle).',
-            'Mettez à jour le statut (Confirmé, Arrivé, Annulé) depuis le tableau.',
+            'Les rappels WhatsApp partent automatiquement 2h et 30min avant l\'heure prévue, sans bloquer le système si WhatsApp est hors ligne.',
         ],
         fields: [
             { name: 'Sans RDV (File)', desc: 'Permet d\'inscrire immédiatement un client de passage dans la file d\'attente sans date future.' },
             { name: 'Pont / Baie', desc: 'Évite les doublons sur un même poste de travail.' },
         ],
         example: 'Mme Claire appelle sur WhatsApp pour une révision vendredi à 09h00. Vous sélectionnez « Claire Mbarga », sa « Peugeot 308 » se sélectionne automatiquement, vous choisissez « Pont 2 » et « Entretien » (60 min).',
-        tip: 'Si le client n\'a qu\'un seul véhicule enregistré, le champ Véhicule est sélectionné automatiquement.',
+        tip: 'Ce module est optionnel : vous pouvez démarrer une réception ou un ordre de réparation sans créer de rendez-vous.',
     },
     {
         id: 'receptions',

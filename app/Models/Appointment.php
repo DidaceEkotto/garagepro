@@ -35,6 +35,8 @@ class Appointment extends Model
         'reason',
         'notes',
         'reminder_sent_at',
+        'reminder_2h_sent_at',
+        'reminder_30m_sent_at',
     ];
 
     protected function casts(): array
@@ -43,6 +45,8 @@ class Appointment extends Model
             'scheduled_at' => 'datetime',
             'duration_minutes' => 'integer',
             'reminder_sent_at' => 'datetime',
+            'reminder_2h_sent_at' => 'datetime',
+            'reminder_30m_sent_at' => 'datetime',
         ];
     }
 
