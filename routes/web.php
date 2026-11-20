@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Auth\TenantAuthController;
 use App\Http\Controllers\Auth\TenantRegistrationController;
 use App\Http\Controllers\ContactController;
+use App\Http\Controllers\CustomerPortalController;
 use App\Http\Controllers\DemoController;
 use App\Http\Controllers\MarketplaceController;
 use App\Http\Controllers\PublicAppointmentController;
@@ -110,6 +111,17 @@ Route::post('/rdv/{token}', [PublicAppointmentController::class, 'submit'])
     ->middleware('throttle:10,1')
     ->name('public.appointment.submit');
 
+// Portail Client Unique MboaCar (accès multi-garages par OTP WhatsApp)
+Route::get('/mon-espace-client', [CustomerPortalController::class, 'index'])->name('public.customer_portal');
+Route::post('/mon-espace-client/otp', [CustomerPortalController::class, 'requestOtp'])
+    ->middleware('throttle:10,1')
+    ->name('public.customer_portal.otp');
+Route::post('/mon-espace-client/verifier', [CustomerPortalController::class, 'verifyOtp'])
+    ->middleware('throttle:15,1')
+    ->name('public.customer_portal.verify');
+Route::put('/mon-espace-client/profil', [CustomerPortalController::class, 'updateProfile'])->name('public.customer_portal.profile');
+Route::post('/mon-espace-client/deconnexion', [CustomerPortalController::class, 'logout'])->name('public.customer_portal.logout');
+
 // Changement de langue (fr, en, es, pt, ar, zh)
 Route::post('/langue/{locale}', function (string $locale) {
     $supported = array_keys(config('garagepro.supported_locales', ['fr' => []]));
@@ -180,6 +192,9 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
     Route::get('/clients', [CustomerController::class, 'index'])
         ->middleware('throttle:search')
         ->name('tenant.customers.index');
+    Route::get('/clients/lookup-global', [CustomerController::class, 'lookupGlobal'])
+        ->middleware('throttle:search')
+        ->name('tenant.customers.lookup_global');
     Route::post('/clients', [CustomerController::class, 'store'])->name('tenant.customers.store');
     Route::post('/clients/{customer}/relancer-whatsapp', [CustomerController::class, 'remindWhatsapp'])->name('tenant.customers.remind_whatsapp');
     Route::get('/clients/{customer}', [CustomerController::class, 'show'])->name('tenant.customers.show');

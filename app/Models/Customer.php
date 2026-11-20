@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Services\GlobalCustomerService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,6 +19,7 @@ class Customer extends Model
 
     protected $fillable = [
         'tenant_id',
+        'global_customer_id',
         'agency_id',
         'name',
         'first_name',
@@ -54,6 +56,18 @@ class Customer extends Model
     public function photoUrl(): ?string
     {
         return $this->photo_path ? asset('storage/'.$this->photo_path) : null;
+    }
+
+    protected static function booted(): void
+    {
+        static::created(function (Customer $customer) {
+            app(GlobalCustomerService::class)->syncFromLocalCustomer($customer);
+        });
+    }
+
+    public function globalCustomer(): BelongsTo
+    {
+        return $this->belongsTo(GlobalCustomer::class, 'global_customer_id');
     }
 
     public function agency(): BelongsTo

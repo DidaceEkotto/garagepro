@@ -77,6 +77,42 @@ function submitWhatsappRemind() {
     });
 }
 
+const globalLookupStatus = ref('');
+
+async function lookupGlobalCustomer() {
+    globalLookupStatus.value = '';
+    const params = new URLSearchParams();
+    if (form.phone) params.set('phone', form.phone);
+    if (form.id_number) params.set('id_number', form.id_number);
+    if (!form.phone && !form.id_number) {
+        globalLookupStatus.value = 'Saisissez un numéro WhatsApp ou une CNI puis cliquez pour pré-remplir.';
+        return;
+    }
+
+    try {
+        const res = await fetch(`/clients/lookup-global?${params.toString()}`, { headers: { Accept: 'application/json' } });
+        const json = await res.json();
+        if (!json.found) {
+            globalLookupStatus.value = 'Aucun compte client MboaCar existant trouvé.';
+            return;
+        }
+        const d = json.data;
+        if (d.name) form.name = d.name;
+        if (d.first_name) form.first_name = d.first_name;
+        if (d.gender) form.gender = d.gender;
+        if (d.id_number) form.id_number = d.id_number;
+        if (d.phone_dial_code) form.phone_dial_code = d.phone_dial_code;
+        if (d.phone) form.phone = d.phone;
+        if (d.email) form.email = d.email;
+        if (d.profession) form.profession = d.profession;
+        if (d.date_of_birth) form.date_of_birth = d.date_of_birth;
+        if (d.emergency_contact) form.emergency_contact = d.emergency_contact;
+        globalLookupStatus.value = 'Identité MboaCar trouvée et pré-remplie automatiquement !';
+    } catch {
+        globalLookupStatus.value = 'Impossible de vérifier pour le moment.';
+    }
+}
+
 function doSearch() {
     router.get('/clients', { q: query.value }, { preserveState: true });
 }
@@ -167,6 +203,15 @@ function createCustomer() {
 
         <StaticModal id="modalAddCustomer" title="Nouveau client" size="modal-lg">
             <form @submit.prevent="createCustomer">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 p-2 mb-3 rounded bg-light border small">
+                    <span class="text-muted">
+                        <i class="bi bi-person-badge text-primary me-1"></i>
+                        {{ globalLookupStatus || 'Le client a déjà visité un autre garage MboaCar ? Saisissez son WhatsApp ou CNI puis pré-remplissez.' }}
+                    </span>
+                    <button type="button" class="btn btn-outline-primary btn-sm" @click="lookupGlobalCustomer">
+                        <i class="bi bi-search me-1"></i>Pré-remplir compte MboaCar
+                    </button>
+                </div>
                 <div class="row g-2 mb-3">
                     <div class="col-md-5">
                         <label class="form-label small">Nom <span class="text-danger">*</span></label>

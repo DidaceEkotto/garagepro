@@ -53,7 +53,26 @@ const sections = [
             { name: 'N° CNI / Passeport', desc: 'Pièce d\'identité officielle permettant d\'identifier le propriétaire.' },
         ],
         example: 'Vous créez le client « Jean Dupont » (+237 699 00 11 22), puis vous lui affectez un ou plusieurs véhicules dans le menu Véhicules.',
-        tip: 'Les champs clients sont séparés du menu Véhicules pour une gestion plus claire.',
+        tip: 'Les champs clients sont séparés du menu Véhicules pour une gestion plus claire. Utilisez « Pré-remplir compte MboaCar » pour éviter de ressaisir un client déjà connu sur la plateforme.',
+    },
+    {
+        id: 'customer_portal',
+        category: 'atelier',
+        title: 'Compte Client Unique (/mon-espace-client)',
+        route: '/mon-espace-client',
+        icon: 'bi-person-badge',
+        badge: 'Multi-garages',
+        summary: 'Chaque client possède un compte global unique lié à son numéro WhatsApp sans jamais exposer les données financières ou notes privées d\'un garage à un autre.',
+        steps: [
+            'Lorsqu\'un client change de garage, cliquez sur « Pré-remplir compte MboaCar » dans Nouveau Client après avoir saisi son WhatsApp ou CNI.',
+            'Le client peut se connecter sur /mon-espace-client par code OTP WhatsApp pour consulter ses véhicules, carnets, suivis d\'OR, rendez-vous et factures dans tous ses garages.',
+            'S\'il met à jour son profil unique sur /mon-espace-client, son identité est synchronisée avec ses garages.',
+        ],
+        fields: [
+            { name: 'Confidentialité inter-garages', desc: 'Un garage ne voit jamais les factures, prix ou notes d\'un autre garage.' },
+        ],
+        example: 'Jean Dupont va au Garage A puis au Garage B : au Garage B, son nom, prénom, sexe et CNI se pré-remplissent en 1 clic, et lui retrouve ses deux garages dans /mon-espace-client.',
+        tip: 'Communiquez l\'adresse /mon-espace-client à vos clients réguliers pour qu\'ils suivent leurs entretiens en autonomie.',
     },
     {
         id: 'vehicles',

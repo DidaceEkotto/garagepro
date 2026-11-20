@@ -8,8 +8,10 @@ use App\Mail\ClientReminderMail;
 use App\Models\AuditLog;
 use App\Models\Country;
 use App\Models\Customer;
+use App\Services\GlobalCustomerService;
 use App\Services\GreenApiService;
 use App\Services\TenantContext;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -19,6 +21,40 @@ use Inertia\Response;
 
 class CustomerController extends Controller
 {
+    public function lookupGlobal(Request $request, GlobalCustomerService $service): JsonResponse
+    {
+        $this->authorize('create', Customer::class);
+
+        $phone = trim((string) $request->query('phone', ''));
+        $idNumber = trim((string) $request->query('id_number', ''));
+
+        if ($phone === '' && $idNumber === '') {
+            return response()->json(['found' => false]);
+        }
+
+        $global = $service->findByPhoneOrId($phone, $idNumber);
+        if (! $global) {
+            return response()->json(['found' => false]);
+        }
+
+        // Ne retourne que l'identité partagée (jamais de données financières ou privées d'un autre garage)
+        return response()->json([
+            'found' => true,
+            'data' => [
+                'name' => $global->name,
+                'first_name' => $global->first_name,
+                'gender' => $global->gender,
+                'id_number' => $global->id_number,
+                'phone_dial_code' => $global->phone_dial_code,
+                'phone' => $global->phone,
+                'email' => $global->email,
+                'profession' => $global->profession,
+                'date_of_birth' => $global->date_of_birth?->format('Y-m-d'),
+                'emergency_contact' => $global->emergency_contact,
+            ],
+        ]);
+    }
+
     public function index(Request $request, TenantContext $tenantContext): Response
     {
         $this->authorize('viewAny', Customer::class);
