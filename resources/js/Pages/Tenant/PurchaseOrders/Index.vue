@@ -1,7 +1,10 @@
 <script setup>
 import StaticModal from '@/Components/StaticModal.vue';
+import { useConfirm } from '@/composables/useConfirm';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
+
+const { askConfirm } = useConfirm();
 
 const props = defineProps({
     purchaseOrders: Object,
@@ -30,7 +33,13 @@ function removeItem(idx) {
 }
 
 function remindSupplier(poId) {
-    router.post(`/approvisionnement/${poId}/relancer`);
+    askConfirm({
+        title: 'Relancer le fournisseur',
+        message: 'Voulez-vous envoyer une relance par e-mail au fournisseur pour ce bon de commande ?',
+        confirmLabel: 'Envoyer la relance',
+        confirmClass: 'btn-primary',
+        onConfirm: () => router.post(`/approvisionnement/${poId}/relancer`),
+    });
 }
 
 function submitPo() {
@@ -45,7 +54,13 @@ function receiveAll(po) {
         const remaining = Math.max(0, item.quantity_ordered - item.quantity_received);
         if (remaining > 0) received[item.id] = remaining;
     });
-    router.post(`/approvisionnement/${po.id}/reception`, { received });
+    askConfirm({
+        title: 'Réceptionner la commande',
+        message: `Confirmez-vous la réception complète du bon de commande ${po.po_number ?? ''} et l'entrée des pièces en stock ?`,
+        confirmLabel: 'Valider la réception',
+        confirmClass: 'btn-success',
+        onConfirm: () => router.post(`/approvisionnement/${po.id}/reception`, { received }),
+    });
 }
 </script>
 

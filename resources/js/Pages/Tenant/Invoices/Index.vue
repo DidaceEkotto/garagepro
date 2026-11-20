@@ -1,5 +1,6 @@
 <script setup>
 import StaticModal from '@/Components/StaticModal.vue';
+import { useConfirm } from '@/composables/useConfirm';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
@@ -54,12 +55,26 @@ function submitPayment() {
     });
 }
 
+const { askConfirm } = useConfirm();
+
 function createCreditNote(id) {
-    router.post(`/factures/${id}/avoir`);
+    askConfirm({
+        title: 'Émettre un avoir',
+        message: 'Voulez-vous vraiment émettre un avoir pour annuler comptablement cette facture ?',
+        confirmLabel: 'Émettre l\'avoir',
+        confirmClass: 'btn-danger',
+        onConfirm: () => router.post(`/factures/${id}/avoir`),
+    });
 }
 
 function remindInvoice(id) {
-    router.post(`/factures/${id}/relancer`);
+    askConfirm({
+        title: 'Relancer le client',
+        message: 'Voulez-vous envoyer une relance par e-mail au client pour cette facture ?',
+        confirmLabel: 'Envoyer la relance',
+        confirmClass: 'btn-primary',
+        onConfirm: () => router.post(`/factures/${id}/relancer`),
+    });
 }
 
 function submitClosure() {

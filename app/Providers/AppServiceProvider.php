@@ -6,6 +6,7 @@ use App\Services\TenantContext;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -23,7 +24,43 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        $this->ensureViteHotFallback();
         $this->configureRateLimiting();
+    }
+
+    /**
+     * Évite toute page blanche si public/hot existe alors que Vite dev n'est pas joignable (ou en production).
+     */
+    protected function ensureViteHotFallback(): void
+    {
+        $hotFile = public_path('hot');
+        if (! file_exists($hotFile) || ! file_exists(public_path('build/manifest.json'))) {
+            return;
+        }
+
+        if ($this->app->isProduction()) {
+            Vite::useHotFile(storage_path('framework/vite.hot.disabled'));
+
+            return;
+        }
+
+        $hotUrl = trim((string) @file_get_contents($hotFile));
+        $parts = parse_url($hotUrl);
+        $host = $parts['host'] ?? null;
+        $port = $parts['port'] ?? null;
+        $reachable = false;
+
+        if ($host && $port) {
+            $fp = @fsockopen($host, (int) $port, $errno, $errstr, 0.15);
+            if ($fp) {
+                fclose($fp);
+                $reachable = true;
+            }
+        }
+
+        if (! $reachable) {
+            Vite::useHotFile(storage_path('framework/vite.hot.disabled'));
+        }
     }
 
     /**

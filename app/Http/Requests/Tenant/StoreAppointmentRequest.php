@@ -31,7 +31,16 @@ class StoreAppointmentRequest extends FormRequest
             ],
             // Création automatique de la fiche client si nouveau
             'new_customer_name' => ['required_without:customer_id', 'nullable', 'string', 'max:150'],
-            'new_customer_phone' => ['required_without:customer_id', 'nullable', 'string', 'max:50'],
+            'new_customer_first_name' => ['nullable', 'string', 'max:100'],
+            'new_customer_gender' => ['required_without:customer_id', 'nullable', Rule::in(['homme', 'femme', 'autre'])],
+            'new_customer_id_number' => ['required_without:customer_id', 'nullable', 'string', 'min:3', 'max:100'],
+            'new_customer_dial_code' => ['nullable', 'string', 'max:15'],
+            'new_customer_phone' => ['required_without:customer_id', 'nullable', 'string', 'min:6', 'max:50'],
+            'new_customer_description' => ['nullable', 'string', 'max:2000'],
+            'new_customer_profession' => ['nullable', 'string', 'max:120'],
+            'new_customer_date_of_birth' => ['nullable', 'date'],
+            'new_customer_emergency_contact' => ['nullable', 'string', 'max:150'],
+            'new_customer_photo' => ['nullable', 'image', 'max:4096'],
             'vehicle_id' => [
                 'nullable',
                 'integer',

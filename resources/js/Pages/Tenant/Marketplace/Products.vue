@@ -2,6 +2,7 @@
 import FileDropzone from '@/Components/FileDropzone.vue';
 import RichTextEditor from '@/Components/RichTextEditor.vue';
 import StaticModal from '@/Components/StaticModal.vue';
+import { useConfirm } from '@/composables/useConfirm';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
@@ -52,12 +53,26 @@ function createProduct() {
     });
 }
 
+const { askConfirm } = useConfirm();
+
 function toggleProduct(id) {
-    router.post(`/marketplace-gestion/produits/${id}/toggle`);
+    askConfirm({
+        title: 'Modifier la visibilité du produit',
+        message: 'Voulez-vous vraiment publier ou masquer ce produit sur le Marketplace ?',
+        confirmLabel: 'Confirmer',
+        confirmClass: 'btn-primary',
+        onConfirm: () => router.post(`/marketplace-gestion/produits/${id}/toggle`),
+    });
 }
 
 function deleteProduct(id) {
-    router.delete(`/marketplace-gestion/produits/${id}`);
+    askConfirm({
+        title: 'Supprimer le produit',
+        message: 'Voulez-vous vraiment supprimer définitivement ce produit de votre catalogue Marketplace ?',
+        confirmLabel: 'Supprimer',
+        confirmClass: 'btn-danger',
+        onConfirm: () => router.delete(`/marketplace-gestion/produits/${id}`),
+    });
 }
 </script>
 

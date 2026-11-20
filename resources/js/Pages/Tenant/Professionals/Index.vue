@@ -2,6 +2,7 @@
 import DatePickerInput from '@/Components/DatePickerInput.vue';
 import FileDropzone from '@/Components/FileDropzone.vue';
 import StaticModal from '@/Components/StaticModal.vue';
+import { useConfirm } from '@/composables/useConfirm';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
@@ -115,14 +116,26 @@ function updateProfessional() {
     });
 }
 
+const { askConfirm } = useConfirm();
+
 function toggleActive(id) {
-    router.post(`/professionnels/${id}/statut`);
+    askConfirm({
+        title: 'Changer le statut du compte',
+        message: 'Voulez-vous vraiment activer ou suspendre ce compte professionnel ?',
+        confirmLabel: 'Confirmer',
+        confirmClass: 'btn-primary',
+        onConfirm: () => router.post(`/professionnels/${id}/statut`),
+    });
 }
 
 function resetPassword(p) {
-    if (confirm(`Réinitialiser le mot de passe de ${p.name} à 00000000 ?`)) {
-        router.post(`/professionnels/${p.id}/reinitialiser-mot-de-passe`);
-    }
+    askConfirm({
+        title: 'Réinitialiser le mot de passe',
+        message: `Voulez-vous vraiment réinitialiser le mot de passe de ${p.name} à 00000000 ?`,
+        confirmLabel: 'Réinitialiser',
+        confirmClass: 'btn-warning text-dark',
+        onConfirm: () => router.post(`/professionnels/${p.id}/reinitialiser-mot-de-passe`),
+    });
 }
 </script>
 

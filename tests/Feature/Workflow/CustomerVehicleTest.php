@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\TenantRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class CustomerVehicleTest extends TestCase
@@ -36,13 +37,22 @@ class CustomerVehicleTest extends TestCase
         $this->actingAs($user, 'web')
             ->post('http://centre.mboacar.com/clients', [
                 'name' => 'M. Kamga',
+                'first_name' => 'Jean',
+                'gender' => 'homme',
+                'id_number' => 'CNI-11223344',
+                'phone_dial_code' => '+237',
                 'phone' => '699112233',
                 'type' => 'particulier',
                 'city' => 'Douala',
+                'profession' => 'Commerçant',
+                'description' => 'Client fidèle',
             ])
             ->assertSessionHas('success');
 
         $customer = Customer::withoutTenantScope()->where('tenant_id', $tenant->id)->firstOrFail();
+        $this->assertSame('+237 699112233', $customer->whatsapp_phone);
+        $this->assertSame('CNI-11223344', $customer->id_number);
+        $this->assertSame('homme', $customer->gender);
 
         $this->actingAs($user, 'web')
             ->post('http://centre.mboacar.com/vehicules', [
@@ -53,18 +63,50 @@ class CustomerVehicleTest extends TestCase
                 'fuel_type' => 'essence',
                 'transmission' => 'automatique',
                 'mileage' => 84500,
+                'vin' => 'JTDBR32E000123456',
+                'year' => 2020,
+                'color' => 'Gris',
+                'notes' => 'Véhicule entretenu',
             ])
             ->assertSessionHas('success');
 
         $this->assertDatabaseHas('vehicles', [
             'tenant_id' => $tenant->id,
             'license_plate' => 'LT 123 AB',
+            'vin' => 'JTDBR32E000123456',
+            'year' => 2020,
+            'color' => 'Gris',
         ]);
 
-        // Recherche par immatriculation
+        // Relance client via WhatsApp (Green-API)
+        config([
+            'services.greenapi.url' => 'https://api.greenapi.test',
+            'services.greenapi.id_instance' => '123456',
+            'services.greenapi.api_token_instance' => 'secret-token',
+        ]);
+        Http::fake([
+            'https://api.greenapi.test/*' => Http::response(['idMessage' => 'WA-REM-1'], 200),
+        ]);
+
+        $this->actingAs($user, 'web')
+            ->post("http://centre.mboacar.com/clients/{$customer->id}/relancer-whatsapp", [
+                'message' => 'Bonjour M. Kamga, votre véhicule est prêt.',
+            ])
+            ->assertSessionHas('success');
+
+        Http::assertSent(fn ($req) => str_contains($req->url(), 'waInstance123456/sendMessage/secret-token')
+            && $req['chatId'] === '237699112233@c.us');
+
+        // Recherche par immatriculation sur /clients et /vehicules
         $this->actingAs($user, 'web')
             ->get('http://centre.mboacar.com/clients?q=LT+123')
             ->assertStatus(200)
+            ->assertSee('M. Kamga');
+
+        $this->actingAs($user, 'web')
+            ->get('http://centre.mboacar.com/vehicules?q=LT+123')
+            ->assertStatus(200)
+            ->assertSee('LT 123 AB')
             ->assertSee('M. Kamga');
     }
 

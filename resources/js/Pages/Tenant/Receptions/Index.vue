@@ -1,6 +1,7 @@
 <script setup>
 import FileDropzone from '@/Components/FileDropzone.vue';
 import StaticModal from '@/Components/StaticModal.vue';
+import { useConfirm } from '@/composables/useConfirm';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
@@ -204,8 +205,16 @@ function submitReception() {
     });
 }
 
+const { askConfirm } = useConfirm();
+
 function returnCourtesy(id) {
-    router.post(`/receptions/${id}/retour-courtoisie`);
+    askConfirm({
+        title: 'Retour du véhicule de courtoisie',
+        message: 'Confirmez-vous que le client a restitué le véhicule de courtoisie au garage ?',
+        confirmLabel: 'Confirmer le retour',
+        confirmClass: 'btn-success',
+        onConfirm: () => router.post(`/receptions/${id}/retour-courtoisie`),
+    });
 }
 </script>
 

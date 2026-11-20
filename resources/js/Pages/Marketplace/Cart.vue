@@ -1,6 +1,9 @@
 <script setup>
+import { useConfirm } from '@/composables/useConfirm';
 import MarketplaceLayout from '@/Layouts/MarketplaceLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
+
+const { askConfirm } = useConfirm();
 
 defineProps({
     cartItems: { type: Array, default: () => [] },
@@ -12,7 +15,13 @@ function updateQty(id, qty) {
 }
 
 function removeItem(id) {
-    router.delete(`/panier/${id}`, { preserveScroll: true });
+    askConfirm({
+        title: 'Retirer du panier',
+        message: 'Voulez-vous vraiment retirer cet article de votre panier ?',
+        confirmLabel: 'Retirer',
+        confirmClass: 'btn-danger',
+        onConfirm: () => router.delete(`/panier/${id}`, { preserveScroll: true }),
+    });
 }
 
 function fmt(n) {

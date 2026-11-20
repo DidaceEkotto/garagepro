@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/css/select2.min.css" rel="stylesheet"/>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>
@@ -206,6 +207,41 @@
             }
             html += '</tbody></table><p><br></p>';
             adminWysiwygExec(editorId, field, 'insertHTML', html);
+        }
+    </script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/js/select2.min.js"></script>
+    <script>
+        function initAdminSelect2() {
+            if (!window.jQuery || !window.jQuery.fn || !window.jQuery.fn.select2) return;
+            const $ = window.jQuery;
+            document.querySelectorAll('select:not(.no-select2)').forEach((el) => {
+                const $el = $(el);
+                if ($el.data('select2')) return;
+                const $modal = $el.closest('.modal');
+                const opts = { width: '100%' };
+                if ($modal.length) opts.dropdownParent = $modal;
+                $el.select2(opts);
+                $el.on('select2:select select2:unselect', function () {
+                    if (el.dataset.s2Syncing === '1') return;
+                    el.dataset.s2Syncing = '1';
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                    setTimeout(() => { delete el.dataset.s2Syncing; }, 0);
+                });
+            });
+        }
+        document.addEventListener('DOMContentLoaded', initAdminSelect2);
+        document.addEventListener('livewire:navigated', () => setTimeout(initAdminSelect2, 60));
+        if (window.MutationObserver) {
+            let s2Scheduled = false;
+            new MutationObserver(() => {
+                if (s2Scheduled) return;
+                s2Scheduled = true;
+                requestAnimationFrame(() => {
+                    s2Scheduled = false;
+                    initAdminSelect2();
+                });
+            }).observe(document.body, { childList: true, subtree: true });
         }
     </script>
 </body>

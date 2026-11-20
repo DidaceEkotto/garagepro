@@ -36,8 +36,8 @@ class SecurityHeaders
         // CSP compatible Inertia/Vue 3, Bootstrap 5 et Livewire 4.
         $csp = implode('; ', [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://js.hcaptcha.com{$viteDev}",
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com{$viteDev}",
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://js.hcaptcha.com https://cdn.jsdelivr.net https://code.jquery.com{$viteDev}",
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net{$viteDev}",
             "font-src 'self' data: https://fonts.gstatic.com",
             "img-src 'self' data: blob:",
             "connect-src 'self' https://api.saspay.me{$viteDev}{$viteWs}",

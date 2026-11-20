@@ -257,10 +257,10 @@ function submit() {
                         </div>
 
                         <div class="mb-3">
-                            <label for="phone" class="form-label small">{{ t('auth.phone') }} <span class="text-danger">*</span></label>
+                            <label for="phone" class="form-label small fw-semibold">{{ t('otp.whatsappLabel') }} <span class="text-danger">*</span></label>
                             <div class="input-group">
-                                <span class="input-group-text fw-semibold bg-light text-dark user-select-none">
-                                    <i class="bi bi-telephone me-1 text-primary"></i>{{ selectedDialCode }}
+                                <span class="input-group-text fw-semibold bg-light text-success user-select-none">
+                                    <i class="bi bi-whatsapp me-1"></i>{{ selectedDialCode }}
                                 </span>
                                 <input
                                     id="phone"
@@ -273,41 +273,7 @@ function submit() {
                                 />
                                 <div v-if="form.errors.phone" class="invalid-feedback">{{ form.errors.phone }}</div>
                             </div>
-                        </div>
-
-                        <div class="row g-2 mb-2">
-                            <div class="col-md-6">
-                                <label for="password" class="form-label small">{{ t('auth.password') }}</label>
-                                <div class="input-group">
-                                    <input
-                                        id="password"
-                                        v-model="form.password"
-                                        :type="showPassword ? 'text' : 'password'"
-                                        class="form-control"
-                                        :class="{ 'is-invalid': form.errors.password }"
-                                        required
-                                    />
-                                    <button type="button" class="btn btn-outline-secondary" @click="showPassword = !showPassword">
-                                        <i :class="showPassword ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
-                                    </button>
-                                    <div v-if="form.errors.password" class="invalid-feedback">{{ form.errors.password }}</div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="password_confirmation" class="form-label small">{{ t('auth.passwordConfirm') }}</label>
-                                <div class="input-group">
-                                    <input
-                                        id="password_confirmation"
-                                        v-model="form.password_confirmation"
-                                        :type="showPasswordConfirmation ? 'text' : 'password'"
-                                        class="form-control"
-                                        required
-                                    />
-                                    <button type="button" class="btn btn-outline-secondary" @click="showPasswordConfirmation = !showPasswordConfirmation">
-                                        <i :class="showPasswordConfirmation ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
-                                    </button>
-                                </div>
-                            </div>
+                            <div class="form-text small">{{ t('otp.whatsappHint') }}</div>
                         </div>
 
                         <div class="mb-3">
@@ -329,51 +295,8 @@ function submit() {
                             <div v-if="form.errors.promo_code" class="text-danger small mt-1">{{ form.errors.promo_code }}</div>
                         </div>
 
-                        <!-- Barre de sécurité & marqueur caractère par caractère -->
-                        <div class="p-3 rounded-3 bg-light border mb-4">
-                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                <span class="small fw-semibold text-dark">{{ t('auth.pwdStrength') }}</span>
-                                <span v-if="form.password.length > 0" class="small fw-bold" :class="passwordStrengthMeta.textClass">
-                                    {{ passwordStrengthMeta.label }}
-                                </span>
-                            </div>
-                            <div class="progress mb-2" style="height: 6px;">
-                                <div
-                                    class="progress-bar transition-all"
-                                    :class="form.password.length > 0 ? passwordStrengthMeta.barClass : 'bg-secondary'"
-                                    :style="{ width: (form.password.length > 0 ? passwordStrengthMeta.percent : 0) + '%', transition: 'width 0.25s ease' }"
-                                ></div>
-                            </div>
-
-                            <!-- 8 segments visuels : marqués au fur et à mesure, gris si non encore tapés -->
-                            <div class="d-flex gap-1 mb-2" aria-hidden="true">
-                                <span
-                                    v-for="slot in 8"
-                                    :key="slot"
-                                    class="flex-grow-1 rounded-pill"
-                                    :class="form.password.length >= slot ? (passwordScore === 4 ? 'bg-success' : 'bg-primary') : 'bg-secondary bg-opacity-25'"
-                                    style="height: 5px; transition: background-color 0.2s ease;"
-                                ></span>
-                            </div>
-
-                            <div class="row g-1" style="font-size: 0.78rem;">
-                                <div class="col-6" :class="passwordRules.length ? 'text-success fw-semibold' : 'text-muted'">
-                                    <i class="bi me-1" :class="passwordRules.length ? 'bi-check-circle-fill' : 'bi-circle'"></i>{{ t('auth.pwdRuleLen') }}
-                                </div>
-                                <div class="col-6" :class="passwordRules.upper ? 'text-success fw-semibold' : 'text-muted'">
-                                    <i class="bi me-1" :class="passwordRules.upper ? 'bi-check-circle-fill' : 'bi-circle'"></i>{{ t('auth.pwdRuleUpper') }}
-                                </div>
-                                <div class="col-6" :class="passwordRules.digit ? 'text-success fw-semibold' : 'text-muted'">
-                                    <i class="bi me-1" :class="passwordRules.digit ? 'bi-check-circle-fill' : 'bi-circle'"></i>{{ t('auth.pwdRuleDigit') }}
-                                </div>
-                                <div class="col-6" :class="passwordRules.special ? 'text-success fw-semibold' : 'text-muted'">
-                                    <i class="bi me-1" :class="passwordRules.special ? 'bi-check-circle-fill' : 'bi-circle'"></i>{{ t('auth.pwdRuleSpecial') }}
-                                </div>
-                            </div>
-                        </div>
-
                         <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold mb-3" :disabled="form.processing">
-                            {{ form.processing ? t('auth.creating') : t('auth.registerBtn') }}
+                            {{ form.processing ? t('auth.creating') : t('otp.continueBtn') }}
                         </button>
 
                         <div class="text-center small text-muted">

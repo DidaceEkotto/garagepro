@@ -39,6 +39,9 @@ class StoreVehicleRequest extends FormRequest
             'transmission' => ['required', Rule::in(['manuelle', 'automatique'])],
             'mileage' => ['required', 'integer', 'min:0'],
             'first_registration_date' => ['nullable', 'date'],
+            'next_service_date' => ['nullable', 'date'],
+            'next_service_mileage' => ['nullable', 'integer', 'min:0'],
+            'notes' => ['nullable', 'string', 'max:2000'],
         ];
     }
 }

@@ -116,6 +116,11 @@ Route::middleware('guest:web')->group(function () {
     Route::post('/inscription', [TenantRegistrationController::class, 'store'])
         ->middleware('throttle:register')
         ->name('register.store');
+    Route::get('/inscription/verification-otp', [TenantRegistrationController::class, 'showOtp'])->name('register.otp');
+    Route::post('/inscription/verification-otp', [TenantRegistrationController::class, 'verifyOtp'])->name('register.otp.verify');
+    Route::post('/inscription/verification-otp/renvoyer', [TenantRegistrationController::class, 'resendOtp'])->name('register.otp.resend');
+    Route::get('/inscription/mot-de-passe', [TenantRegistrationController::class, 'showPasswordStep'])->name('register.password');
+    Route::post('/inscription/mot-de-passe', [TenantRegistrationController::class, 'storePasswordStep'])->name('register.password.store');
 });
 
 Route::get('/sso/{token}', [TenantRegistrationController::class, 'consumeSso'])->name('tenant.sso');
@@ -165,9 +170,13 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
         ->middleware('throttle:search')
         ->name('tenant.customers.index');
     Route::post('/clients', [CustomerController::class, 'store'])->name('tenant.customers.store');
+    Route::post('/clients/{customer}/relancer-whatsapp', [CustomerController::class, 'remindWhatsapp'])->name('tenant.customers.remind_whatsapp');
     Route::get('/clients/{customer}', [CustomerController::class, 'show'])->name('tenant.customers.show');
     Route::post('/clients/{customer}/relancer', [CustomerController::class, 'remind'])->name('tenant.customers.remind');
 
+    Route::get('/vehicules', [VehicleController::class, 'index'])
+        ->middleware('throttle:search')
+        ->name('tenant.vehicles.index');
     Route::post('/vehicules', [VehicleController::class, 'store'])->name('tenant.vehicles.store');
     Route::get('/vehicules/{vehicle}', [VehicleController::class, 'show'])->name('tenant.vehicles.show');
 

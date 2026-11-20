@@ -1,5 +1,6 @@
 <script setup>
 import DatePickerInput from '@/Components/DatePickerInput.vue';
+import FileDropzone from '@/Components/FileDropzone.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import TimePickerInput from '@/Components/TimePickerInput.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
@@ -12,6 +13,8 @@ const props = defineProps({
     customers: Array,
     vehicles: Array,
     mechanics: Array,
+    defaultDialCode: { type: String, default: '+237' },
+    countries: { type: Array, default: () => [] },
 });
 
 const isNewCustomer = ref(false);
@@ -22,7 +25,16 @@ const form = useForm({
     agency_id: props.agencies?.[0]?.id ?? '',
     customer_id: '',
     new_customer_name: '',
+    new_customer_first_name: '',
+    new_customer_gender: 'homme',
+    new_customer_id_number: '',
+    new_customer_dial_code: props.defaultDialCode || '+237',
     new_customer_phone: '',
+    new_customer_profession: '',
+    new_customer_date_of_birth: '',
+    new_customer_emergency_contact: '',
+    new_customer_description: '',
+    new_customer_photo: null,
     vehicle_id: '',
     assigned_mechanic_id: '',
     bay_name: 'Pont 1',
@@ -75,8 +87,21 @@ function submitAppointment() {
         ? `${scheduleDate.value} ${scheduleTime.value || '09:00'}`
         : '';
     form.post('/rendez-vous', {
+        forceFormData: true,
         onSuccess: () => {
-            form.reset('new_customer_name', 'new_customer_phone', 'notes', 'scheduled_at');
+            form.reset(
+                'new_customer_name',
+                'new_customer_first_name',
+                'new_customer_id_number',
+                'new_customer_phone',
+                'new_customer_profession',
+                'new_customer_date_of_birth',
+                'new_customer_emergency_contact',
+                'new_customer_description',
+                'new_customer_photo',
+                'notes',
+                'scheduled_at'
+            );
             window.bootstrap?.Modal.getInstance(document.getElementById('modalAddAppointment'))?.hide();
         },
     });
@@ -156,14 +181,62 @@ function updateStatus(id, status) {
                     </select>
                 </div>
 
-                <div v-else class="row g-2 mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label small">Nom du client</label>
-                        <input v-model="form.new_customer_name" type="text" class="form-control" required />
+                <div v-else class="border rounded p-3 mb-3 bg-light">
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-5">
+                            <label class="form-label small">Nom du client <span class="text-danger">*</span></label>
+                            <input v-model="form.new_customer_name" type="text" class="form-control form-control-sm" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small">Prénom (facultatif)</label>
+                            <input v-model="form.new_customer_first_name" type="text" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Sexe <span class="text-danger">*</span></label>
+                            <select v-model="form.new_customer_gender" class="form-select form-select-sm" required>
+                                <option value="homme">Homme</option>
+                                <option value="femme">Femme</option>
+                                <option value="autre">Autre</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label small">Téléphone</label>
-                        <input v-model="form.new_customer_phone" type="text" class="form-control" required />
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label small">N° CNI ou Passeport <span class="text-danger">*</span></label>
+                            <input v-model="form.new_customer_id_number" type="text" class="form-control form-control-sm" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small">Téléphone WhatsApp <span class="text-danger">*</span></label>
+                            <div class="input-group input-group-sm">
+                                <select v-model="form.new_customer_dial_code" class="form-select" style="max-width: 100px;">
+                                    <option :value="defaultDialCode">{{ defaultDialCode }}</option>
+                                    <option v-for="c in countries" :key="c.code" :value="c.dial_code">{{ c.code }} ({{ c.dial_code }})</option>
+                                </select>
+                                <input v-model="form.new_customer_phone" type="tel" class="form-control" required />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-4">
+                            <label class="form-label small">Profession (facultatif)</label>
+                            <input v-model="form.new_customer_profession" type="text" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small">Date de naissance (facultatif)</label>
+                            <DatePickerInput v-model="form.new_customer_date_of_birth" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small">Contact d'urgence (facultatif)</label>
+                            <input v-model="form.new_customer_emergency_contact" type="text" class="form-control form-control-sm" />
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Description (facultatif)</label>
+                        <textarea v-model="form.new_customer_description" rows="2" class="form-control form-control-sm"></textarea>
+                    </div>
+                    <div>
+                        <label class="form-label small">Photo de profil (facultatif)</label>
+                        <FileDropzone v-model="form.new_customer_photo" label="Glissez-déposez la photo ou cliquez" />
                     </div>
                 </div>
 

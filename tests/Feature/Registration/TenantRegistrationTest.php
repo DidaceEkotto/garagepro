@@ -7,6 +7,7 @@ use App\Models\Agency;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -67,6 +68,7 @@ class TenantRegistrationTest extends TestCase
             'garage_name' => 'Garage Local',
             'slug' => 'garage-local',
             'email' => 'local@example.cm',
+            'phone' => '+237 699000001',
             'country' => 'CM',
             'agencies_count' => 1,
             'password' => 'MotDePasse@123',
@@ -95,5 +97,77 @@ class TenantRegistrationTest extends TestCase
 
             $response->assertSessionHasErrors('slug');
         }
+    }
+
+    public function test_three_step_whatsapp_otp_with_email_fallback_and_password_creation(): void
+    {
+        Mail::fake();
+        config([
+            'services.greenapi.url' => 'https://api.greenapi.test',
+            'services.greenapi.id_instance' => '123456',
+            'services.greenapi.api_token_instance' => 'secret-token',
+        ]);
+        Http::fake([
+            'https://api.greenapi.test/*' => Http::response(['idMessage' => 'MSG-1'], 200),
+        ]);
+
+        // 1. Numéro WhatsApp obligatoire
+        $this->post('/inscription', [
+            'garage_name' => 'Garage WhatsApp',
+            'slug' => 'garage-whatsapp',
+            'email' => 'wa@test.cm',
+            'country' => 'CM',
+            'agencies_count' => 1,
+        ])->assertSessionHasErrors('phone');
+
+        // 2. Inscription sans mot de passe -> envoi OTP WhatsApp + redirection /inscription/verification-otp
+        $this->post('/inscription', [
+            'garage_name' => 'Garage WhatsApp',
+            'slug' => 'garage-whatsapp',
+            'owner_first_name' => 'Marc',
+            'owner_last_name' => 'Benoit',
+            'gender' => 'homme',
+            'email' => 'wa@test.cm',
+            'phone' => '699112233',
+            'country' => 'CM',
+            'city' => 'Douala',
+            'agencies_count' => 1,
+        ])->assertRedirect(route('register.otp'));
+
+        Http::assertSent(fn ($req) => str_contains($req->url(), 'waInstance123456/sendMessage/secret-token')
+            && $req['chatId'] === '237699112233@c.us');
+
+        $this->get(route('register.otp'))->assertStatus(200);
+
+        // 3. Renvoi bloqué avant 2 minutes
+        $this->post(route('register.otp.resend'))
+            ->assertSessionHasErrors('code');
+
+        // 4. Après 3 tentatives invalides -> bascule vers l'email
+        $this->post(route('register.otp.verify'), ['code' => '00000'])->assertSessionHasErrors('code');
+        $this->post(route('register.otp.verify'), ['code' => '00000'])->assertSessionHasErrors('code');
+        $this->post(route('register.otp.verify'), ['code' => '00000'])->assertSessionHas('warning');
+
+        $sentCode = null;
+        Mail::assertSent(\App\Mail\RegistrationOtpMail::class, function ($mail) use (&$sentCode) {
+            $sentCode = $mail->code;
+            return $mail->hasTo('wa@test.cm') && strlen($mail->code) === 5;
+        });
+        $this->assertNotNull($sentCode);
+
+        // 5. Validation avec le code email -> redirection vers la page mot de passe
+        $this->post(route('register.otp.verify'), ['code' => $sentCode])
+            ->assertRedirect(route('register.password'));
+
+        $this->get(route('register.password'))->assertStatus(200);
+
+        // 6. Création du mot de passe -> création du garage + redirection SSO
+        $finalRes = $this->post(route('register.password.store'), [
+            'password' => 'Garage@2026',
+            'password_confirmation' => 'Garage@2026',
+        ]);
+
+        $finalRes->assertRedirect();
+        $this->assertNotNull(Tenant::where('slug', 'garage-whatsapp')->first());
     }
 }

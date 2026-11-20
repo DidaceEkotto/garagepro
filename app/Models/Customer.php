@@ -20,7 +20,13 @@ class Customer extends Model
         'tenant_id',
         'agency_id',
         'name',
+        'first_name',
+        'gender',
+        'id_number',
+        'phone_dial_code',
         'phone',
+        'whatsapp_phone',
+        'photo_path',
         'email',
         'address',
         'city',
@@ -29,13 +35,23 @@ class Customer extends Model
         'tax_id',
         'credit_limit',
         'notes',
+        'description',
+        'profession',
+        'date_of_birth',
+        'emergency_contact',
     ];
 
     protected function casts(): array
     {
         return [
             'credit_limit' => 'integer',
+            'date_of_birth' => 'date',
         ];
+    }
+
+    public function photoUrl(): ?string
+    {
+        return $this->photo_path ? asset('storage/'.$this->photo_path) : null;
     }
 
     public function agency(): BelongsTo

@@ -1,5 +1,6 @@
 <script setup>
 import StaticModal from '@/Components/StaticModal.vue';
+import { useConfirm } from '@/composables/useConfirm';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, ref, watch } from 'vue';
@@ -88,12 +89,26 @@ function submitQuote() {
     });
 }
 
+const { askConfirm } = useConfirm();
+
 function acceptQuote(id) {
-    router.post(`/devis/${id}/valider`);
+    askConfirm({
+        title: 'Valider le devis',
+        message: 'Confirmez-vous la validation de ce devis par le client ?',
+        confirmLabel: 'Valider le devis',
+        confirmClass: 'btn-success',
+        onConfirm: () => router.post(`/devis/${id}/valider`),
+    });
 }
 
 function newVersion(id) {
-    router.post(`/devis/${id}/nouvelle-version`);
+    askConfirm({
+        title: 'Créer une nouvelle version',
+        message: 'Voulez-vous créer une nouvelle version modifiable de ce devis ?',
+        confirmLabel: 'Créer la version',
+        confirmClass: 'btn-primary',
+        onConfirm: () => router.post(`/devis/${id}/nouvelle-version`),
+    });
 }
 </script>
 

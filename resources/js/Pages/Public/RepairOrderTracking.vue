@@ -1,4 +1,6 @@
 <script setup>
+import ConfirmStaticModal from '@/Components/ConfirmStaticModal.vue';
+import { useConfirm } from '@/composables/useConfirm';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 
@@ -25,9 +27,22 @@ const currentStepIndex = computed(() => {
     return 0;
 });
 
+const { askConfirm } = useConfirm();
+
 function respondQuote(quoteId, decision) {
-    router.post(`/suivi/${props.order.tracking_token}/devis/${quoteId}/repondre`, { decision }, {
-        preserveScroll: true,
+    const isAccept = decision === 'accept';
+    askConfirm({
+        title: isAccept ? 'Accepter le devis' : 'Refuser le devis',
+        message: isAccept
+            ? 'Confirmez-vous l\'acceptation de ce devis ? Le garage pourra démarrer les réparations.'
+            : 'Confirmez-vous le refus de ce devis ?',
+        confirmLabel: isAccept ? 'Accepter le devis' : 'Refuser',
+        confirmClass: isAccept ? 'btn-success' : 'btn-danger',
+        onConfirm: () => {
+            router.post(`/suivi/${props.order.tracking_token}/devis/${quoteId}/repondre`, { decision }, {
+                preserveScroll: true,
+            });
+        },
     });
 }
 
@@ -145,5 +160,6 @@ function fmt(n) {
                 </div>
             </div>
         </div>
+        <ConfirmStaticModal />
     </div>
 </template>

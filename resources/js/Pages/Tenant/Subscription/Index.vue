@@ -1,7 +1,10 @@
 <script setup>
+import { useConfirm } from '@/composables/useConfirm';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+
+const { askConfirm } = useConfirm();
 
 defineProps({
     monthlyPrice: Number,
@@ -20,7 +23,13 @@ function payNow() {
 }
 
 function payWithAffiliate() {
-    router.post('/affiliation/payer-abonnement');
+    askConfirm({
+        title: 'Payer avec le solde d\'affiliation',
+        message: 'Voulez-vous vraiment utiliser votre solde d\'affiliation pour payer cet abonnement ?',
+        confirmLabel: 'Confirmer le paiement',
+        confirmClass: 'btn-success',
+        onConfirm: () => router.post('/affiliation/payer-abonnement'),
+    });
 }
 
 function fmt(n) {

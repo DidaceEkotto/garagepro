@@ -347,7 +347,7 @@ function submitTask() {
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small">Chrono diagnostic</label>
-                            <select v-model="createForm.diagnostic_action" class="form-select form-select-sm no-select2">
+                            <select v-model="createForm.diagnostic_action" class="form-select form-select-sm">
                                 <option value="">-- Plus tard --</option>
                                 <option value="start">Démarrer diagnostic</option>
                                 <option value="finish">Terminer diagnostic</option>

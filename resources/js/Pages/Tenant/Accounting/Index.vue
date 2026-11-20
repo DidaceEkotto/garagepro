@@ -1,6 +1,7 @@
 <script setup>
 import DatePickerInput from '@/Components/DatePickerInput.vue';
 import StaticModal from '@/Components/StaticModal.vue';
+import { useConfirm } from '@/composables/useConfirm';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
@@ -54,12 +55,26 @@ function submitEntry() {
     });
 }
 
+const { askConfirm } = useConfirm();
+
 function reverseEntry(id) {
-    router.post(`/comptabilite/ecritures/${id}/contre-passer`);
+    askConfirm({
+        title: 'Contre-passer l\'écriture',
+        message: 'Voulez-vous vraiment contre-passer cette écriture comptable ? Une écriture d\'annulation sera générée.',
+        confirmLabel: 'Contre-passer',
+        confirmClass: 'btn-warning text-dark',
+        onConfirm: () => router.post(`/comptabilite/ecritures/${id}/contre-passer`),
+    });
 }
 
 function closeFy(id) {
-    router.post(`/comptabilite/exercices/${id}/cloturer`);
+    askConfirm({
+        title: 'Clôturer l\'exercice comptable',
+        message: 'Attention : voulez-vous vraiment clôturer cet exercice comptable ? Aucune nouvelle écriture ne pourra plus y être ajoutée.',
+        confirmLabel: 'Clôturer définitivement',
+        confirmClass: 'btn-danger',
+        onConfirm: () => router.post(`/comptabilite/exercices/${id}/cloturer`),
+    });
 }
 </script>
 

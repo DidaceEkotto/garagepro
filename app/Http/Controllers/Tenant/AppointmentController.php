@@ -7,6 +7,7 @@ use App\Http\Requests\Tenant\StoreAppointmentRequest;
 use App\Jobs\SendAppointmentReminderJob;
 use App\Models\Agency;
 use App\Models\Appointment;
+use App\Models\Country;
 use App\Models\Customer;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -14,15 +15,19 @@ use App\Services\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class AppointmentController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, TenantContext $tenantContext): Response
     {
         $this->authorize('viewAny', Appointment::class);
+
+        $tenant = $tenantContext->getTenant();
+        $defaultDialCode = Country::where('code', $tenant?->country ?: 'CM')->value('dial_code') ?? '+237';
 
         $appointments = Appointment::with(['customer', 'vehicle', 'mechanic', 'agency'])
             ->orderByRaw('scheduled_at IS NULL ASC')
@@ -35,6 +40,8 @@ class AppointmentController extends Controller
             'customers' => Customer::orderBy('name')->get(['id', 'name', 'phone']),
             'vehicles' => Vehicle::orderBy('license_plate')->get(['id', 'customer_id', 'license_plate', 'brand', 'model']),
             'mechanics' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'defaultDialCode' => $defaultDialCode,
+            'countries' => Country::active()->orderBy('name')->get(['code', 'name', 'dial_code']),
         ]);
     }
 
@@ -42,16 +49,47 @@ class AppointmentController extends Controller
     {
         $data = $request->validated();
 
-        $appointment = DB::transaction(function () use ($data, $tenantContext) {
+        $appointment = DB::transaction(function () use ($data, $tenantContext, $request) {
             $customerId = $data['customer_id'] ?? null;
 
             // Création automatique de la fiche client si nouveau client
             if (! $customerId) {
+                $tenant = $tenantContext->getTenant();
+                $dialCode = trim((string) ($data['new_customer_dial_code'] ?? ''));
+                if ($dialCode === '') {
+                    $dialCode = Country::where('code', $tenant?->country ?: 'CM')->value('dial_code') ?? '+237';
+                }
+
+                $rawPhone = trim((string) $data['new_customer_phone']);
+                $dialDigits = preg_replace('/\D+/', '', $dialCode);
+                $phoneDigits = preg_replace('/\D+/', '', $rawPhone);
+                if (str_starts_with($rawPhone, '+')) {
+                    $formattedPhone = $rawPhone;
+                } elseif ($dialDigits !== '' && str_starts_with($phoneDigits, $dialDigits)) {
+                    $formattedPhone = '+'.$phoneDigits;
+                } else {
+                    $formattedPhone = $dialCode.' '.$phoneDigits;
+                }
+
+                $photoPath = $request->hasFile('new_customer_photo')
+                    ? Storage::disk('public')->putFile('images/customers', $request->file('new_customer_photo'))
+                    : null;
+
                 $customer = Customer::create([
                     'tenant_id' => $tenantContext->id(),
                     'agency_id' => $data['agency_id'],
                     'name' => $data['new_customer_name'],
-                    'phone' => $data['new_customer_phone'],
+                    'first_name' => $data['new_customer_first_name'] ?? null,
+                    'gender' => $data['new_customer_gender'] ?? null,
+                    'id_number' => $data['new_customer_id_number'] ?? null,
+                    'phone_dial_code' => $dialCode,
+                    'phone' => $formattedPhone,
+                    'whatsapp_phone' => $formattedPhone,
+                    'photo_path' => $photoPath,
+                    'description' => $data['new_customer_description'] ?? null,
+                    'profession' => $data['new_customer_profession'] ?? null,
+                    'date_of_birth' => $data['new_customer_date_of_birth'] ?? null,
+                    'emergency_contact' => $data['new_customer_emergency_contact'] ?? null,
                     'type' => 'particulier',
                 ]);
                 $customerId = $customer->id;

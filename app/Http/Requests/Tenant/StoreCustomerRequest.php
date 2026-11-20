@@ -17,6 +17,10 @@ class StoreCustomerRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'min:2', 'max:150'],
+            'first_name' => ['nullable', 'string', 'max:100'],
+            'gender' => ['required', Rule::in(['homme', 'femme', 'autre'])],
+            'id_number' => ['required', 'string', 'min:3', 'max:100'],
+            'phone_dial_code' => ['nullable', 'string', 'max:15'],
             'phone' => ['required', 'string', 'min:6', 'max:50'],
             'email' => ['nullable', 'email', 'max:150'],
             'address' => ['nullable', 'string', 'max:255'],
@@ -26,6 +30,11 @@ class StoreCustomerRequest extends FormRequest
             'tax_id' => ['nullable', 'string', 'max:80'],
             'credit_limit' => ['nullable', 'integer', 'min:0'],
             'notes' => ['nullable', 'string', 'max:2000'],
+            'description' => ['nullable', 'string', 'max:2000'],
+            'profession' => ['nullable', 'string', 'max:120'],
+            'date_of_birth' => ['nullable', 'date'],
+            'emergency_contact' => ['nullable', 'string', 'max:150'],
+            'photo' => ['nullable', 'image', 'max:4096'],
         ];
     }
 }

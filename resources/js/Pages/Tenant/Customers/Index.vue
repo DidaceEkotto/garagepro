@@ -1,24 +1,39 @@
 <script setup>
+import DatePickerInput from '@/Components/DatePickerInput.vue';
+import FileDropzone from '@/Components/FileDropzone.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
-import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
 const props = defineProps({
     customers: Object,
     search: String,
+    defaultDialCode: { type: String, default: '+237' },
+    countries: { type: Array, default: () => [] },
 });
 
 const query = ref(props.search ?? '');
 const remindingCustomer = ref(null);
+const remindingWhatsappCustomer = ref(null);
 
 const form = useForm({
     name: '',
+    first_name: '',
+    gender: 'homme',
+    id_number: '',
+    phone_dial_code: props.defaultDialCode || '+237',
     phone: '',
     email: '',
     type: 'particulier',
     city: '',
+    address: '',
     company_name: '',
+    profession: '',
+    date_of_birth: '',
+    emergency_contact: '',
+    description: '',
+    photo: null,
     credit_limit: 0,
 });
 
@@ -43,14 +58,36 @@ function submitRemind() {
     });
 }
 
+const whatsappForm = useForm({
+    message: '',
+});
+
+function openWhatsappRemind(customer) {
+    remindingWhatsappCustomer.value = customer;
+    whatsappForm.message = `Bonjour ${customer.name}, nous vous contactons depuis votre garage concernant le suivi de votre véhicule. N'hésitez pas à nous répondre sur WhatsApp !`;
+}
+
+function submitWhatsappRemind() {
+    if (!remindingWhatsappCustomer.value) return;
+    whatsappForm.post(`/clients/${remindingWhatsappCustomer.value.id}/relancer-whatsapp`, {
+        onSuccess: () => {
+            remindingWhatsappCustomer.value = null;
+            window.bootstrap?.Modal.getInstance(document.getElementById('modalRemindWhatsapp'))?.hide();
+        },
+    });
+}
+
 function doSearch() {
     router.get('/clients', { q: query.value }, { preserveState: true });
 }
 
 function createCustomer() {
     form.post('/clients', {
+        forceFormData: true,
         onSuccess: () => {
             form.reset();
+            form.phone_dial_code = props.defaultDialCode || '+237';
+            form.gender = 'homme';
             window.bootstrap?.Modal.getInstance(document.getElementById('modalAddCustomer'))?.hide();
         },
     });
@@ -58,12 +95,12 @@ function createCustomer() {
 </script>
 
 <template>
-    <Head title="Clients & Véhicules" />
+    <Head title="Clients" />
 
     <TenantLayout>
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
-                <h1 class="h4 fw-bold mb-0">Clients &amp; Véhicules</h1>
+                <h1 class="h4 fw-bold mb-0">Clients</h1>
                 <p class="text-muted small mb-0">Recherche rapide par nom, téléphone ou plaque d'immatriculation</p>
             </div>
             <div class="d-flex gap-2">
@@ -102,6 +139,16 @@ function createCustomer() {
                             <td>{{ c.vehicles?.length ?? 0 }}</td>
                             <td class="text-end text-nowrap">
                                 <button
+                                    v-if="c.whatsapp_phone || c.phone"
+                                    type="button"
+                                    class="btn btn-outline-success btn-sm me-1"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#modalRemindWhatsapp"
+                                    @click="openWhatsappRemind(c)"
+                                >
+                                    <i class="bi bi-whatsapp me-1"></i>WhatsApp
+                                </button>
+                                <button
                                     v-if="c.email"
                                     type="button"
                                     class="btn btn-outline-info btn-sm me-1"
@@ -111,7 +158,6 @@ function createCustomer() {
                                 >
                                     <i class="bi bi-envelope-paper me-1"></i>Relancer
                                 </button>
-                                <Link :href="`/clients/${c.id}`" class="btn btn-outline-primary btn-sm">Ouvrir</Link>
                             </td>
                         </tr>
                     </tbody>
@@ -119,18 +165,49 @@ function createCustomer() {
             </div>
         </div>
 
-        <StaticModal id="modalAddCustomer" title="Nouveau client">
+        <StaticModal id="modalAddCustomer" title="Nouveau client" size="modal-lg">
             <form @submit.prevent="createCustomer">
-                <div class="mb-3">
-                    <label class="form-label small">Nom complet</label>
-                    <input v-model="form.name" type="text" class="form-control" required />
-                </div>
-                <div class="mb-3">
-                    <label class="form-label small">Téléphone</label>
-                    <input v-model="form.phone" type="text" class="form-control" required />
-                </div>
                 <div class="row g-2 mb-3">
-                    <div class="col-6">
+                    <div class="col-md-5">
+                        <label class="form-label small">Nom <span class="text-danger">*</span></label>
+                        <input v-model="form.name" type="text" class="form-control" :class="{ 'is-invalid': form.errors.name }" required />
+                        <div v-if="form.errors.name" class="invalid-feedback">{{ form.errors.name }}</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Prénom (facultatif)</label>
+                        <input v-model="form.first_name" type="text" class="form-control" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">Sexe <span class="text-danger">*</span></label>
+                        <select v-model="form.gender" class="form-select" required>
+                            <option value="homme">Homme</option>
+                            <option value="femme">Femme</option>
+                            <option value="autre">Autre</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small">N° CNI ou Passeport <span class="text-danger">*</span></label>
+                        <input v-model="form.id_number" type="text" class="form-control" :class="{ 'is-invalid': form.errors.id_number }" placeholder="Ex: 112233445 ou CM123456" required />
+                        <div v-if="form.errors.id_number" class="invalid-feedback">{{ form.errors.id_number }}</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Téléphone WhatsApp <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <select v-model="form.phone_dial_code" class="form-select" style="max-width: 110px;">
+                                <option :value="defaultDialCode">{{ defaultDialCode }}</option>
+                                <option v-for="c in countries" :key="c.code" :value="c.dial_code">{{ c.code }} ({{ c.dial_code }})</option>
+                            </select>
+                            <input v-model="form.phone" type="tel" class="form-control" :class="{ 'is-invalid': form.errors.phone }" placeholder="6XX XXX XXX" required />
+                            <div v-if="form.errors.phone" class="invalid-feedback">{{ form.errors.phone }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
                         <label class="form-label small">Type</label>
                         <select v-model="form.type" class="form-select">
                             <option value="particulier">Particulier</option>
@@ -138,15 +215,47 @@ function createCustomer() {
                             <option value="flotte">Flotte</option>
                         </select>
                     </div>
-                    <div class="col-6">
-                        <label class="form-label small">Ville</label>
+                    <div class="col-md-4">
+                        <label class="form-label small">Ville (facultatif)</label>
                         <input v-model="form.city" type="text" class="form-control" />
                     </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">E-mail (facultatif)</label>
+                        <input v-model="form.email" type="email" class="form-control" />
+                    </div>
                 </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label small">Profession (facultatif)</label>
+                        <input v-model="form.profession" type="text" class="form-control" placeholder="Ex: Commerçant" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Date de naissance (facultatif)</label>
+                        <DatePickerInput v-model="form.date_of_birth" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Contact d'urgence (facultatif)</label>
+                        <input v-model="form.emergency_contact" type="text" class="form-control" placeholder="Nom & téléphone" />
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small">Adresse / Quartier (facultatif)</label>
+                    <input v-model="form.address" type="text" class="form-control" placeholder="Ex: Bonapriso, Rue..." />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small">Description (facultatif)</label>
+                    <textarea v-model="form.description" rows="2" class="form-control" placeholder="Notes ou informations complémentaires pour identifier le client..."></textarea>
+                </div>
+
                 <div class="mb-4">
-                    <label class="form-label small">E-mail (optionnel)</label>
-                    <input v-model="form.email" type="email" class="form-control" />
+                    <label class="form-label small">Photo de profil (facultatif)</label>
+                    <FileDropzone v-model="form.photo" label="Glissez-déposez la photo de profil ou cliquez pour choisir" />
+                    <div v-if="form.errors.photo" class="text-danger small mt-1">{{ form.errors.photo }}</div>
                 </div>
+
                 <div class="d-flex justify-content-end gap-2">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
                     <button type="submit" class="btn btn-primary px-4" :disabled="form.processing">Enregistrer</button>
@@ -171,6 +280,25 @@ function createCustomer() {
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
                     <button type="submit" class="btn btn-primary px-4" :disabled="remindForm.processing">
                         <i class="bi bi-send me-1"></i>Envoyer la relance
+                    </button>
+                </div>
+            </form>
+        </StaticModal>
+
+        <StaticModal id="modalRemindWhatsapp" title="Relancer le client via WhatsApp">
+            <form @submit.prevent="submitWhatsappRemind">
+                <p class="small text-muted mb-3">
+                    Destinataire : <strong>{{ remindingWhatsappCustomer?.name }}</strong>
+                    ({{ remindingWhatsappCustomer?.whatsapp_phone || remindingWhatsappCustomer?.phone }})
+                </p>
+                <div class="mb-4">
+                    <label class="form-label small">Message WhatsApp</label>
+                    <textarea v-model="whatsappForm.message" rows="4" class="form-control" required></textarea>
+                </div>
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="submit" class="btn btn-success px-4" :disabled="whatsappForm.processing">
+                        <i class="bi bi-whatsapp me-1"></i>Envoyer via WhatsApp
                     </button>
                 </div>
             </form>

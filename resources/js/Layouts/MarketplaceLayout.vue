@@ -1,5 +1,6 @@
 <script setup>
 import BackToTop from '@/Components/BackToTop.vue';
+import ConfirmStaticModal from '@/Components/ConfirmStaticModal.vue';
 import LanguageSwitcher from '@/Components/LanguageSwitcher.vue';
 import { useI18n } from '@/composables/useI18n';
 import { useMarketplaceCart } from '@/composables/useMarketplaceCart';
@@ -539,6 +540,7 @@ function fmt(n) {
             </div>
         </footer>
 
+        <ConfirmStaticModal />
         <BackToTop />
     </div>
 </template>

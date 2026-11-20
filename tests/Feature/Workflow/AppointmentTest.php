@@ -39,6 +39,8 @@ class AppointmentTest extends TestCase
             ->post('http://rdv.mboacar.com/rendez-vous', [
                 'agency_id' => $agency->id,
                 'new_customer_name' => 'Nouveau Client',
+                'new_customer_gender' => 'homme',
+                'new_customer_id_number' => 'CNI-998877',
                 'new_customer_phone' => '655443322',
                 'channel' => 'whatsapp',
                 'scheduled_at' => now()->addDay()->toDateTimeString(),
@@ -49,6 +51,7 @@ class AppointmentTest extends TestCase
         $this->assertDatabaseHas('customers', [
             'tenant_id' => $tenant->id,
             'name' => 'Nouveau Client',
+            'id_number' => 'CNI-998877',
         ]);
 
         Queue::assertPushed(SendAppointmentReminderJob::class);
@@ -58,6 +61,8 @@ class AppointmentTest extends TestCase
             ->post('http://rdv.mboacar.com/rendez-vous', [
                 'agency_id' => $agency->id,
                 'new_customer_name' => 'Client Sans RDV',
+                'new_customer_gender' => 'femme',
+                'new_customer_id_number' => 'PASS-445566',
                 'new_customer_phone' => '655000111',
                 'channel' => 'sans_rdv',
                 'reason' => 'panne',

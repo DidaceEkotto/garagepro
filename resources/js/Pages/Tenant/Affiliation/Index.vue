@@ -1,7 +1,10 @@
 <script setup>
+import { useConfirm } from '@/composables/useConfirm';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+
+const { askConfirm } = useConfirm();
 
 const props = defineProps({
     affiliateLink: { type: Object, default: null },
@@ -44,7 +47,13 @@ function copyShareUrl() {
 }
 
 function payWithBalance() {
-    router.post('/affiliation/payer-abonnement');
+    askConfirm({
+        title: 'Payer l\'abonnement avec le solde d\'affiliation',
+        message: 'Voulez-vous vraiment utiliser votre solde d\'affiliation pour renouveler 1 mois d\'abonnement ?',
+        confirmLabel: 'Confirmer le paiement',
+        confirmClass: 'btn-success',
+        onConfirm: () => router.post('/affiliation/payer-abonnement'),
+    });
 }
 
 function fmt(n) {

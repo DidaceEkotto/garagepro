@@ -1,7 +1,10 @@
 <script setup>
 import StaticModal from '@/Components/StaticModal.vue';
+import { useConfirm } from '@/composables/useConfirm';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
+
+const { askConfirm } = useConfirm();
 
 defineProps({
     categories: { type: Array, default: () => [] },
@@ -37,11 +40,23 @@ function createSubCategory() {
 }
 
 function deleteCategory(id) {
-    router.delete(`/marketplace-gestion/categories/${id}`);
+    askConfirm({
+        title: 'Supprimer la catégorie',
+        message: 'Voulez-vous vraiment supprimer cette catégorie du Marketplace ? Cette action est irréversible.',
+        confirmLabel: 'Supprimer',
+        confirmClass: 'btn-danger',
+        onConfirm: () => router.delete(`/marketplace-gestion/categories/${id}`),
+    });
 }
 
 function deleteSubCategory(id) {
-    router.delete(`/marketplace-gestion/sous-categories/${id}`);
+    askConfirm({
+        title: 'Supprimer la sous-catégorie',
+        message: 'Voulez-vous vraiment supprimer cette sous-catégorie ? Cette action est irréversible.',
+        confirmLabel: 'Supprimer',
+        confirmClass: 'btn-danger',
+        onConfirm: () => router.delete(`/marketplace-gestion/sous-categories/${id}`),
+    });
 }
 </script>
 

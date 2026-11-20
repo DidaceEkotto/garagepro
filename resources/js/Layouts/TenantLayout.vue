@@ -1,5 +1,6 @@
 <script setup>
 import BackToTop from '@/Components/BackToTop.vue';
+import ConfirmStaticModal from '@/Components/ConfirmStaticModal.vue';
 import FileDropzone from '@/Components/FileDropzone.vue';
 import LanguageSwitcher from '@/Components/LanguageSwitcher.vue';
 import StaticModal from '@/Components/StaticModal.vue';
@@ -106,6 +107,7 @@ const menuGroups = computed(() => {
             title: t('layout.workshop'),
             items: [
                 { label: t('layout.customers'), href: '/clients', icon: 'bi-people', permissions: ['clients.view', 'clients.manage'] },
+                { label: 'Véhicules', href: '/vehicules', icon: 'bi-car-front', permissions: ['clients.view', 'clients.manage'] },
                 { label: t('layout.appointments'), href: '/rendez-vous', icon: 'bi-calendar-check', permissions: ['appointments.view', 'appointments.manage'] },
                 { label: t('layout.receptions'), href: '/receptions', icon: 'bi-clipboard-check', permissions: ['receptions.manage'] },
                 { label: t('layout.repairOrders'), href: '/ordres-reparation', icon: 'bi-wrench-adjustable', permissions: ['repair_orders.view', 'repair_orders.manage'] },
@@ -164,8 +166,7 @@ function isActive(href) {
 
     return currentUrl.value === href
         || currentUrl.value.startsWith(href + '/')
-        || currentUrl.value.startsWith(href + '?')
-        || (href === '/clients' && currentUrl.value.startsWith('/vehicules/'));
+        || currentUrl.value.startsWith(href + '?');
 }
 
 function confirmLogout() {
@@ -540,6 +541,7 @@ function resetDemo() {
             </form>
         </StaticModal>
 
+        <ConfirmStaticModal />
         <BackToTop />
     </div>
 </template>
