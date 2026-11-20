@@ -34,6 +34,8 @@ class Customer extends Model
         'company_name',
         'tax_id',
         'credit_limit',
+        'fleet_manager_name',
+        'fleet_notes',
         'notes',
         'description',
         'profession',

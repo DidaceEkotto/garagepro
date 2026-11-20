@@ -32,6 +32,9 @@ class Vehicle extends Model
         'first_registration_date',
         'next_service_date',
         'next_service_mileage',
+        'technical_inspection_expires_at',
+        'insurance_expires_at',
+        'maintenance_reminder_sent_at',
         'notes',
         'public_token',
     ];
@@ -62,6 +65,9 @@ class Vehicle extends Model
             'next_service_mileage' => 'integer',
             'first_registration_date' => 'date',
             'next_service_date' => 'date',
+            'technical_inspection_expires_at' => 'date',
+            'insurance_expires_at' => 'date',
+            'maintenance_reminder_sent_at' => 'datetime',
         ];
     }
 

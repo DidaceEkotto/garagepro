@@ -109,9 +109,14 @@ const menuGroups = computed(() => {
             items: [
                 { label: t('layout.customers'), href: '/clients', icon: 'bi-people', permissions: ['clients.view', 'clients.manage'] },
                 { label: 'Véhicules', href: '/vehicules', icon: 'bi-car-front', permissions: ['clients.view', 'clients.manage'] },
+                { label: 'Flottes B2B', href: '/flottes', icon: 'bi-buildings', permissions: ['clients.view', 'clients.manage'] },
                 { label: t('layout.appointments'), href: '/rendez-vous', icon: 'bi-calendar-check', permissions: ['appointments.view', 'appointments.manage'] },
+                { label: 'Planning Atelier', href: '/planning-atelier', icon: 'bi-calendar3', permissions: ['appointments.view', 'repair_orders.view'] },
+                { label: 'Rappels Entretien', href: '/rappels-entretien', icon: 'bi-bell', permissions: ['clients.view', 'clients.manage'] },
                 { label: t('layout.receptions'), href: '/receptions', icon: 'bi-clipboard-check', permissions: ['receptions.manage'] },
+                { label: 'Inspections (DVI)', href: '/inspections', icon: 'bi-camera', permissions: ['repair_orders.view', 'diagnostics.manage'] },
                 { label: t('layout.repairOrders'), href: '/ordres-reparation', icon: 'bi-wrench-adjustable', permissions: ['repair_orders.view', 'repair_orders.manage'] },
+                { label: 'Sous-traitance & Dépannage', href: '/sous-traitance', icon: 'bi-truck-front', permissions: ['repair_orders.view', 'repair_orders.manage'] },
                 { label: t('layout.quotes'), href: '/devis', icon: 'bi-file-earmark-text', permissions: ['quotes.view', 'quotes.manage'] },
                 { label: t('layout.workshop'), href: '/atelier/mes-or', icon: 'bi-tools', permissions: ['repair_orders.view', 'repair_orders.view_own', 'diagnostics.manage'] },
             ],
@@ -120,6 +125,7 @@ const menuGroups = computed(() => {
             title: t('layout.accounting'),
             items: [
                 { label: t('layout.inventory'), href: '/stock', icon: 'bi-box-seam', permissions: ['stock.view', 'stock.manage'] },
+                { label: 'Outillage & Vrac', href: '/outillage-vrac', icon: 'bi-droplet-half', permissions: ['stock.view', 'stock.manage'] },
                 { label: t('layout.purchasing'), href: '/approvisionnement', icon: 'bi-truck', permissions: ['purchase_orders.manage', 'suppliers.manage'] },
                 { label: t('layout.invoices'), href: '/factures', icon: 'bi-receipt', permissions: ['invoices.view', 'invoices.manage', 'payments.manage'] },
                 { label: t('layout.accounting'), href: '/comptabilite', icon: 'bi-journal-bookmark', permissions: ['accounting.view', 'accounting.manage'] },

@@ -16,9 +16,12 @@ use App\Http\Controllers\Tenant\AppointmentController;
 use App\Http\Controllers\Tenant\CustomerController;
 use App\Http\Controllers\Tenant\DashboardController;
 use App\Http\Controllers\Tenant\ExportController;
+use App\Http\Controllers\Tenant\FleetController;
 use App\Http\Controllers\Tenant\HrController;
+use App\Http\Controllers\Tenant\InspectionController;
 use App\Http\Controllers\Tenant\InventoryController;
 use App\Http\Controllers\Tenant\InvoiceController;
+use App\Http\Controllers\Tenant\MaintenanceReminderController;
 use App\Http\Controllers\Tenant\MarketplaceManagementController;
 use App\Http\Controllers\Tenant\MessageController;
 use App\Http\Controllers\Tenant\PaymentController;
@@ -30,10 +33,13 @@ use App\Http\Controllers\Tenant\RepairOrderController;
 use App\Http\Controllers\Tenant\ReportController;
 use App\Http\Controllers\Tenant\SecureFileController;
 use App\Http\Controllers\Tenant\SpaceSettingsController;
+use App\Http\Controllers\Tenant\SubcontractController;
+use App\Http\Controllers\Tenant\ToolsAndBulkController;
 use App\Http\Controllers\Tenant\VehicleController;
 use App\Http\Controllers\Tenant\VehicleExitController;
 use App\Http\Controllers\Tenant\VehicleReceptionController;
 use App\Http\Controllers\Tenant\WorkshopController;
+use App\Http\Controllers\Tenant\WorkshopPlanningController;
 use App\Http\Controllers\Webhooks\SaspayWebhookController;
 use App\Models\PlatformSetting;
 use App\Models\Testimonial;
@@ -235,6 +241,41 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
     Route::patch('/atelier/or/{repairOrder}/statut', [WorkshopController::class, 'updateStatus'])->name('tenant.workshop.status');
     Route::post('/atelier/taches/{task}/pointage', [WorkshopController::class, 'logTime'])->name('tenant.workshop.log_time');
     Route::post('/atelier/or/{repairOrder}/controle-qualite', [WorkshopController::class, 'submitQualityCheck'])->name('tenant.workshop.quality_check');
+
+    // 1. Inspection Visuelle Numérique (DVI) & Photos WhatsApp
+    Route::get('/inspections', [InspectionController::class, 'index'])->name('tenant.inspections.index');
+    Route::post('/inspections', [InspectionController::class, 'store'])->name('tenant.inspections.store');
+    Route::post('/inspections/{inspection}/whatsapp', [InspectionController::class, 'sendWhatsapp'])->name('tenant.inspections.whatsapp');
+
+    // 2. Planning Visuel de l'Atelier (Ponts & Mécaniciens)
+    Route::get('/planning-atelier', [WorkshopPlanningController::class, 'index'])->name('tenant.planning.index');
+    Route::patch('/planning-atelier/rdv/{appointment}', [WorkshopPlanningController::class, 'assignAppointment'])->name('tenant.planning.assign_appointment');
+    Route::patch('/planning-atelier/or/{repairOrder}', [WorkshopPlanningController::class, 'assignRepairOrder'])->name('tenant.planning.assign_ro');
+
+    // 3. Rappels Périodiques (Vidange, Visite Technique, Assurance)
+    Route::get('/rappels-entretien', [MaintenanceReminderController::class, 'index'])->name('tenant.maintenance_reminders.index');
+    Route::patch('/rappels-entretien/{vehicle}', [MaintenanceReminderController::class, 'updateDates'])->name('tenant.maintenance_reminders.update');
+    Route::post('/rappels-entretien/{vehicle}/whatsapp', [MaintenanceReminderController::class, 'sendWhatsapp'])->name('tenant.maintenance_reminders.whatsapp');
+
+    // 4. Flottes Entreprises (B2B) & Facturation Groupée
+    Route::get('/flottes', [FleetController::class, 'index'])->name('tenant.fleets.index');
+    Route::post('/flottes/{customer}/parametres', [FleetController::class, 'updateSettings'])->name('tenant.fleets.settings');
+    Route::post('/flottes/{customer}/facture-mensuelle', [FleetController::class, 'generateMonthlyInvoice'])->name('tenant.fleets.monthly_invoice');
+
+    // 5. Sous-traitance & Dépannage / Remorquage
+    Route::get('/sous-traitance', [SubcontractController::class, 'index'])->name('tenant.subcontracting.index');
+    Route::post('/sous-traitance', [SubcontractController::class, 'store'])->name('tenant.subcontracting.store');
+    Route::patch('/sous-traitance/{intervention}/statut', [SubcontractController::class, 'updateStatus'])->name('tenant.subcontracting.status');
+    Route::delete('/sous-traitance/{intervention}', [SubcontractController::class, 'destroy'])->name('tenant.subcontracting.destroy');
+
+    // 6. Outillage Atelier & Consommables en Vrac
+    Route::get('/outillage-vrac', [ToolsAndBulkController::class, 'index'])->name('tenant.tools_bulk.index');
+    Route::post('/outillage-vrac/outils', [ToolsAndBulkController::class, 'storeTool'])->name('tenant.tools_bulk.tools.store');
+    Route::post('/outillage-vrac/outils/{tool}/emprunter', [ToolsAndBulkController::class, 'borrowTool'])->name('tenant.tools_bulk.tools.borrow');
+    Route::post('/outillage-vrac/outils/{tool}/rendre', [ToolsAndBulkController::class, 'returnTool'])->name('tenant.tools_bulk.tools.return');
+    Route::delete('/outillage-vrac/outils/{tool}', [ToolsAndBulkController::class, 'destroyTool'])->name('tenant.tools_bulk.tools.destroy');
+    Route::post('/outillage-vrac/vrac', [ToolsAndBulkController::class, 'storeBulk'])->name('tenant.tools_bulk.bulk.store');
+    Route::post('/outillage-vrac/vrac/{consumable}/mouvement', [ToolsAndBulkController::class, 'logBulkMovement'])->name('tenant.tools_bulk.bulk.movement');
 
     // Facturation, avoirs & PDF
     Route::get('/factures', [InvoiceController::class, 'index'])->name('tenant.invoices.index');
