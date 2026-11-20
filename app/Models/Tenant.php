@@ -14,6 +14,10 @@ class Tenant extends Model
 {
     use HasFactory, SoftDeletes;
 
+    public const TYPE_GARAGE = 'garage';
+    public const TYPE_TECHNICAL_CENTER = 'centre_technique';
+    public const TYPE_INSURANCE = 'assurance';
+
     public const STATUS_TRIALING = 'trialing';
     public const STATUS_ACTIVE = 'active';
     public const STATUS_PAST_DUE = 'past_due';
@@ -24,6 +28,7 @@ class Tenant extends Model
     protected $fillable = [
         'name',
         'slug',
+        'type',
         'email',
         'phone',
         'address',

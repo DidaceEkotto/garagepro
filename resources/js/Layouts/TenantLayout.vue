@@ -115,6 +115,8 @@ const menuGroups = computed(() => {
                 { label: 'Rappels Entretien', href: '/rappels-entretien', icon: 'bi-bell', permissions: ['clients.view', 'clients.manage'] },
                 { label: t('layout.receptions'), href: '/receptions', icon: 'bi-clipboard-check', permissions: ['receptions.manage'] },
                 { label: 'Inspections (DVI)', href: '/inspections', icon: 'bi-camera', permissions: ['repair_orders.view', 'diagnostics.manage'] },
+                { label: 'Visite Technique', href: '/visite-technique', icon: 'bi-clipboard2-check', permissions: ['clients.view', 'repair_orders.view', 'diagnostics.manage'] },
+                { label: 'Assurances & Sinistres', href: '/assurances', icon: 'bi-shield-check', permissions: ['clients.view', 'invoices.view', 'repair_orders.view'] },
                 { label: t('layout.repairOrders'), href: '/ordres-reparation', icon: 'bi-wrench-adjustable', permissions: ['repair_orders.view', 'repair_orders.manage'] },
                 { label: 'Sous-traitance & Dépannage', href: '/sous-traitance', icon: 'bi-truck-front', permissions: ['repair_orders.view', 'repair_orders.manage'] },
                 { label: t('layout.quotes'), href: '/devis', icon: 'bi-file-earmark-text', permissions: ['quotes.view', 'quotes.manage'] },

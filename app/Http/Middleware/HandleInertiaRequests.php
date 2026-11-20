@@ -126,6 +126,7 @@ class HandleInertiaRequests extends Middleware
                 'id' => $tenant->id,
                 'name' => $tenant->name,
                 'slug' => $tenant->slug,
+                'type' => $tenant->type ?? 'garage',
                 'status' => $tenant->status,
                 'isReadOnly' => $tenant->isReadOnly(),
                 'isInTrialGrace' => $tenant->isInTrialGrace(),

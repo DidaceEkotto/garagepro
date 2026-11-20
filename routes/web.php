@@ -20,6 +20,7 @@ use App\Http\Controllers\Tenant\ExportController;
 use App\Http\Controllers\Tenant\FleetController;
 use App\Http\Controllers\Tenant\HrController;
 use App\Http\Controllers\Tenant\InspectionController;
+use App\Http\Controllers\Tenant\InsuranceController;
 use App\Http\Controllers\Tenant\InventoryController;
 use App\Http\Controllers\Tenant\InvoiceController;
 use App\Http\Controllers\Tenant\MaintenanceReminderController;
@@ -35,6 +36,7 @@ use App\Http\Controllers\Tenant\ReportController;
 use App\Http\Controllers\Tenant\SecureFileController;
 use App\Http\Controllers\Tenant\SpaceSettingsController;
 use App\Http\Controllers\Tenant\SubcontractController;
+use App\Http\Controllers\Tenant\TechnicalInspectionController;
 use App\Http\Controllers\Tenant\ToolsAndBulkController;
 use App\Http\Controllers\Tenant\VehicleController;
 use App\Http\Controllers\Tenant\VehicleExitController;
@@ -104,6 +106,7 @@ Route::post('/demo/reinitialiser', [DemoController::class, 'reset'])->name('demo
 
 // Carnet d'entretien numérique & Suivi client en direct
 Route::get('/carnet/{token}', [PublicTrackingController::class, 'vehiclePassport'])->name('public.vehicle.passport');
+Route::get('/pv-visite/{token}', [TechnicalInspectionController::class, 'publicShow'])->name('public.technical_pv.show');
 Route::get('/suivi/{token}', [PublicTrackingController::class, 'repairOrderTracking'])->name('public.repair_order.tracking');
 Route::post('/suivi/{token}/devis/{quoteId}/repondre', [PublicTrackingController::class, 'respondQuote'])->name('public.repair_order.quote_respond');
 Route::get('/rdv/{token}', [PublicAppointmentController::class, 'show'])->name('public.appointment.show');
@@ -291,6 +294,18 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
     Route::delete('/outillage-vrac/outils/{tool}', [ToolsAndBulkController::class, 'destroyTool'])->name('tenant.tools_bulk.tools.destroy');
     Route::post('/outillage-vrac/vrac', [ToolsAndBulkController::class, 'storeBulk'])->name('tenant.tools_bulk.bulk.store');
     Route::post('/outillage-vrac/vrac/{consumable}/mouvement', [ToolsAndBulkController::class, 'logBulkMovement'])->name('tenant.tools_bulk.bulk.movement');
+
+    // 7. Centre de Contrôle Technique (PV Visite Technique & QR)
+    Route::get('/visite-technique', [TechnicalInspectionController::class, 'index'])->name('tenant.technical_inspection.index');
+    Route::post('/visite-technique', [TechnicalInspectionController::class, 'store'])->name('tenant.technical_inspection.store');
+    Route::post('/visite-technique/{technicalInspection}/whatsapp', [TechnicalInspectionController::class, 'sendWhatsapp'])->name('tenant.technical_inspection.whatsapp');
+
+    // 8. Assurances Automobile (Polices, Sinistres & Prises en charge)
+    Route::get('/assurances', [InsuranceController::class, 'index'])->name('tenant.insurance.index');
+    Route::post('/assurances/polices', [InsuranceController::class, 'storePolicy'])->name('tenant.insurance.policies.store');
+    Route::post('/assurances/sinistres', [InsuranceController::class, 'storeClaim'])->name('tenant.insurance.claims.store');
+    Route::post('/assurances/sinistres/{claimId}/approuver', [InsuranceController::class, 'approveClaim'])->name('tenant.insurance.claims.approve');
+    Route::patch('/assurances/sinistres/{claimId}/statut', [InsuranceController::class, 'updateClaimStatus'])->name('tenant.insurance.claims.status');
 
     // Facturation, avoirs & PDF
     Route::get('/factures', [InvoiceController::class, 'index'])->name('tenant.invoices.index');
