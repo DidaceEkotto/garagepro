@@ -85,7 +85,7 @@ class AppointmentReminderService
         return $sentCount;
     }
 
-    public function sendSingleReminder(Appointment $appointment, string $window = '2h', ?string $locale = null): bool
+    public function sendSingleReminder(Appointment $appointment, string $window = '2h', ?string $locale = null, ?string $customMessage = null): bool
     {
         try {
             $phone = $appointment->customer?->whatsapp_phone ?: $appointment->customer?->phone;
@@ -93,12 +93,50 @@ class AppointmentReminderService
                 return false;
             }
 
-            $message = $this->buildMultilingualMessage($appointment, $window, $locale ?: app()->getLocale());
+            $message = ($customMessage !== null && trim($customMessage) !== '')
+                ? trim($customMessage)
+                : $this->buildMultilingualMessage($appointment, $window, $locale ?: app()->getLocale());
             $res = $this->greenApi->sendMessage($phone, $message);
 
             return (bool) ($res['ok'] ?? false);
         } catch (\Throwable $e) {
             Log::warning('WhatsApp appointment reminder failed (skipped cleanly)', [
+                'appointment_id' => $appointment->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+    }
+
+    public function sendConfirmationMessage(Appointment $appointment, ?string $locale = null): bool
+    {
+        try {
+            $phone = $appointment->customer?->whatsapp_phone ?: $appointment->customer?->phone;
+            if (empty($phone)) {
+                return false;
+            }
+
+            $loc = $locale ?: app()->getLocale();
+            $clientName = trim(($appointment->customer?->name ?? '') . ' ' . ($appointment->customer?->first_name ?? '')) ?: 'Client';
+            $garageName = $appointment->tenant?->name ?? 'MboaCar';
+            $plate = $appointment->vehicle?->license_plate ? " ({$appointment->vehicle->license_plate})" : '';
+            $time = $appointment->scheduled_at?->format('d/m/Y H:i') ?? 'à confirmer';
+
+            $templates = [
+                'fr' => "Bonjour {$clientName}, votre rendez-vous chez {$garageName}{$plate} est CONFIRMÉ pour le {$time}. À bientôt !",
+                'en' => "Hello {$clientName}, your appointment at {$garageName}{$plate} is CONFIRMED for {$time}. See you soon!",
+                'es' => "Hola {$clientName}, su cita en {$garageName}{$plate} está CONFIRMADA para el {$time}. ¡Hasta pronto!",
+                'ar' => "مرحباً {$clientName}، تم تأكيد موعدك في {$garageName}{$plate} ليوم {$time}. نراكم قريباً!",
+                'zh' => "您好 {$clientName}，您在 {$garageName}{$plate} 的预约已确认，时间为 {$time}。期待您的光临！",
+            ];
+
+            $message = $templates[$loc] ?? $templates['fr'];
+            $res = $this->greenApi->sendMessage($phone, $message);
+
+            return (bool) ($res['ok'] ?? false);
+        } catch (\Throwable $e) {
+            Log::warning('WhatsApp appointment confirmation failed (skipped cleanly)', [
                 'appointment_id' => $appointment->id,
                 'error' => $e->getMessage(),
             ]);

@@ -17,6 +17,7 @@ const payrollAlert = computed(() => page.props.payrollAlert);
 const affiliateAlert = computed(() => page.props.affiliateAlert ?? null);
 const unreadMessagesCount = computed(() => page.props.unreadMessagesCount ?? 0);
 const pendingMarketplaceOrdersCount = computed(() => page.props.pendingMarketplaceOrdersCount ?? 0);
+const pendingAppointmentRequestsCount = computed(() => page.props.pendingAppointmentRequestsCount ?? 0);
 const recentNotifications = computed(() => page.props.recentNotifications ?? []);
 const currentUrl = computed(() => page.url);
 const marketplaceMenuOpen = ref(currentUrl.value.startsWith('/marketplace-gestion'));
@@ -352,11 +353,16 @@ function resetDemo() {
                         <li v-for="item in group.items" :key="item.href" class="nav-item">
                             <Link
                                 :href="item.href"
-                                class="nav-link sidebar-link d-flex align-items-center gap-2 py-2 px-3 small"
+                                class="nav-link sidebar-link d-flex align-items-center justify-content-between py-2 px-3 small"
                                 :class="{ active: isActive(item.href) }"
                             >
-                                <i :class="`bi ${item.icon}`"></i>
-                                <span>{{ item.label }}</span>
+                                <span class="d-flex align-items-center gap-2">
+                                    <i :class="`bi ${item.icon}`"></i>
+                                    <span>{{ item.label }}</span>
+                                </span>
+                                <span v-if="item.href === '/rendez-vous' && pendingAppointmentRequestsCount > 0" class="badge bg-warning text-dark rounded-pill">
+                                    {{ pendingAppointmentRequestsCount }}
+                                </span>
                             </Link>
                         </li>
                     </ul>
@@ -470,6 +476,14 @@ function resetDemo() {
                         <strong>Marketplace :</strong> Vous avez <strong>{{ pendingMarketplaceOrdersCount }}</strong> nouvelle(s) commande(s) de pièces à traiter !
                     </div>
                     <Link href="/marketplace-gestion/commandes" class="btn btn-success btn-sm ms-2 text-nowrap">Voir les commandes</Link>
+                </div>
+
+                <div v-if="pendingAppointmentRequestsCount > 0" class="alert alert-warning border-0 shadow-sm d-flex justify-content-between align-items-center mb-3 py-2 small">
+                    <div>
+                        <i class="bi bi-calendar-heart-fill me-2"></i>
+                        <strong>Nouveau rendez-vous en ligne :</strong> Vous avez <strong>{{ pendingAppointmentRequestsCount }}</strong> demande(s) reçue(s) via lien sécurisé à valider !
+                    </div>
+                    <Link href="/rendez-vous" class="btn btn-warning btn-sm ms-2 text-nowrap fw-semibold text-dark">Examiner &amp; Valider</Link>
                 </div>
 
                 <div v-if="payrollAlert" class="alert alert-info d-flex justify-content-between align-items-center mb-3 py-2 small">

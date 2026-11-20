@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\AffiliateLink;
+use App\Models\AppointmentLink;
 use App\Models\Category;
 use App\Models\Employee;
 use App\Models\MarketplaceOrderItem;
@@ -65,6 +66,7 @@ class HandleInertiaRequests extends Middleware
         $unreadMessagesCount = 0;
         $recentNotifications = [];
         $pendingMarketplaceOrdersCount = 0;
+        $pendingAppointmentRequestsCount = 0;
         if ($user && $tenant) {
             $unreadMessagesCount = PlatformMessage::where('tenant_id', $tenant->id)
                 ->where('recipient_type', PlatformMessage::TYPE_TENANT)
@@ -73,6 +75,10 @@ class HandleInertiaRequests extends Middleware
 
             $pendingMarketplaceOrdersCount = MarketplaceOrderItem::where('tenant_id', $tenant->id)
                 ->where('is_seen_by_seller', false)
+                ->count();
+
+            $pendingAppointmentRequestsCount = AppointmentLink::where('tenant_id', $tenant->id)
+                ->where('status', AppointmentLink::STATUS_SUBMITTED)
                 ->count();
 
             $recentNotifications = PlatformMessage::where('tenant_id', $tenant->id)
@@ -103,6 +109,7 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'unreadMessagesCount' => $unreadMessagesCount,
             'pendingMarketplaceOrdersCount' => $pendingMarketplaceOrdersCount,
+            'pendingAppointmentRequestsCount' => $pendingAppointmentRequestsCount,
             'marketplaceCartCount' => $marketplaceCartCount,
             'marketplaceCart' => $marketplaceCart,
             'marketplaceCategories' => $marketplaceCategories,

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Tenant\StoreAppointmentRequest;
 use App\Models\Agency;
 use App\Models\Appointment;
+use App\Models\AppointmentLink;
 use App\Models\Country;
 use App\Models\Customer;
 use App\Models\User;
@@ -34,8 +35,36 @@ class AppointmentController extends Controller
             ->orderBy('scheduled_at')
             ->paginate(30);
 
+        // Expirer automatiquement les liens actifs dépassant 24h
+        AppointmentLink::where('status', AppointmentLink::STATUS_ACTIVE)
+            ->where('expires_at', '<=', now())
+            ->update(['status' => AppointmentLink::STATUS_EXPIRED]);
+
+        $appointmentLinks = AppointmentLink::with(['agency:id,name', 'customer:id,name,phone', 'appointment:id,status,scheduled_at'])
+            ->latest('id')
+            ->take(30)
+            ->get()
+            ->map(function (AppointmentLink $link) {
+                return [
+                    'id' => $link->id,
+                    'token' => $link->token,
+                    'public_url' => route('public.appointment.show', ['token' => $link->token]),
+                    'label' => $link->label,
+                    'status' => $link->status,
+                    'expires_at' => $link->expires_at?->toIso8601String(),
+                    'expires_at_formatted' => $link->expires_at?->format('d/m/Y H:i'),
+                    'submitted_at_formatted' => $link->submitted_at?->format('d/m/Y H:i'),
+                    'confirmed_at_formatted' => $link->confirmed_at?->format('d/m/Y H:i'),
+                    'agency_id' => $link->agency_id,
+                    'agency' => $link->agency,
+                    'customer' => $link->customer,
+                    'submitted_payload' => $link->submitted_payload,
+                ];
+            });
+
         return Inertia::render('Tenant/Appointments/Index', [
             'appointments' => $appointments,
+            'appointmentLinks' => $appointmentLinks,
             'agencies' => Agency::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'customers' => Customer::orderBy('name')->get(['id', 'name', 'phone']),
             'vehicles' => Vehicle::orderBy('license_plate')->get(['id', 'customer_id', 'license_plate', 'brand', 'model']),
@@ -124,12 +153,21 @@ class AppointmentController extends Controller
         return back()->with('success', 'Rendez-vous enregistré avec succès.');
     }
 
-    public function sendWhatsappReminder(Appointment $appointment, AppointmentReminderService $reminderService): RedirectResponse
+    public function sendWhatsappReminder(Request $request, Appointment $appointment, AppointmentReminderService $reminderService): RedirectResponse
     {
         $this->authorize('update', $appointment);
 
+        $validated = $request->validate([
+            'custom_message' => ['nullable', 'string', 'max:1000'],
+        ]);
+
         $appointment->loadMissing(['customer', 'vehicle', 'tenant']);
-        $sent = $reminderService->sendSingleReminder($appointment, '2h', app()->getLocale());
+        $sent = $reminderService->sendSingleReminder(
+            $appointment,
+            '2h',
+            app()->getLocale(),
+            $validated['custom_message'] ?? null
+        );
 
         if (! $sent) {
             return back()->with('warning', 'Le message WhatsApp n\'a pas pu être remis pour le moment (le rendez-vous reste actif).');
@@ -137,7 +175,145 @@ class AppointmentController extends Controller
 
         $appointment->update(['reminder_sent_at' => now()]);
 
-        return back()->with('success', 'Rappel WhatsApp envoyé au client.');
+        return back()->with('success', 'Relance WhatsApp envoyée au client.');
+    }
+
+    public function generateLink(Request $request, TenantContext $tenantContext): RedirectResponse
+    {
+        $this->authorize('create', Appointment::class);
+
+        $tenantId = $tenantContext->id();
+        $validated = $request->validate([
+            'agency_id' => ['nullable', 'integer', Rule::exists('agencies', 'id')->where('tenant_id', $tenantId)],
+            'label' => ['nullable', 'string', 'max:150'],
+        ]);
+
+        $agencyId = $validated['agency_id'] ?? Agency::where('is_active', true)->value('id');
+
+        AppointmentLink::create([
+            'tenant_id' => $tenantId,
+            'agency_id' => $agencyId,
+            'created_by' => $request->user('web')?->id,
+            'token' => bin2hex(random_bytes(32)),
+            'label' => $validated['label'] ?? null,
+            'status' => AppointmentLink::STATUS_ACTIVE,
+            'expires_at' => now()->addDay(),
+        ]);
+
+        return back()->with('success', 'Lien de rendez-vous sécurisé généré (valable 24h, usage unique).');
+    }
+
+    public function confirmLinkSubmission(
+        Request $request,
+        AppointmentLink $appointmentLink,
+        TenantContext $tenantContext,
+        AppointmentReminderService $reminderService
+    ): RedirectResponse {
+        $this->authorize('create', Appointment::class);
+
+        if ($appointmentLink->status !== AppointmentLink::STATUS_SUBMITTED || empty($appointmentLink->submitted_payload)) {
+            return back()->withErrors(['link' => 'Ce lien n\'est pas en attente de validation ou a déjà été confirmé.']);
+        }
+
+        $tenantId = $tenantContext->id();
+        $validated = $request->validate([
+            'agency_id' => ['required', 'integer', Rule::exists('agencies', 'id')->where('tenant_id', $tenantId)],
+            'create_customer' => ['boolean'],
+            'customer_id' => ['nullable', 'integer', Rule::exists('customers', 'id')->where('tenant_id', $tenantId)],
+            'bay_name' => ['nullable', 'string', 'max:60'],
+            'assigned_mechanic_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where('tenant_id', $tenantId)],
+            'scheduled_at' => ['required', 'date'],
+            'duration_minutes' => ['nullable', 'integer', 'min:15', 'max:480'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $appointment = DB::transaction(function () use ($appointmentLink, $validated, $tenantId) {
+            $payload = $appointmentLink->submitted_payload;
+            $customerId = $validated['customer_id'] ?? null;
+
+            if (! $customerId && ($validated['create_customer'] ?? true)) {
+                $customer = Customer::create([
+                    'tenant_id' => $tenantId,
+                    'agency_id' => $validated['agency_id'],
+                    'name' => $payload['name'] ?? 'Client',
+                    'first_name' => $payload['first_name'] ?? null,
+                    'gender' => $payload['gender'] ?? 'homme',
+                    'id_number' => $payload['id_number'] ?? null,
+                    'phone_dial_code' => $payload['dial_code'] ?? '+237',
+                    'phone' => $payload['phone'] ?? '',
+                    'whatsapp_phone' => $payload['phone'] ?? '',
+                    'description' => $payload['description'] ?? null,
+                    'profession' => $payload['profession'] ?? null,
+                    'date_of_birth' => $payload['date_of_birth'] ?? null,
+                    'emergency_contact' => $payload['emergency_contact'] ?? null,
+                    'type' => 'particulier',
+                ]);
+                $customerId = $customer->id;
+            }
+
+            if (! $customerId) {
+                abort(422, 'Veuillez choisir un client existant ou activer la création du compte client.');
+            }
+
+            $vehicleId = null;
+            if (! empty($payload['vehicle_plate'])) {
+                $plate = strtoupper(trim((string) $payload['vehicle_plate']));
+                $vehicle = Vehicle::firstOrCreate(
+                    ['tenant_id' => $tenantId, 'license_plate' => $plate],
+                    [
+                        'customer_id' => $customerId,
+                        'brand' => $payload['vehicle_brand'] ?? null,
+                        'model' => $payload['vehicle_model'] ?? null,
+                    ]
+                );
+                $vehicleId = $vehicle->id;
+            }
+
+            $appointment = Appointment::create([
+                'tenant_id' => $tenantId,
+                'agency_id' => $validated['agency_id'],
+                'customer_id' => $customerId,
+                'vehicle_id' => $vehicleId,
+                'assigned_mechanic_id' => $validated['assigned_mechanic_id'] ?? null,
+                'bay_name' => $validated['bay_name'] ?? null,
+                'channel' => 'en_ligne',
+                'scheduled_at' => $validated['scheduled_at'],
+                'duration_minutes' => $validated['duration_minutes'] ?? 60,
+                'status' => Appointment::STATUS_CONFIRMED,
+                'reason' => $payload['reason'] ?? 'entretien',
+                'notes' => $validated['notes'] ?? ($payload['notes'] ?? null),
+            ]);
+
+            $appointmentLink->update([
+                'status' => AppointmentLink::STATUS_CONFIRMED,
+                'confirmed_at' => now(),
+                'customer_id' => $customerId,
+                'vehicle_id' => $vehicleId,
+                'appointment_id' => $appointment->id,
+            ]);
+
+            return $appointment;
+        });
+
+        $appointment->loadMissing(['customer', 'vehicle', 'tenant']);
+        $whatsappSent = $reminderService->sendConfirmationMessage($appointment, app()->getLocale());
+
+        $msg = $whatsappSent
+            ? 'Rendez-vous confirmé, compte client créé et message WhatsApp de confirmation envoyé ! Le lien est désormais désactivé.'
+            : 'Rendez-vous confirmé et compte client créé ! Le lien est désormais désactivé (WhatsApp non remis).';
+
+        return back()->with('success', $msg);
+    }
+
+    public function cancelLink(AppointmentLink $appointmentLink): RedirectResponse
+    {
+        $this->authorize('create', Appointment::class);
+
+        if ($appointmentLink->status === AppointmentLink::STATUS_ACTIVE) {
+            $appointmentLink->update(['status' => AppointmentLink::STATUS_CANCELLED]);
+        }
+
+        return back()->with('success', 'Lien de rendez-vous désactivé.');
     }
 
     public function updateStatus(Request $request, Appointment $appointment): RedirectResponse

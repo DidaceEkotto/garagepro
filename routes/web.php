@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\TenantRegistrationController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\DemoController;
 use App\Http\Controllers\MarketplaceController;
+use App\Http\Controllers\PublicAppointmentController;
 use App\Http\Controllers\PublicTrackingController;
 use App\Http\Controllers\Tenant\AccountingController;
 use App\Http\Controllers\Tenant\AffiliationController;
@@ -98,6 +99,10 @@ Route::post('/demo/reinitialiser', [DemoController::class, 'reset'])->name('demo
 Route::get('/carnet/{token}', [PublicTrackingController::class, 'vehiclePassport'])->name('public.vehicle.passport');
 Route::get('/suivi/{token}', [PublicTrackingController::class, 'repairOrderTracking'])->name('public.repair_order.tracking');
 Route::post('/suivi/{token}/devis/{quoteId}/repondre', [PublicTrackingController::class, 'respondQuote'])->name('public.repair_order.quote_respond');
+Route::get('/rdv/{token}', [PublicAppointmentController::class, 'show'])->name('public.appointment.show');
+Route::post('/rdv/{token}', [PublicAppointmentController::class, 'submit'])
+    ->middleware('throttle:10,1')
+    ->name('public.appointment.submit');
 
 // Changement de langue (fr, en, es, pt, ar, zh)
 Route::post('/langue/{locale}', function (string $locale) {
@@ -185,6 +190,9 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
     Route::post('/rendez-vous', [AppointmentController::class, 'store'])->name('tenant.appointments.store');
     Route::patch('/rendez-vous/{appointment}/statut', [AppointmentController::class, 'updateStatus'])->name('tenant.appointments.status');
     Route::post('/rendez-vous/{appointment}/rappel-whatsapp', [AppointmentController::class, 'sendWhatsappReminder'])->name('tenant.appointments.whatsapp_reminder');
+    Route::post('/rendez-vous/liens', [AppointmentController::class, 'generateLink'])->name('tenant.appointments.links.store');
+    Route::post('/rendez-vous/liens/{appointmentLink}/valider', [AppointmentController::class, 'confirmLinkSubmission'])->name('tenant.appointments.links.confirm');
+    Route::post('/rendez-vous/liens/{appointmentLink}/annuler', [AppointmentController::class, 'cancelLink'])->name('tenant.appointments.links.cancel');
 
     // Réception & Véhicules de courtoisie
     Route::get('/receptions', [VehicleReceptionController::class, 'index'])->name('tenant.receptions.index');
