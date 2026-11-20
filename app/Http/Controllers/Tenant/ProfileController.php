@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
+use App\Models\Agency;
 use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Services\SecureUploadService;
@@ -20,16 +21,24 @@ class ProfileController extends Controller
     {
         $user = $request->user('web');
         $employee = Employee::where('user_id', $user->id)->first();
+        $agencies = Agency::where('is_active', true)->orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('Tenant/Profile/Index', [
             'profile' => [
                 'name' => $user->name,
                 'email' => $user->email,
                 'phone' => $user->phone,
+                'gender' => $user->gender ?? '',
+                'default_agency_id' => $user->default_agency_id ?? '',
+                'is_active' => (bool) $user->is_active,
+                'email_verified_at' => $user->email_verified_at?->format('d/m/Y H:i'),
+                'two_factor_confirmed_at' => $user->two_factor_confirmed_at?->format('d/m/Y H:i'),
+                'roles' => $user->getRoleNames()->values()->all(),
                 'photo_url' => ($user->avatar_path ?? $employee?->photo_path)
                     ? $uploadService->signedUrl($user->avatar_path ?? $employee->photo_path, 60)
                     : null,
             ],
+            'agencies' => $agencies,
         ]);
     }
 
@@ -39,23 +48,28 @@ class ProfileController extends Controller
         SecureUploadService $uploadService
     ): RedirectResponse {
         $user = $request->user('web');
+        $tenantId = $tenantContext->id();
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'min:2', 'max:150'],
             'email' => ['required', 'string', 'email', 'max:150', Rule::unique('users', 'email')->ignore($user->id)],
             'phone' => ['nullable', 'string', 'max:50'],
+            'gender' => ['nullable', Rule::in(['homme', 'femme', 'autre'])],
+            'default_agency_id' => ['nullable', 'integer', Rule::exists('agencies', 'id')->where('tenant_id', $tenantId)],
             'photo' => ['nullable', 'file', 'max:5120'],
         ]);
 
         $photoPath = $user->avatar_path;
         if ($request->hasFile('photo')) {
-            $photoPath = $uploadService->storeImage($request->file('photo'), $tenantContext->id(), 'professionals/photos');
+            $photoPath = $uploadService->storeImage($request->file('photo'), $tenantId, 'professionals/photos');
         }
 
         $user->update([
             'name' => $validated['name'],
             'email' => strtolower($validated['email']),
             'phone' => $validated['phone'] ?? null,
+            'gender' => array_key_exists('gender', $validated) ? ($validated['gender'] ?: null) : $user->gender,
+            'default_agency_id' => array_key_exists('default_agency_id', $validated) ? ($validated['default_agency_id'] ?: null) : $user->default_agency_id,
             'avatar_path' => $photoPath,
         ]);
 

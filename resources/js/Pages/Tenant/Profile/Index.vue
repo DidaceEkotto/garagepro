@@ -6,6 +6,7 @@ import { ref } from 'vue';
 
 const props = defineProps({
     profile: Object,
+    agencies: { type: Array, default: () => [] },
 });
 
 const showCurrent = ref(false);
@@ -17,6 +18,8 @@ const infoForm = useForm({
     name: props.profile?.name ?? '',
     email: props.profile?.email ?? '',
     phone: props.profile?.phone ?? '',
+    gender: props.profile?.gender ?? '',
+    default_agency_id: props.profile?.default_agency_id ?? '',
     photo: null,
 });
 
@@ -51,17 +54,56 @@ function savePassword() {
                     <div class="card-header bg-white fw-bold py-3">Informations personnelles</div>
                     <div class="card-body p-4">
                         <form @submit.prevent="saveInfo">
+                            <div v-if="profile?.photo_url || profile?.roles?.length" class="d-flex align-items-center gap-3 mb-3 pb-3 border-bottom">
+                                <img
+                                    v-if="profile?.photo_url"
+                                    :src="profile.photo_url"
+                                    alt="Photo de profil"
+                                    class="rounded-circle border"
+                                    style="width: 56px; height: 56px; object-fit: cover;"
+                                />
+                                <div class="small">
+                                    <div class="d-flex flex-wrap gap-1 mb-1">
+                                        <span v-for="r in (profile?.roles || [])" :key="r" class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ r }}</span>
+                                        <span class="badge" :class="profile?.is_active ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'">
+                                            {{ profile?.is_active ? 'Compte actif' : 'Désactivé' }}
+                                        </span>
+                                    </div>
+                                    <div v-if="profile?.email_verified_at" class="text-muted">E-mail vérifié le {{ profile.email_verified_at }}</div>
+                                </div>
+                            </div>
+
                             <div class="mb-3">
-                                <label class="form-label small">Nom complet</label>
+                                <label class="form-label small">Nom complet <span class="text-danger">*</span></label>
                                 <input v-model="infoForm.name" type="text" class="form-control" required />
+                                <div v-if="infoForm.errors.name" class="text-danger small mt-1">{{ infoForm.errors.name }}</div>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label small">Adresse e-mail</label>
+                                <label class="form-label small">Adresse e-mail <span class="text-danger">*</span></label>
                                 <input v-model="infoForm.email" type="email" class="form-control" required />
+                                <div v-if="infoForm.errors.email" class="text-danger small mt-1">{{ infoForm.errors.email }}</div>
+                            </div>
+                            <div class="row g-2 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label small">Téléphone / WhatsApp</label>
+                                    <input v-model="infoForm.phone" type="text" class="form-control" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">Sexe</label>
+                                    <select v-model="infoForm.gender" class="form-select">
+                                        <option value="">-- Non précisé --</option>
+                                        <option value="homme">Homme</option>
+                                        <option value="femme">Femme</option>
+                                        <option value="autre">Autre</option>
+                                    </select>
+                                </div>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label small">Téléphone</label>
-                                <input v-model="infoForm.phone" type="text" class="form-control" />
+                                <label class="form-label small">Agence par défaut</label>
+                                <select v-model="infoForm.default_agency_id" class="form-select">
+                                    <option value="">-- Aucune --</option>
+                                    <option v-for="ag in agencies" :key="ag.id" :value="ag.id">{{ ag.name }}</option>
+                                </select>
                             </div>
                             <div class="mb-4">
                                 <label class="form-label small">Photo de profil (facultatif)</label>
