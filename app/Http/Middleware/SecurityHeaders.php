@@ -38,7 +38,7 @@ class SecurityHeaders
             "default-src 'self'",
             "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://js.hcaptcha.com https://cdn.jsdelivr.net https://code.jquery.com{$viteDev}",
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net{$viteDev}",
-            "font-src 'self' data: https://fonts.gstatic.com",
+            "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net",
             "img-src 'self' data: blob:",
             "connect-src 'self' https://api.saspay.me{$viteDev}{$viteWs}",
             "frame-src 'self' https://challenges.cloudflare.com https://newassets.hcaptcha.com",
