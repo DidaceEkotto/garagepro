@@ -47,18 +47,21 @@ class HrController extends Controller
         $employees = Employee::with('agency')->where('is_active', true)->orderBy('full_name')->get();
 
         if ($isWorkDay) {
+            $dateStr = $carbonDate->toDateString();
             foreach ($employees as $employee) {
-                EmployeeAttendance::firstOrCreate(
-                    [
-                        'employee_id' => $employee->id,
-                        'work_date' => $carbonDate->toDateString(),
-                    ],
-                    [
+                $exists = EmployeeAttendance::where('employee_id', $employee->id)
+                    ->whereDate('work_date', $dateStr)
+                    ->exists();
+
+                if (! $exists) {
+                    EmployeeAttendance::create([
                         'tenant_id' => $tenant->id,
                         'agency_id' => $employee->agency_id,
+                        'employee_id' => $employee->id,
+                        'work_date' => $dateStr,
                         'status' => 'present',
-                    ]
-                );
+                    ]);
+                }
             }
         }
 

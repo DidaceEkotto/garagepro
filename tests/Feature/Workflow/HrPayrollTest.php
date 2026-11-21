@@ -64,8 +64,9 @@ class HrPayrollTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Ouvre /rh -> génère automatiquement la fiche du jour
+        // Ouvre /rh deux fois le même jour -> ne doit pas provoquer d'erreur UNIQUE sous SQLite
         $today = now()->toDateString();
+        $this->actingAs($user, 'web')->get("http://rhpro.mboacar.com/rh?date={$today}")->assertOk();
         $this->actingAs($user, 'web')->get("http://rhpro.mboacar.com/rh?date={$today}")->assertOk();
 
         $att = EmployeeAttendance::withoutTenantScope()->where('employee_id', $employee->id)->firstOrFail();
