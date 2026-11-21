@@ -105,7 +105,6 @@ const menuGroups = computed(() => {
             title: t('layout.dashboard'),
             items: [
                 { label: t('layout.dashboard'), href: '/tableau-de-bord', icon: 'bi-speedometer2', permissions: [] },
-                { label: t('layoutExtra.tutorial'), href: '/tutoriel', icon: 'bi-book', permissions: [] },
             ],
         },
         {
@@ -149,6 +148,7 @@ const menuGroups = computed(() => {
                 { label: t('layout.settings'), href: '/parametres-espace', icon: 'bi-gear', permissions: ['settings.manage'] },
                 { label: t('layoutExtra.affiliation'), href: '/affiliation', icon: 'bi-ticket-perforated', permissions: ['settings.manage', 'payments.manage'] },
                 { label: t('layout.subscription'), href: '/abonnement', icon: 'bi-credit-card', permissions: ['settings.manage', 'payments.manage'] },
+                { label: t('layoutExtra.tutorial'), href: '/tutoriel', icon: 'bi-book', permissions: [] },
             ],
         },
     ];
