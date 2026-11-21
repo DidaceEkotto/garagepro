@@ -3,12 +3,15 @@ import BackToTop from '@/Components/BackToTop.vue';
 import ConfirmStaticModal from '@/Components/ConfirmStaticModal.vue';
 import FileDropzone from '@/Components/FileDropzone.vue';
 import LanguageSwitcher from '@/Components/LanguageSwitcher.vue';
+import PageSkeleton from '@/Components/PageSkeleton.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import { useI18n } from '@/composables/useI18n';
+import { usePageLoading } from '@/composables/usePageLoading';
 import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 const { t } = useI18n();
+const { isNavigating } = usePageLoading();
 const page = usePage();
 const tenant = computed(() => page.props.tenant);
 const auth = computed(() => page.props.auth);
@@ -519,7 +522,8 @@ function resetDemo() {
                     {{ flash.error }}
                 </div>
 
-                <slot />
+                <PageSkeleton v-if="isNavigating" />
+                <slot v-else />
             </main>
         </div>
 

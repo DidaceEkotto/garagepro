@@ -6,6 +6,9 @@ window.bootstrap = bootstrap;
 
 import { createApp, h } from 'vue';
 import { createInertiaApp, router } from '@inertiajs/vue3';
+import { initPageLoadingListener } from './composables/usePageLoading';
+
+initPageLoadingListener();
 
 // Charge jQuery UI et Select2 après exposition de window.jQuery (évite le hoisting ESM)
 import('jquery-ui-dist/jquery-ui.min.js').catch(() => {});

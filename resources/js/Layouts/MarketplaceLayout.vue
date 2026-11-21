@@ -2,12 +2,15 @@
 import BackToTop from '@/Components/BackToTop.vue';
 import ConfirmStaticModal from '@/Components/ConfirmStaticModal.vue';
 import LanguageSwitcher from '@/Components/LanguageSwitcher.vue';
+import PageSkeleton from '@/Components/PageSkeleton.vue';
 import { useI18n } from '@/composables/useI18n';
 import { useMarketplaceCart } from '@/composables/useMarketplaceCart';
+import { usePageLoading } from '@/composables/usePageLoading';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
 const { t } = useI18n();
+const { isNavigating } = usePageLoading();
 const page = usePage();
 const flash = computed(() => page.props.flash);
 const appName = computed(() => page.props.app?.name ?? 'GaragePro');
@@ -241,7 +244,8 @@ function fmt(n) {
         </div>
 
         <main class="flex-grow-1">
-            <slot />
+            <PageSkeleton v-if="isNavigating" variant="marketplace" />
+            <slot v-else />
         </main>
 
         <!-- Full-Screen Static Modal de Recherche avec Autocomplétion (min 3 caractères) -->

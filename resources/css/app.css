@@ -38,6 +38,23 @@ body {
     box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.12) !important;
 }
 
+/* Système global de Skeleton Loaders MboaCar */
+@keyframes mboacarShimmer {
+    0% {
+        background-position: -468px 0;
+    }
+    100% {
+        background-position: 468px 0;
+    }
+}
+
+.mboacar-skeleton-box {
+    border-radius: 6px;
+    background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+    background-size: 936px 100%;
+    animation: mboacarShimmer 1.3s infinite linear;
+}
+
 /* Cartes & formulaires professionnels */
 .card {
     border-radius: 0.75rem;
