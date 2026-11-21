@@ -355,11 +355,20 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
             ->name('tenant.accounting.balance_pdf');
     });
 
-    // RH — Pointage & Paie (les professionnels sont créés depuis /professionnels)
+    // RH — Pointage, Avances/Primes & Bulletins de Paie
     Route::middleware('tenant.permission:hr.manage')->group(function () {
         Route::get('/rh', [HrController::class, 'index'])->name('tenant.hr.index');
         Route::post('/rh/pointages/{attendance}/arrivee', [HrController::class, 'checkIn'])->name('tenant.hr.attendance.checkin');
         Route::post('/rh/pointages/{attendance}/depart', [HrController::class, 'checkOut'])->name('tenant.hr.attendance.checkout');
+        Route::patch('/rh/pointages/{attendance}/statut', [HrController::class, 'updateStatus'])->name('tenant.hr.attendance.status');
+        Route::post('/rh/ajustements', [HrController::class, 'storeAdjustment'])->name('tenant.hr.adjustments.store');
+        Route::delete('/rh/ajustements/{adjustment}', [HrController::class, 'destroyAdjustment'])->name('tenant.hr.adjustments.destroy');
+        Route::post('/rh/bulletins/generer', [HrController::class, 'generatePayslips'])->name('tenant.hr.payslips.generate');
+        Route::post('/rh/bulletins/{payslip}/payer', [HrController::class, 'payPayslip'])->name('tenant.hr.payslips.pay');
+        Route::get('/rh/bulletins/{payslip}/pdf', [HrController::class, 'payslipPdf'])
+            ->middleware('throttle:pdf')
+            ->name('tenant.hr.payslips.pdf');
+        Route::post('/rh/bulletins/{payslip}/whatsapp', [HrController::class, 'sendPayslipWhatsapp'])->name('tenant.hr.payslips.whatsapp');
     });
 
     Route::get('/apres-vente', [AfterSalesController::class, 'index'])->name('tenant.after_sales.index');

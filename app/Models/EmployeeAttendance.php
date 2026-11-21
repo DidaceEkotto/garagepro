@@ -15,11 +15,15 @@ class EmployeeAttendance extends Model
         'agency_id',
         'employee_id',
         'work_date',
+        'status',
         'checked_in_at',
         'checked_out_at',
         'late_minutes',
         'late_penalty',
+        'overtime_minutes',
+        'overtime_bonus',
         'commission_earned',
+        'notes',
     ];
 
     protected function casts(): array
@@ -30,6 +34,8 @@ class EmployeeAttendance extends Model
             'checked_out_at' => 'datetime',
             'late_minutes' => 'integer',
             'late_penalty' => 'integer',
+            'overtime_minutes' => 'integer',
+            'overtime_bonus' => 'integer',
             'commission_earned' => 'integer',
         ];
     }
