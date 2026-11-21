@@ -96,6 +96,7 @@ class MaintenanceReminderService
                 'fr' => "Bonjour {$clientName}, rappel d'entretien {$garageName} pour votre véhicule {$plate} ({$details}). Prenez soin de votre véhicule !",
                 'en' => "Hello {$clientName}, maintenance reminder from {$garageName} for your vehicle {$plate} ({$details}).",
                 'es' => "Hola {$clientName}, recordatorio de mantenimiento de {$garageName} para su vehículo {$plate} ({$details}).",
+                'pt' => "Olá {$clientName}, lembrete de manutenção da {$garageName} para o seu veículo {$plate} ({$details}).",
                 'ar' => "مرحباً {$clientName}، تذكير صيانة من {$garageName} لمركبتك {$plate} ({$details}).",
                 'zh' => "您好 {$clientName}，{$garageName} 提醒您注意车辆 {$plate} 的保养日期（{$details}）。",
             ];

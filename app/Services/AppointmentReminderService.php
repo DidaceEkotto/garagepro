@@ -127,6 +127,7 @@ class AppointmentReminderService
                 'fr' => "Bonjour {$clientName}, votre rendez-vous chez {$garageName}{$plate} est CONFIRMÉ pour le {$time}. À bientôt !",
                 'en' => "Hello {$clientName}, your appointment at {$garageName}{$plate} is CONFIRMED for {$time}. See you soon!",
                 'es' => "Hola {$clientName}, su cita en {$garageName}{$plate} está CONFIRMADA para el {$time}. ¡Hasta pronto!",
+                'pt' => "Olá {$clientName}, a sua marcação em {$garageName}{$plate} está CONFIRMADA para {$time}. Até breve!",
                 'ar' => "مرحباً {$clientName}، تم تأكيد موعدك في {$garageName}{$plate} ليوم {$time}. نراكم قريباً!",
                 'zh' => "您好 {$clientName}，您在 {$garageName}{$plate} 的预约已确认，时间为 {$time}。期待您的光临！",
             ];

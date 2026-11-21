@@ -105,24 +105,24 @@ const menuGroups = computed(() => {
             title: t('layout.dashboard'),
             items: [
                 { label: t('layout.dashboard'), href: '/tableau-de-bord', icon: 'bi-speedometer2', permissions: [] },
-                { label: 'Tutoriel & Guide', href: '/tutoriel', icon: 'bi-book', permissions: [] },
+                { label: t('layoutExtra.tutorial'), href: '/tutoriel', icon: 'bi-book', permissions: [] },
             ],
         },
         {
-            title: currentType === 'centre_technique' ? 'Contrôle Technique' : (currentType === 'assurance' ? 'Assurance & Sinistres' : t('layout.workshop')),
+            title: currentType === 'centre_technique' ? t('layoutExtra.technicalControlGroup') : (currentType === 'assurance' ? t('layoutExtra.insuranceGroup') : t('layout.workshop')),
             items: [
-                { label: currentType === 'assurance' ? 'Assurés' : t('layout.customers'), href: '/clients', icon: 'bi-people', permissions: ['clients.view', 'clients.manage'] },
-                { label: 'Véhicules', href: '/vehicules', icon: 'bi-car-front', permissions: ['clients.view', 'clients.manage'] },
-                { label: 'Flottes B2B', href: '/flottes', icon: 'bi-buildings', permissions: ['clients.view', 'clients.manage'], types: ['garage', 'assurance'] },
+                { label: currentType === 'assurance' ? t('layoutExtra.insured') : t('layout.customers'), href: '/clients', icon: 'bi-people', permissions: ['clients.view', 'clients.manage'] },
+                { label: t('layoutExtra.vehicles'), href: '/vehicules', icon: 'bi-car-front', permissions: ['clients.view', 'clients.manage'] },
+                { label: t('layoutExtra.fleets'), href: '/flottes', icon: 'bi-buildings', permissions: ['clients.view', 'clients.manage'], types: ['garage', 'assurance'] },
                 { label: t('layout.appointments'), href: '/rendez-vous', icon: 'bi-calendar-check', permissions: ['appointments.view', 'appointments.manage'] },
-                { label: currentType === 'centre_technique' ? 'Planning Lignes' : 'Planning Atelier', href: '/planning-atelier', icon: 'bi-calendar3', permissions: ['appointments.view', 'repair_orders.view'], types: ['garage', 'centre_technique'] },
-                { label: 'Rappels Entretien', href: '/rappels-entretien', icon: 'bi-bell', permissions: ['clients.view', 'clients.manage'] },
+                { label: currentType === 'centre_technique' ? t('layoutExtra.planningLines') : t('layoutExtra.planningWorkshop'), href: '/planning-atelier', icon: 'bi-calendar3', permissions: ['appointments.view', 'repair_orders.view'], types: ['garage', 'centre_technique'] },
+                { label: t('layoutExtra.maintenanceReminders'), href: '/rappels-entretien', icon: 'bi-bell', permissions: ['clients.view', 'clients.manage'] },
                 { label: t('layout.receptions'), href: '/receptions', icon: 'bi-clipboard-check', permissions: ['receptions.manage'], types: ['garage'] },
-                { label: 'Inspections (DVI)', href: '/inspections', icon: 'bi-camera', permissions: ['repair_orders.view', 'diagnostics.manage'], types: ['garage'] },
-                { label: 'Visite Technique', href: '/visite-technique', icon: 'bi-clipboard2-check', permissions: ['clients.view', 'repair_orders.view', 'diagnostics.manage'], types: ['centre_technique'] },
-                { label: currentType === 'assurance' ? 'Polices & Sinistres' : 'Assurances & Sinistres', href: '/assurances', icon: 'bi-shield-check', permissions: ['clients.view', 'invoices.view', 'repair_orders.view'], types: ['assurance', 'garage'] },
+                { label: t('layoutExtra.inspectionsDvi'), href: '/inspections', icon: 'bi-camera', permissions: ['repair_orders.view', 'diagnostics.manage'], types: ['garage'] },
+                { label: t('layoutExtra.technicalInspection'), href: '/visite-technique', icon: 'bi-clipboard2-check', permissions: ['clients.view', 'repair_orders.view', 'diagnostics.manage'], types: ['centre_technique'] },
+                { label: currentType === 'assurance' ? t('layoutExtra.policiesAndClaims') : t('layoutExtra.insuranceAndClaims'), href: '/assurances', icon: 'bi-shield-check', permissions: ['clients.view', 'invoices.view', 'repair_orders.view'], types: ['assurance', 'garage'] },
                 { label: t('layout.repairOrders'), href: '/ordres-reparation', icon: 'bi-wrench-adjustable', permissions: ['repair_orders.view', 'repair_orders.manage'], types: ['garage'] },
-                { label: 'Sous-traitance & Dépannage', href: '/sous-traitance', icon: 'bi-truck-front', permissions: ['repair_orders.view', 'repair_orders.manage'], types: ['garage'] },
+                { label: t('layoutExtra.subcontracting'), href: '/sous-traitance', icon: 'bi-truck-front', permissions: ['repair_orders.view', 'repair_orders.manage'], types: ['garage'] },
                 { label: t('layout.quotes'), href: '/devis', icon: 'bi-file-earmark-text', permissions: ['quotes.view', 'quotes.manage'], types: ['garage'] },
                 { label: t('layout.workshop'), href: '/atelier/mes-or', icon: 'bi-tools', permissions: ['repair_orders.view', 'repair_orders.view_own', 'diagnostics.manage'], types: ['garage'] },
             ],
@@ -131,7 +131,7 @@ const menuGroups = computed(() => {
             title: t('layout.accounting'),
             items: [
                 { label: t('layout.inventory'), href: '/stock', icon: 'bi-box-seam', permissions: ['stock.view', 'stock.manage'], types: ['garage'] },
-                { label: 'Outillage & Vrac', href: '/outillage-vrac', icon: 'bi-droplet-half', permissions: ['stock.view', 'stock.manage'], types: ['garage'] },
+                { label: t('layoutExtra.toolsAndBulk'), href: '/outillage-vrac', icon: 'bi-droplet-half', permissions: ['stock.view', 'stock.manage'], types: ['garage'] },
                 { label: t('layout.purchasing'), href: '/approvisionnement', icon: 'bi-truck', permissions: ['purchase_orders.manage', 'suppliers.manage'], types: ['garage'] },
                 { label: t('layout.invoices'), href: '/factures', icon: 'bi-receipt', permissions: ['invoices.view', 'invoices.manage', 'payments.manage'] },
                 { label: t('layout.accounting'), href: '/comptabilite', icon: 'bi-journal-bookmark', permissions: ['accounting.view', 'accounting.manage'] },
@@ -495,9 +495,9 @@ function resetDemo() {
                 <div v-if="pendingAppointmentRequestsCount > 0" class="alert alert-warning border-0 shadow-sm d-flex justify-content-between align-items-center mb-3 py-2 small">
                     <div>
                         <i class="bi bi-calendar-heart-fill me-2"></i>
-                        <strong>Nouveau rendez-vous en ligne :</strong> Vous avez <strong>{{ pendingAppointmentRequestsCount }}</strong> demande(s) reçue(s) via lien sécurisé à valider !
+                        {{ t('layoutExtra.newAppointmentRequestsBanner', { count: pendingAppointmentRequestsCount }) }}
                     </div>
-                    <Link href="/rendez-vous" class="btn btn-warning btn-sm ms-2 text-nowrap fw-semibold text-dark">Examiner &amp; Valider</Link>
+                    <Link href="/rendez-vous" class="btn btn-warning btn-sm ms-2 text-nowrap fw-semibold text-dark">{{ t('layoutExtra.reviewAndValidate') }}</Link>
                 </div>
 
                 <div v-if="payrollAlert" class="alert alert-info d-flex justify-content-between align-items-center mb-3 py-2 small">

@@ -1,11 +1,15 @@
 <script setup>
+import { useI18n } from '@/composables/useI18n';
+
+const { t } = useI18n();
+
 defineProps({
     variant: { type: String, default: 'table' }, // 'table' | 'marketplace'
 });
 </script>
 
 <template>
-    <div class="mboacar-skeleton-wrapper py-2" aria-busy="true" aria-label="Chargement en cours...">
+    <div class="mboacar-skeleton-wrapper py-2" aria-busy="true" :aria-label="t('layoutExtra.loading')">
         <!-- En-tête -->
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
             <div style="min-width: 240px;">

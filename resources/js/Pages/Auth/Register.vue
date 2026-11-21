@@ -130,7 +130,7 @@ function submit() {
 
                     <form @submit.prevent="submit">
                         <div class="mb-3">
-                            <label class="form-label small fw-semibold">Type d'établissement <span class="text-danger">*</span></label>
+                            <label class="form-label small fw-semibold">{{ t('layoutExtra.establishmentType') }} <span class="text-danger">*</span></label>
                             <div class="row g-2">
                                 <div class="col-4">
                                     <button
@@ -140,8 +140,8 @@ function submit() {
                                         @click="form.type = 'garage'"
                                     >
                                         <i class="bi bi-wrench-adjustable d-block fs-5 mb-1"></i>
-                                        <span class="fw-bold d-block">Garage</span>
-                                        <span class="opacity-75" style="font-size: 0.7rem;">Atelier &amp; Pièces</span>
+                                        <span class="fw-bold d-block">{{ t('layoutExtra.typeGarage') }}</span>
+                                        <span class="opacity-75" style="font-size: 0.7rem;">{{ t('layoutExtra.typeGarageSub') }}</span>
                                     </button>
                                 </div>
                                 <div class="col-4">
@@ -152,8 +152,8 @@ function submit() {
                                         @click="form.type = 'centre_technique'"
                                     >
                                         <i class="bi bi-clipboard2-check d-block fs-5 mb-1"></i>
-                                        <span class="fw-bold d-block">Centre Tech.</span>
-                                        <span class="opacity-75" style="font-size: 0.7rem;">Visite Technique</span>
+                                        <span class="fw-bold d-block">{{ t('layoutExtra.typeTech') }}</span>
+                                        <span class="opacity-75" style="font-size: 0.7rem;">{{ t('layoutExtra.typeTechSub') }}</span>
                                     </button>
                                 </div>
                                 <div class="col-4">
@@ -164,8 +164,8 @@ function submit() {
                                         @click="form.type = 'assurance'"
                                     >
                                         <i class="bi bi-shield-check d-block fs-5 mb-1"></i>
-                                        <span class="fw-bold d-block">Assurance</span>
-                                        <span class="opacity-75" style="font-size: 0.7rem;">Polices &amp; Sinistres</span>
+                                        <span class="fw-bold d-block">{{ t('layoutExtra.typeInsurance') }}</span>
+                                        <span class="opacity-75" style="font-size: 0.7rem;">{{ t('layoutExtra.typeInsuranceSub') }}</span>
                                     </button>
                                 </div>
                             </div>
