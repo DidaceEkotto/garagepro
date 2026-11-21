@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
 use App\Models\Agency;
+use App\Models\PlatformMessage;
 use App\Models\TechnicalInspection;
+use App\Models\Tenant;
 use App\Models\Vehicle;
 use App\Services\GreenApiService;
 use App\Services\TenantContext;
@@ -159,11 +161,24 @@ class TechnicalInspectionController extends Controller
     public function publicShow(string $token): Response
     {
         $pv = TechnicalInspection::withoutTenantScope()
-            ->with(['tenant:id,name,city,phone', 'vehicle:id,license_plate,brand,model,vin', 'customer:id,name,first_name'])
+            ->with([
+                'tenant:id,name,city,phone',
+                'vehicle' => fn ($q) => $q->withoutTenantScope()->select('id', 'license_plate', 'brand', 'model', 'vin'),
+                'customer' => fn ($q) => $q->withoutTenantScope()->select('id', 'name', 'first_name'),
+            ])
             ->where('public_token', $token)
             ->firstOrFail();
 
+        $garages = $pv->verdict !== TechnicalInspection::VERDICT_FAVORABLE
+            ? Tenant::where('type', Tenant::TYPE_GARAGE)
+                ->whereIn('status', [Tenant::STATUS_ACTIVE, Tenant::STATUS_TRIALING])
+                ->orderBy('name')
+                ->get(['id', 'name', 'city'])
+            : collect();
+
         return Inertia::render('Public/TechnicalInspectionPv', [
+            'token' => $pv->public_token,
+            'garages' => $garages,
             'pv' => [
                 'pv_number' => $pv->pv_number,
                 'center_name' => $pv->tenant?->name ?? 'Centre Technique',
@@ -184,5 +199,42 @@ class TechnicalInspectionController extends Controller
                 'notes' => $pv->notes,
             ],
         ]);
+    }
+
+    public function requestRepairQuote(Request $request, string $token): RedirectResponse
+    {
+        $pv = TechnicalInspection::withoutTenantScope()
+            ->with([
+                'vehicle' => fn ($q) => $q->withoutTenantScope()->select('id', 'license_plate', 'brand', 'model'),
+                'customer' => fn ($q) => $q->withoutTenantScope()->select('id', 'name', 'first_name', 'phone'),
+            ])
+            ->where('public_token', $token)
+            ->firstOrFail();
+
+        $validated = $request->validate([
+            'garage_tenant_id' => ['required', 'integer', Rule::exists('tenants', 'id')->where('type', Tenant::TYPE_GARAGE)],
+            'client_phone' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $defects = collect($pv->defects ?? [])
+            ->whereIn('severity', ['majeur', 'critique'])
+            ->pluck('item')
+            ->implode(', ');
+
+        $plate = $pv->vehicle?->license_plate ?? 'Véhicule';
+        $clientName = trim(($pv->customer?->name ?? '').' '.($pv->customer?->first_name ?? '')) ?: 'Client';
+        $phone = $validated['client_phone'] ?: ($pv->customer?->phone ?? '');
+
+        PlatformMessage::create([
+            'tenant_id' => $validated['garage_tenant_id'],
+            'sender_type' => PlatformMessage::TYPE_CUSTOMER,
+            'sender_name' => $clientName,
+            'recipient_type' => PlatformMessage::TYPE_TENANT,
+            'subject' => "Demande de devis suite à contre-visite ({$plate})",
+            'body' => "PV {$pv->pv_number} — Véhicule {$plate} ({$phone}). Défauts relevés : ".($defects ?: 'Voir PV').'. Lien PV : '.route('public.technical_pv.show', ['token' => $pv->public_token]),
+            'is_read' => false,
+        ]);
+
+        return back()->with('success', 'Votre PV et la liste des défauts ont été transmis au garage choisi pour devis !');
     }
 }

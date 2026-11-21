@@ -1,9 +1,24 @@
 <script setup>
-import { Head } from '@inertiajs/vue3';
+import { Head, useForm, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 
-defineProps({
+const props = defineProps({
     pv: { type: Object, required: true },
+    token: { type: String, default: '' },
+    garages: { type: Array, default: () => [] },
 });
+
+const page = usePage();
+const flashSuccess = computed(() => page.props.flash?.success ?? null);
+
+const quoteForm = useForm({
+    garage_tenant_id: props.garages?.[0]?.id ?? '',
+    client_phone: '',
+});
+
+function submitQuoteRequest() {
+    quoteForm.post(`/pv-visite/${props.token}/demander-devis`, { preserveScroll: true });
+}
 </script>
 
 <template>
@@ -53,6 +68,34 @@ defineProps({
 
                     <p v-if="pv.notes" class="small text-muted mb-0"><strong>Observations :</strong> {{ pv.notes }}</p>
                 </div>
+            </div>
+
+            <!-- Passerelle Contre-visite -> Garage MboaCar -->
+            <div v-if="pv.verdict !== 'favorable' && garages.length" class="card border-warning shadow-sm mt-3">
+                <div class="card-header bg-warning-subtle fw-bold small text-dark py-2">
+                    <i class="bi bi-wrench-adjustable me-1"></i>Corriger ces défauts dans un Garage MboaCar
+                </div>
+                <form class="card-body p-3" @submit.prevent="submitQuoteRequest">
+                    <div v-if="flashSuccess" class="alert alert-success py-2 small mb-3">{{ flashSuccess }}</div>
+                    <p class="small text-muted mb-2">Transmettez ce PV et la liste des défauts directement à un garage partenaire pour obtenir un devis de remise en état :</p>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-5">
+                            <label class="form-label small fw-semibold">Garage choisi</label>
+                            <select v-model="quoteForm.garage_tenant_id" class="form-select form-select-sm" required>
+                                <option v-for="g in garages" :key="g.id" :value="g.id">{{ g.name }} {{ g.city ? `(${g.city})` : '' }}</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold">Votre WhatsApp (facultatif)</label>
+                            <input v-model="quoteForm.client_phone" type="tel" class="form-control form-control-sm" placeholder="6XX XXX XXX" />
+                        </div>
+                        <div class="col-md-3 d-grid">
+                            <button type="submit" class="btn btn-warning btn-sm fw-semibold text-dark" :disabled="quoteForm.processing">
+                                Demander un devis
+                            </button>
+                        </div>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

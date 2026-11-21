@@ -323,6 +323,22 @@ function formatMoney(v) {
                         <input v-model="claimForm.estimated_amount" type="number" min="0" class="form-control" required />
                     </div>
                 </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Assurance partenaire MboaCar (facultatif)</label>
+                        <select v-model="claimForm.insurance_tenant_id" class="form-select">
+                            <option value="">-- Gestion interne --</option>
+                            <option v-for="ins in insuranceTenants" :key="ins.id" :value="ins.id">{{ ins.name }}</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Garage réparateur partenaire (facultatif)</label>
+                        <select v-model="claimForm.garage_tenant_id" class="form-select">
+                            <option value="">-- Aucun / À définir --</option>
+                            <option v-for="gar in garageTenants" :key="gar.id" :value="gar.id">{{ gar.name }}</option>
+                        </select>
+                    </div>
+                </div>
                 <div class="mb-4">
                     <label class="form-label small fw-semibold">Circonstances &amp; dommages <span class="text-danger">*</span></label>
                     <textarea v-model="claimForm.description" rows="2" class="form-control" required></textarea>

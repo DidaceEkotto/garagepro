@@ -4,19 +4,26 @@ namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
+use App\Models\InsuranceClaim;
+use App\Models\InsurancePolicy;
 use App\Models\Invoice;
 use App\Models\Part;
 use App\Models\Payment;
 use App\Models\RepairOrder;
+use App\Models\TechnicalInspection;
 use App\Models\VehicleReception;
+use App\Services\TenantContext;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, TenantContext $tenantContext): Response
     {
+        $tenant = $tenantContext->getTenant();
+        $tenantType = $tenant?->type ?? 'garage';
+
         $monthRevenue = (int) Payment::where('status', Payment::STATUS_SUCCESS)
             ->whereYear('paid_at', now()->year)
             ->whereMonth('paid_at', now()->month)
@@ -78,7 +85,32 @@ class DashboardController extends Controller
             ->take(5)
             ->get();
 
+        $technicalKpis = $tenantType === 'centre_technique' ? [
+            'totalPvs' => TechnicalInspection::count(),
+            'favorableCount' => TechnicalInspection::where('verdict', 'favorable')->count(),
+            'counterVisitCount' => TechnicalInspection::where('verdict', 'contre_visite')->count(),
+            'immobilizedCount' => TechnicalInspection::where('verdict', 'immobilisation')->count(),
+        ] : null;
+
+        $insuranceKpis = $tenantType === 'assurance' ? [
+            'activePolicies' => InsurancePolicy::where('status', 'active')->count(),
+            'openClaims' => InsuranceClaim::withoutTenantScope()
+                ->where(fn ($q) => $q->where('tenant_id', $tenant->id)->orWhere('insurance_tenant_id', $tenant->id))
+                ->whereIn('status', ['declare', 'expertise'])
+                ->count(),
+            'approvedClaims' => InsuranceClaim::withoutTenantScope()
+                ->where(fn ($q) => $q->where('tenant_id', $tenant->id)->orWhere('insurance_tenant_id', $tenant->id))
+                ->whereIn('status', ['accord_prise_en_charge', 'en_reparation', 'cloture'])
+                ->count(),
+            'approvedTotal' => (int) InsuranceClaim::withoutTenantScope()
+                ->where(fn ($q) => $q->where('tenant_id', $tenant->id)->orWhere('insurance_tenant_id', $tenant->id))
+                ->sum('approved_amount'),
+        ] : null;
+
         return Inertia::render('Tenant/Dashboard', [
+            'tenantType' => $tenantType,
+            'technicalKpis' => $technicalKpis,
+            'insuranceKpis' => $insuranceKpis,
             'kpis' => [
                 'monthRevenue' => $monthRevenue,
                 'unpaidTotal' => $unpaidTotal,

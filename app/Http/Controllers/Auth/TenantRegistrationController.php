@@ -311,6 +311,7 @@ class TenantRegistrationController extends Controller
             $tenant = Tenant::create([
                 'name' => $data['garage_name'],
                 'slug' => $data['slug'],
+                'type' => $data['type'] ?? Tenant::TYPE_GARAGE,
                 'email' => strtolower($data['email']),
                 'phone' => $data['phone'] ?? null,
                 'country' => $data['country'],

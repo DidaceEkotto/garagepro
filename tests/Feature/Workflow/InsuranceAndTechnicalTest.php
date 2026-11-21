@@ -96,7 +96,8 @@ class InsuranceAndTechnicalTest extends TestCase
             ->assertSessionHas('success');
         $this->assertNotNull($pv->fresh()->whatsapp_sent_at);
 
-        // 2. Assurances : Police + Sinistre + Accord Prise en charge
+        // 2. Assurances : Police + Sinistre + Accord Prise en charge (sur un tenant Assurance)
+        $tenant->update(['type' => Tenant::TYPE_INSURANCE]);
         $this->actingAs($user, 'web')->get('http://centremboa.mboacar.com/assurances')->assertOk();
 
         $policyExpires = now()->addMonths(6)->toDateString();

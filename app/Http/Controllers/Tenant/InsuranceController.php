@@ -7,6 +7,7 @@ use App\Models\Agency;
 use App\Models\Customer;
 use App\Models\InsuranceClaim;
 use App\Models\InsurancePolicy;
+use App\Models\PlatformMessage;
 use App\Models\RepairOrder;
 use App\Models\Tenant;
 use App\Models\Vehicle;
@@ -147,7 +148,7 @@ class InsuranceController extends Controller
             'estimated_amount' => ['required', 'integer', 'min:0'],
         ]);
 
-        InsuranceClaim::create([
+        $claim = InsuranceClaim::create([
             'tenant_id' => $tenantId,
             'insurance_tenant_id' => $validated['insurance_tenant_id'] ?? ($tenant->type === Tenant::TYPE_INSURANCE ? $tenantId : null),
             'garage_tenant_id' => $validated['garage_tenant_id'] ?? ($tenant->type === Tenant::TYPE_GARAGE ? $tenantId : null),
@@ -161,6 +162,18 @@ class InsuranceController extends Controller
             'estimated_amount' => $validated['estimated_amount'],
             'status' => 'declare',
         ]);
+
+        if ($claim->insurance_tenant_id && (int) $claim->insurance_tenant_id !== (int) $tenantId) {
+            PlatformMessage::create([
+                'tenant_id' => $claim->insurance_tenant_id,
+                'sender_type' => PlatformMessage::TYPE_TENANT,
+                'sender_name' => $tenant->name,
+                'recipient_type' => PlatformMessage::TYPE_TENANT,
+                'subject' => "Nouveau sinistre soumis par {$tenant->name} ({$claim->claim_number})",
+                'body' => "Montant estimé : ".number_format($claim->estimated_amount, 0, ',', ' ')." FCFA. {$claim->description}",
+                'is_read' => false,
+            ]);
+        }
 
         return back()->with('success', 'Dossier sinistre déclaré avec succès.');
     }
@@ -202,6 +215,18 @@ class InsuranceController extends Controller
             'expert_notes' => $validated['expert_notes'] ?? $claim->expert_notes,
             'status' => 'accord_prise_en_charge',
         ]);
+
+        if ($claim->garage_tenant_id && (int) $claim->garage_tenant_id !== (int) $tenantId) {
+            PlatformMessage::create([
+                'tenant_id' => $claim->garage_tenant_id,
+                'sender_type' => PlatformMessage::TYPE_TENANT,
+                'sender_name' => $tenantContext->getTenant()?->name ?? 'Assurance',
+                'recipient_type' => PlatformMessage::TYPE_TENANT,
+                'subject' => "Accord de prise en charge ({$claim->claim_number})",
+                'body' => "Montant approuvé : ".number_format($approved, 0, ',', ' ')." FCFA ({$share}% assurance). Franchise client : ".number_format($clientDeductible, 0, ',', ' ')." FCFA.",
+                'is_read' => false,
+            ]);
+        }
 
         $phone = $claim->customer?->whatsapp_phone ?: $claim->customer?->phone;
         if ($phone && $greenApi->isConfigured()) {

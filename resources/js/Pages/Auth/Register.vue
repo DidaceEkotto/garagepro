@@ -18,6 +18,7 @@ const showPassword = ref(false);
 const showPasswordConfirmation = ref(false);
 
 const form = useForm({
+    type: 'garage',
     garage_name: '',
     slug: '',
     owner_last_name: '',
@@ -129,7 +130,52 @@ function submit() {
 
                     <form @submit.prevent="submit">
                         <div class="mb-3">
-                            <label for="garage_name" class="form-label small">{{ t('auth.garageName') }} <span class="text-danger">*</span></label>
+                            <label class="form-label small fw-semibold">Type d'établissement <span class="text-danger">*</span></label>
+                            <div class="row g-2">
+                                <div class="col-4">
+                                    <button
+                                        type="button"
+                                        class="btn w-100 text-start p-2 small border"
+                                        :class="form.type === 'garage' ? 'btn-primary text-white border-primary' : 'btn-light'"
+                                        @click="form.type = 'garage'"
+                                    >
+                                        <i class="bi bi-wrench-adjustable d-block fs-5 mb-1"></i>
+                                        <span class="fw-bold d-block">Garage</span>
+                                        <span class="opacity-75" style="font-size: 0.7rem;">Atelier &amp; Pièces</span>
+                                    </button>
+                                </div>
+                                <div class="col-4">
+                                    <button
+                                        type="button"
+                                        class="btn w-100 text-start p-2 small border"
+                                        :class="form.type === 'centre_technique' ? 'btn-primary text-white border-primary' : 'btn-light'"
+                                        @click="form.type = 'centre_technique'"
+                                    >
+                                        <i class="bi bi-clipboard2-check d-block fs-5 mb-1"></i>
+                                        <span class="fw-bold d-block">Centre Tech.</span>
+                                        <span class="opacity-75" style="font-size: 0.7rem;">Visite Technique</span>
+                                    </button>
+                                </div>
+                                <div class="col-4">
+                                    <button
+                                        type="button"
+                                        class="btn w-100 text-start p-2 small border"
+                                        :class="form.type === 'assurance' ? 'btn-primary text-white border-primary' : 'btn-light'"
+                                        @click="form.type = 'assurance'"
+                                    >
+                                        <i class="bi bi-shield-check d-block fs-5 mb-1"></i>
+                                        <span class="fw-bold d-block">Assurance</span>
+                                        <span class="opacity-75" style="font-size: 0.7rem;">Polices &amp; Sinistres</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="garage_name" class="form-label small">
+                                {{ form.type === 'centre_technique' ? 'Nom du Centre Technique' : (form.type === 'assurance' ? 'Nom de l\'Assurance / Cabinet' : t('auth.garageName')) }}
+                                <span class="text-danger">*</span>
+                            </label>
                             <input
                                 id="garage_name"
                                 v-model="form.garage_name"

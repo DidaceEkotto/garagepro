@@ -107,6 +107,9 @@ Route::post('/demo/reinitialiser', [DemoController::class, 'reset'])->name('demo
 // Carnet d'entretien numérique & Suivi client en direct
 Route::get('/carnet/{token}', [PublicTrackingController::class, 'vehiclePassport'])->name('public.vehicle.passport');
 Route::get('/pv-visite/{token}', [TechnicalInspectionController::class, 'publicShow'])->name('public.technical_pv.show');
+Route::post('/pv-visite/{token}/demander-devis', [TechnicalInspectionController::class, 'requestRepairQuote'])
+    ->middleware('throttle:10,1')
+    ->name('public.technical_pv.request_quote');
 Route::get('/suivi/{token}', [PublicTrackingController::class, 'repairOrderTracking'])->name('public.repair_order.tracking');
 Route::post('/suivi/{token}/devis/{quoteId}/repondre', [PublicTrackingController::class, 'respondQuote'])->name('public.repair_order.quote_respond');
 Route::get('/rdv/{token}', [PublicAppointmentController::class, 'show'])->name('public.appointment.show');
@@ -218,94 +221,105 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
     Route::post('/rendez-vous/liens/{appointmentLink}/valider', [AppointmentController::class, 'confirmLinkSubmission'])->name('tenant.appointments.links.confirm');
     Route::post('/rendez-vous/liens/{appointmentLink}/annuler', [AppointmentController::class, 'cancelLink'])->name('tenant.appointments.links.cancel');
 
-    // Réception & Véhicules de courtoisie
-    Route::get('/receptions', [VehicleReceptionController::class, 'index'])->name('tenant.receptions.index');
-    Route::post('/receptions', [VehicleReceptionController::class, 'store'])->name('tenant.receptions.store');
-    Route::post('/receptions/{reception}/retour-courtoisie', [VehicleReceptionController::class, 'returnCourtesy'])->name('tenant.receptions.return_courtesy');
+    // Modules réservés à l'espace Garage / Atelier
+    Route::middleware('tenant.type:garage')->group(function () {
+        // Réception & Véhicules de courtoisie
+        Route::get('/receptions', [VehicleReceptionController::class, 'index'])->name('tenant.receptions.index');
+        Route::post('/receptions', [VehicleReceptionController::class, 'store'])->name('tenant.receptions.store');
+        Route::post('/receptions/{reception}/retour-courtoisie', [VehicleReceptionController::class, 'returnCourtesy'])->name('tenant.receptions.return_courtesy');
+
+        // Ordres de réparation, diagnostic & planification
+        Route::get('/ordres-reparation', [RepairOrderController::class, 'index'])->name('tenant.repair_orders.index');
+        Route::post('/ordres-reparation', [RepairOrderController::class, 'store'])->name('tenant.repair_orders.store');
+        Route::post('/ordres-reparation/{repairOrder}/diagnostic', [RepairOrderController::class, 'saveDiagnostic'])->name('tenant.repair_orders.diagnostic');
+        Route::post('/ordres-reparation/{repairOrder}/taches', [RepairOrderController::class, 'addTask'])->name('tenant.repair_orders.tasks.store');
+
+        // Devis multi-versions, validation client & PDF
+        Route::get('/devis', [QuoteController::class, 'index'])->name('tenant.quotes.index');
+        Route::post('/devis', [QuoteController::class, 'store'])->name('tenant.quotes.store');
+        Route::post('/devis/{quote}/valider', [QuoteController::class, 'accept'])->name('tenant.quotes.accept');
+        Route::post('/devis/{quote}/nouvelle-version', [QuoteController::class, 'newVersion'])->name('tenant.quotes.new_version');
+        Route::get('/devis/{quote}/pdf', [QuoteController::class, 'pdf'])
+            ->middleware('throttle:pdf')
+            ->name('tenant.quotes.pdf');
+
+        // Stock, fournisseurs & approvisionnement
+        Route::get('/stock', [InventoryController::class, 'index'])->name('tenant.inventory.index');
+        Route::post('/stock/pieces', [InventoryController::class, 'storePart'])->name('tenant.inventory.parts.store');
+        Route::post('/stock/fournisseurs', [InventoryController::class, 'storeSupplier'])->name('tenant.inventory.suppliers.store');
+        Route::post('/stock/pieces/{part}/reserver', [InventoryController::class, 'reserve'])->name('tenant.inventory.parts.reserve');
+        Route::post('/stock/pieces/{part}/sortie', [InventoryController::class, 'issue'])->name('tenant.inventory.parts.issue');
+        Route::post('/stock/pieces/{part}/transfert', [InventoryController::class, 'transfer'])->name('tenant.inventory.parts.transfer');
+
+        Route::get('/approvisionnement', [PurchaseOrderController::class, 'index'])->name('tenant.purchase_orders.index');
+        Route::post('/approvisionnement', [PurchaseOrderController::class, 'store'])->name('tenant.purchase_orders.store');
+        Route::post('/approvisionnement/{purchaseOrder}/relancer', [PurchaseOrderController::class, 'remind'])->name('tenant.purchase_orders.remind');
+        Route::post('/approvisionnement/{purchaseOrder}/reception', [PurchaseOrderController::class, 'receive'])->name('tenant.purchase_orders.receive');
+
+        // Atelier, pointage & contrôle qualité
+        Route::get('/atelier/mes-or', [WorkshopController::class, 'myOrders'])->name('tenant.workshop.my_orders');
+        Route::patch('/atelier/or/{repairOrder}/statut', [WorkshopController::class, 'updateStatus'])->name('tenant.workshop.status');
+        Route::post('/atelier/taches/{task}/pointage', [WorkshopController::class, 'logTime'])->name('tenant.workshop.log_time');
+        Route::post('/atelier/or/{repairOrder}/controle-qualite', [WorkshopController::class, 'submitQualityCheck'])->name('tenant.workshop.quality_check');
+
+        // Inspection Visuelle Numérique (DVI) & Photos WhatsApp
+        Route::get('/inspections', [InspectionController::class, 'index'])->name('tenant.inspections.index');
+        Route::post('/inspections', [InspectionController::class, 'store'])->name('tenant.inspections.store');
+        Route::post('/inspections/{inspection}/whatsapp', [InspectionController::class, 'sendWhatsapp'])->name('tenant.inspections.whatsapp');
+
+        // Sous-traitance & Dépannage / Remorquage
+        Route::get('/sous-traitance', [SubcontractController::class, 'index'])->name('tenant.subcontracting.index');
+        Route::post('/sous-traitance', [SubcontractController::class, 'store'])->name('tenant.subcontracting.store');
+        Route::patch('/sous-traitance/{intervention}/statut', [SubcontractController::class, 'updateStatus'])->name('tenant.subcontracting.status');
+        Route::delete('/sous-traitance/{intervention}', [SubcontractController::class, 'destroy'])->name('tenant.subcontracting.destroy');
+
+        // Outillage Atelier & Consommables en Vrac
+        Route::get('/outillage-vrac', [ToolsAndBulkController::class, 'index'])->name('tenant.tools_bulk.index');
+        Route::post('/outillage-vrac/outils', [ToolsAndBulkController::class, 'storeTool'])->name('tenant.tools_bulk.tools.store');
+        Route::post('/outillage-vrac/outils/{tool}/emprunter', [ToolsAndBulkController::class, 'borrowTool'])->name('tenant.tools_bulk.tools.borrow');
+        Route::post('/outillage-vrac/outils/{tool}/rendre', [ToolsAndBulkController::class, 'returnTool'])->name('tenant.tools_bulk.tools.return');
+        Route::delete('/outillage-vrac/outils/{tool}', [ToolsAndBulkController::class, 'destroyTool'])->name('tenant.tools_bulk.tools.destroy');
+        Route::post('/outillage-vrac/vrac', [ToolsAndBulkController::class, 'storeBulk'])->name('tenant.tools_bulk.bulk.store');
+        Route::post('/outillage-vrac/vrac/{consumable}/mouvement', [ToolsAndBulkController::class, 'logBulkMovement'])->name('tenant.tools_bulk.bulk.movement');
+    });
 
     // Fichiers privés signés (photos, signatures)
     Route::get('/fichiers-securises/{path}', [SecureFileController::class, 'show'])->name('tenant.files.show');
 
-    // Ordres de réparation, diagnostic & planification
-    Route::get('/ordres-reparation', [RepairOrderController::class, 'index'])->name('tenant.repair_orders.index');
-    Route::post('/ordres-reparation', [RepairOrderController::class, 'store'])->name('tenant.repair_orders.store');
-    Route::post('/ordres-reparation/{repairOrder}/diagnostic', [RepairOrderController::class, 'saveDiagnostic'])->name('tenant.repair_orders.diagnostic');
-    Route::post('/ordres-reparation/{repairOrder}/taches', [RepairOrderController::class, 'addTask'])->name('tenant.repair_orders.tasks.store');
+    // Planning Visuel (Garage & Centre Technique)
+    Route::middleware('tenant.type:garage,centre_technique')->group(function () {
+        Route::get('/planning-atelier', [WorkshopPlanningController::class, 'index'])->name('tenant.planning.index');
+        Route::patch('/planning-atelier/rdv/{appointment}', [WorkshopPlanningController::class, 'assignAppointment'])->name('tenant.planning.assign_appointment');
+        Route::patch('/planning-atelier/or/{repairOrder}', [WorkshopPlanningController::class, 'assignRepairOrder'])->name('tenant.planning.assign_ro');
+    });
 
-    // Devis multi-versions, validation client & PDF
-    Route::get('/devis', [QuoteController::class, 'index'])->name('tenant.quotes.index');
-    Route::post('/devis', [QuoteController::class, 'store'])->name('tenant.quotes.store');
-    Route::post('/devis/{quote}/valider', [QuoteController::class, 'accept'])->name('tenant.quotes.accept');
-    Route::post('/devis/{quote}/nouvelle-version', [QuoteController::class, 'newVersion'])->name('tenant.quotes.new_version');
-    Route::get('/devis/{quote}/pdf', [QuoteController::class, 'pdf'])
-        ->middleware('throttle:pdf')
-        ->name('tenant.quotes.pdf');
-
-    // Stock, fournisseurs & approvisionnement
-    Route::get('/stock', [InventoryController::class, 'index'])->name('tenant.inventory.index');
-    Route::post('/stock/pieces', [InventoryController::class, 'storePart'])->name('tenant.inventory.parts.store');
-    Route::post('/stock/fournisseurs', [InventoryController::class, 'storeSupplier'])->name('tenant.inventory.suppliers.store');
-    Route::post('/stock/pieces/{part}/reserver', [InventoryController::class, 'reserve'])->name('tenant.inventory.parts.reserve');
-    Route::post('/stock/pieces/{part}/sortie', [InventoryController::class, 'issue'])->name('tenant.inventory.parts.issue');
-    Route::post('/stock/pieces/{part}/transfert', [InventoryController::class, 'transfer'])->name('tenant.inventory.parts.transfer');
-
-    Route::get('/approvisionnement', [PurchaseOrderController::class, 'index'])->name('tenant.purchase_orders.index');
-    Route::post('/approvisionnement', [PurchaseOrderController::class, 'store'])->name('tenant.purchase_orders.store');
-    Route::post('/approvisionnement/{purchaseOrder}/relancer', [PurchaseOrderController::class, 'remind'])->name('tenant.purchase_orders.remind');
-    Route::post('/approvisionnement/{purchaseOrder}/reception', [PurchaseOrderController::class, 'receive'])->name('tenant.purchase_orders.receive');
-
-    // Atelier, pointage & contrôle qualité
-    Route::get('/atelier/mes-or', [WorkshopController::class, 'myOrders'])->name('tenant.workshop.my_orders');
-    Route::patch('/atelier/or/{repairOrder}/statut', [WorkshopController::class, 'updateStatus'])->name('tenant.workshop.status');
-    Route::post('/atelier/taches/{task}/pointage', [WorkshopController::class, 'logTime'])->name('tenant.workshop.log_time');
-    Route::post('/atelier/or/{repairOrder}/controle-qualite', [WorkshopController::class, 'submitQualityCheck'])->name('tenant.workshop.quality_check');
-
-    // 1. Inspection Visuelle Numérique (DVI) & Photos WhatsApp
-    Route::get('/inspections', [InspectionController::class, 'index'])->name('tenant.inspections.index');
-    Route::post('/inspections', [InspectionController::class, 'store'])->name('tenant.inspections.store');
-    Route::post('/inspections/{inspection}/whatsapp', [InspectionController::class, 'sendWhatsapp'])->name('tenant.inspections.whatsapp');
-
-    // 2. Planning Visuel de l'Atelier (Ponts & Mécaniciens)
-    Route::get('/planning-atelier', [WorkshopPlanningController::class, 'index'])->name('tenant.planning.index');
-    Route::patch('/planning-atelier/rdv/{appointment}', [WorkshopPlanningController::class, 'assignAppointment'])->name('tenant.planning.assign_appointment');
-    Route::patch('/planning-atelier/or/{repairOrder}', [WorkshopPlanningController::class, 'assignRepairOrder'])->name('tenant.planning.assign_ro');
-
-    // 3. Rappels Périodiques (Vidange, Visite Technique, Assurance)
+    // Rappels Périodiques (Vidange, Visite Technique, Assurance — tous espaces)
     Route::get('/rappels-entretien', [MaintenanceReminderController::class, 'index'])->name('tenant.maintenance_reminders.index');
     Route::patch('/rappels-entretien/{vehicle}', [MaintenanceReminderController::class, 'updateDates'])->name('tenant.maintenance_reminders.update');
     Route::post('/rappels-entretien/{vehicle}/whatsapp', [MaintenanceReminderController::class, 'sendWhatsapp'])->name('tenant.maintenance_reminders.whatsapp');
 
-    // 4. Flottes Entreprises (B2B) & Facturation Groupée
-    Route::get('/flottes', [FleetController::class, 'index'])->name('tenant.fleets.index');
-    Route::post('/flottes/{customer}/parametres', [FleetController::class, 'updateSettings'])->name('tenant.fleets.settings');
-    Route::post('/flottes/{customer}/facture-mensuelle', [FleetController::class, 'generateMonthlyInvoice'])->name('tenant.fleets.monthly_invoice');
-
-    // 5. Sous-traitance & Dépannage / Remorquage
-    Route::get('/sous-traitance', [SubcontractController::class, 'index'])->name('tenant.subcontracting.index');
-    Route::post('/sous-traitance', [SubcontractController::class, 'store'])->name('tenant.subcontracting.store');
-    Route::patch('/sous-traitance/{intervention}/statut', [SubcontractController::class, 'updateStatus'])->name('tenant.subcontracting.status');
-    Route::delete('/sous-traitance/{intervention}', [SubcontractController::class, 'destroy'])->name('tenant.subcontracting.destroy');
-
-    // 6. Outillage Atelier & Consommables en Vrac
-    Route::get('/outillage-vrac', [ToolsAndBulkController::class, 'index'])->name('tenant.tools_bulk.index');
-    Route::post('/outillage-vrac/outils', [ToolsAndBulkController::class, 'storeTool'])->name('tenant.tools_bulk.tools.store');
-    Route::post('/outillage-vrac/outils/{tool}/emprunter', [ToolsAndBulkController::class, 'borrowTool'])->name('tenant.tools_bulk.tools.borrow');
-    Route::post('/outillage-vrac/outils/{tool}/rendre', [ToolsAndBulkController::class, 'returnTool'])->name('tenant.tools_bulk.tools.return');
-    Route::delete('/outillage-vrac/outils/{tool}', [ToolsAndBulkController::class, 'destroyTool'])->name('tenant.tools_bulk.tools.destroy');
-    Route::post('/outillage-vrac/vrac', [ToolsAndBulkController::class, 'storeBulk'])->name('tenant.tools_bulk.bulk.store');
-    Route::post('/outillage-vrac/vrac/{consumable}/mouvement', [ToolsAndBulkController::class, 'logBulkMovement'])->name('tenant.tools_bulk.bulk.movement');
+    // Flottes Entreprises (B2B — Garage & Assurance)
+    Route::middleware('tenant.type:garage,assurance')->group(function () {
+        Route::get('/flottes', [FleetController::class, 'index'])->name('tenant.fleets.index');
+        Route::post('/flottes/{customer}/parametres', [FleetController::class, 'updateSettings'])->name('tenant.fleets.settings');
+        Route::post('/flottes/{customer}/facture-mensuelle', [FleetController::class, 'generateMonthlyInvoice'])->name('tenant.fleets.monthly_invoice');
+    });
 
     // 7. Centre de Contrôle Technique (PV Visite Technique & QR)
-    Route::get('/visite-technique', [TechnicalInspectionController::class, 'index'])->name('tenant.technical_inspection.index');
-    Route::post('/visite-technique', [TechnicalInspectionController::class, 'store'])->name('tenant.technical_inspection.store');
-    Route::post('/visite-technique/{technicalInspection}/whatsapp', [TechnicalInspectionController::class, 'sendWhatsapp'])->name('tenant.technical_inspection.whatsapp');
+    Route::middleware('tenant.type:centre_technique')->group(function () {
+        Route::get('/visite-technique', [TechnicalInspectionController::class, 'index'])->name('tenant.technical_inspection.index');
+        Route::post('/visite-technique', [TechnicalInspectionController::class, 'store'])->name('tenant.technical_inspection.store');
+        Route::post('/visite-technique/{technicalInspection}/whatsapp', [TechnicalInspectionController::class, 'sendWhatsapp'])->name('tenant.technical_inspection.whatsapp');
+    });
 
-    // 8. Assurances Automobile (Polices, Sinistres & Prises en charge)
-    Route::get('/assurances', [InsuranceController::class, 'index'])->name('tenant.insurance.index');
-    Route::post('/assurances/polices', [InsuranceController::class, 'storePolicy'])->name('tenant.insurance.policies.store');
-    Route::post('/assurances/sinistres', [InsuranceController::class, 'storeClaim'])->name('tenant.insurance.claims.store');
-    Route::post('/assurances/sinistres/{claimId}/approuver', [InsuranceController::class, 'approveClaim'])->name('tenant.insurance.claims.approve');
-    Route::patch('/assurances/sinistres/{claimId}/statut', [InsuranceController::class, 'updateClaimStatus'])->name('tenant.insurance.claims.status');
+    // 8. Assurances Automobile (Polices, Sinistres & Prises en charge — passerelle Assurance <-> Garage)
+    Route::middleware('tenant.type:assurance,garage')->group(function () {
+        Route::get('/assurances', [InsuranceController::class, 'index'])->name('tenant.insurance.index');
+        Route::post('/assurances/polices', [InsuranceController::class, 'storePolicy'])->name('tenant.insurance.policies.store');
+        Route::post('/assurances/sinistres', [InsuranceController::class, 'storeClaim'])->name('tenant.insurance.claims.store');
+        Route::post('/assurances/sinistres/{claimId}/approuver', [InsuranceController::class, 'approveClaim'])->name('tenant.insurance.claims.approve');
+        Route::patch('/assurances/sinistres/{claimId}/statut', [InsuranceController::class, 'updateClaimStatus'])->name('tenant.insurance.claims.status');
+    });
 
     // Facturation, avoirs & PDF
     Route::get('/factures', [InvoiceController::class, 'index'])->name('tenant.invoices.index');

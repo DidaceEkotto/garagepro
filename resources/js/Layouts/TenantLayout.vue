@@ -96,6 +96,7 @@ function hasAnyPermission(perms) {
 }
 
 const menuGroups = computed(() => {
+    const currentType = tenant.value?.type || 'garage';
     const rawGroups = [
         {
             title: t('layout.dashboard'),
@@ -105,30 +106,30 @@ const menuGroups = computed(() => {
             ],
         },
         {
-            title: t('layout.workshop'),
+            title: currentType === 'centre_technique' ? 'Contrôle Technique' : (currentType === 'assurance' ? 'Assurance & Sinistres' : t('layout.workshop')),
             items: [
-                { label: t('layout.customers'), href: '/clients', icon: 'bi-people', permissions: ['clients.view', 'clients.manage'] },
+                { label: currentType === 'assurance' ? 'Assurés' : t('layout.customers'), href: '/clients', icon: 'bi-people', permissions: ['clients.view', 'clients.manage'] },
                 { label: 'Véhicules', href: '/vehicules', icon: 'bi-car-front', permissions: ['clients.view', 'clients.manage'] },
-                { label: 'Flottes B2B', href: '/flottes', icon: 'bi-buildings', permissions: ['clients.view', 'clients.manage'] },
+                { label: 'Flottes B2B', href: '/flottes', icon: 'bi-buildings', permissions: ['clients.view', 'clients.manage'], types: ['garage', 'assurance'] },
                 { label: t('layout.appointments'), href: '/rendez-vous', icon: 'bi-calendar-check', permissions: ['appointments.view', 'appointments.manage'] },
-                { label: 'Planning Atelier', href: '/planning-atelier', icon: 'bi-calendar3', permissions: ['appointments.view', 'repair_orders.view'] },
+                { label: currentType === 'centre_technique' ? 'Planning Lignes' : 'Planning Atelier', href: '/planning-atelier', icon: 'bi-calendar3', permissions: ['appointments.view', 'repair_orders.view'], types: ['garage', 'centre_technique'] },
                 { label: 'Rappels Entretien', href: '/rappels-entretien', icon: 'bi-bell', permissions: ['clients.view', 'clients.manage'] },
-                { label: t('layout.receptions'), href: '/receptions', icon: 'bi-clipboard-check', permissions: ['receptions.manage'] },
-                { label: 'Inspections (DVI)', href: '/inspections', icon: 'bi-camera', permissions: ['repair_orders.view', 'diagnostics.manage'] },
-                { label: 'Visite Technique', href: '/visite-technique', icon: 'bi-clipboard2-check', permissions: ['clients.view', 'repair_orders.view', 'diagnostics.manage'] },
-                { label: 'Assurances & Sinistres', href: '/assurances', icon: 'bi-shield-check', permissions: ['clients.view', 'invoices.view', 'repair_orders.view'] },
-                { label: t('layout.repairOrders'), href: '/ordres-reparation', icon: 'bi-wrench-adjustable', permissions: ['repair_orders.view', 'repair_orders.manage'] },
-                { label: 'Sous-traitance & Dépannage', href: '/sous-traitance', icon: 'bi-truck-front', permissions: ['repair_orders.view', 'repair_orders.manage'] },
-                { label: t('layout.quotes'), href: '/devis', icon: 'bi-file-earmark-text', permissions: ['quotes.view', 'quotes.manage'] },
-                { label: t('layout.workshop'), href: '/atelier/mes-or', icon: 'bi-tools', permissions: ['repair_orders.view', 'repair_orders.view_own', 'diagnostics.manage'] },
+                { label: t('layout.receptions'), href: '/receptions', icon: 'bi-clipboard-check', permissions: ['receptions.manage'], types: ['garage'] },
+                { label: 'Inspections (DVI)', href: '/inspections', icon: 'bi-camera', permissions: ['repair_orders.view', 'diagnostics.manage'], types: ['garage'] },
+                { label: 'Visite Technique', href: '/visite-technique', icon: 'bi-clipboard2-check', permissions: ['clients.view', 'repair_orders.view', 'diagnostics.manage'], types: ['centre_technique'] },
+                { label: currentType === 'assurance' ? 'Polices & Sinistres' : 'Assurances & Sinistres', href: '/assurances', icon: 'bi-shield-check', permissions: ['clients.view', 'invoices.view', 'repair_orders.view'], types: ['assurance', 'garage'] },
+                { label: t('layout.repairOrders'), href: '/ordres-reparation', icon: 'bi-wrench-adjustable', permissions: ['repair_orders.view', 'repair_orders.manage'], types: ['garage'] },
+                { label: 'Sous-traitance & Dépannage', href: '/sous-traitance', icon: 'bi-truck-front', permissions: ['repair_orders.view', 'repair_orders.manage'], types: ['garage'] },
+                { label: t('layout.quotes'), href: '/devis', icon: 'bi-file-earmark-text', permissions: ['quotes.view', 'quotes.manage'], types: ['garage'] },
+                { label: t('layout.workshop'), href: '/atelier/mes-or', icon: 'bi-tools', permissions: ['repair_orders.view', 'repair_orders.view_own', 'diagnostics.manage'], types: ['garage'] },
             ],
         },
         {
             title: t('layout.accounting'),
             items: [
-                { label: t('layout.inventory'), href: '/stock', icon: 'bi-box-seam', permissions: ['stock.view', 'stock.manage'] },
-                { label: 'Outillage & Vrac', href: '/outillage-vrac', icon: 'bi-droplet-half', permissions: ['stock.view', 'stock.manage'] },
-                { label: t('layout.purchasing'), href: '/approvisionnement', icon: 'bi-truck', permissions: ['purchase_orders.manage', 'suppliers.manage'] },
+                { label: t('layout.inventory'), href: '/stock', icon: 'bi-box-seam', permissions: ['stock.view', 'stock.manage'], types: ['garage'] },
+                { label: 'Outillage & Vrac', href: '/outillage-vrac', icon: 'bi-droplet-half', permissions: ['stock.view', 'stock.manage'], types: ['garage'] },
+                { label: t('layout.purchasing'), href: '/approvisionnement', icon: 'bi-truck', permissions: ['purchase_orders.manage', 'suppliers.manage'], types: ['garage'] },
                 { label: t('layout.invoices'), href: '/factures', icon: 'bi-receipt', permissions: ['invoices.view', 'invoices.manage', 'payments.manage'] },
                 { label: t('layout.accounting'), href: '/comptabilite', icon: 'bi-journal-bookmark', permissions: ['accounting.view', 'accounting.manage'] },
                 { label: t('layout.reports'), href: '/rapports', icon: 'bi-graph-up', permissions: ['reports.view'] },
@@ -163,7 +164,9 @@ const menuGroups = computed(() => {
     return rawGroups
         .map((group) => ({
             ...group,
-            items: group.items.filter((item) => hasAnyPermission(item.permissions)),
+            items: group.items.filter(
+                (item) => (!item.types || item.types.includes(currentType)) && hasAnyPermission(item.permissions)
+            ),
         }))
         .filter((group) => group.items.length > 0);
 });
@@ -377,7 +380,7 @@ function resetDemo() {
                 </div>
 
                 <!-- Menu déroulant Marketplace -->
-                <div v-if="!tenant?.isReadOnly" class="mb-3">
+                <div v-if="!tenant?.isReadOnly && (tenant?.type === 'garage' || !tenant?.type)" class="mb-3">
                     <button
                         type="button"
                         class="btn btn-light w-100 d-flex align-items-center justify-content-between py-2 px-3 small fw-semibold border"

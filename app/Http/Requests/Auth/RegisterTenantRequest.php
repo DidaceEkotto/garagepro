@@ -31,6 +31,7 @@ class RegisterTenantRequest extends FormRequest
         $reserved = config('garagepro.reserved_subdomains', []);
 
         return [
+            'type' => ['nullable', Rule::in(['garage', 'centre_technique', 'assurance'])],
             'garage_name' => ['required', 'string', 'min:2', 'max:150'],
             'owner_last_name' => ['nullable', 'string', 'min:2', 'max:100'],
             'owner_first_name' => ['nullable', 'string', 'min:2', 'max:100'],

@@ -3,6 +3,7 @@
 use App\Http\Middleware\BlockSuspiciousIp;
 use App\Http\Middleware\CheckSiteMaintenance;
 use App\Http\Middleware\EnsureTenantPermission;
+use App\Http\Middleware\EnsureTenantType;
 use App\Http\Middleware\EnsureTenantUser;
 use App\Http\Middleware\EnsureTenantWritable;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -46,6 +47,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenant.auth' => EnsureTenantUser::class,
             'tenant.writable' => EnsureTenantWritable::class,
             'tenant.permission' => EnsureTenantPermission::class,
+            'tenant.type' => EnsureTenantType::class,
         ]);
 
         $middleware->validateCsrfTokens(except: [

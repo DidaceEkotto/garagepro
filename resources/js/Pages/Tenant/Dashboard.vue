@@ -4,6 +4,9 @@ import { Head, Link } from '@inertiajs/vue3';
 import { computed } from 'vue';
 
 const props = defineProps({
+    tenantType: { type: String, default: 'garage' },
+    technicalKpis: { type: Object, default: null },
+    insuranceKpis: { type: Object, default: null },
     kpis: Object,
     revenueSeries: Array,
     ordersByStatus: Array,
@@ -41,16 +44,86 @@ const statusColors = [
     <TenantLayout>
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
-                <h1 class="h4 fw-bold mb-0">Tableau de bord récapitulatif</h1>
-                <p class="text-muted small mb-0">Vue d'ensemble de l'activité atelier, stock et finances</p>
+                <h1 class="h4 fw-bold mb-0">
+                    {{ tenantType === 'centre_technique' ? 'Tableau de bord — Centre Technique' : (tenantType === 'assurance' ? 'Tableau de bord — Assurance Auto' : 'Tableau de bord récapitulatif') }}
+                </h1>
+                <p class="text-muted small mb-0">
+                    {{ tenantType === 'centre_technique' ? 'Suivi des visites techniques, contre-visites et encaissements' : (tenantType === 'assurance' ? 'Suivi des polices, dossiers sinistres et accords de prise en charge' : 'Vue d\'ensemble de l\'activité atelier, stock et finances') }}
+                </p>
             </div>
-            <div class="d-flex gap-2">
+            <div v-if="tenantType === 'centre_technique'" class="d-flex gap-2">
+                <Link href="/visite-technique" class="btn btn-primary btn-sm">
+                    <i class="bi bi-clipboard2-check me-1"></i>Nouveau PV Visite
+                </Link>
+            </div>
+            <div v-else-if="tenantType === 'assurance'" class="d-flex gap-2">
+                <Link href="/assurances" class="btn btn-primary btn-sm">
+                    <i class="bi bi-shield-check me-1"></i>Polices &amp; Sinistres
+                </Link>
+            </div>
+            <div v-else class="d-flex gap-2">
                 <Link href="/rendez-vous" class="btn btn-outline-primary btn-sm">
                     <i class="bi bi-calendar-plus me-1"></i>Nouveau RDV
                 </Link>
                 <Link href="/ordres-reparation" class="btn btn-primary btn-sm">
                     <i class="bi bi-plus-circle me-1"></i>Nouvel OR
                 </Link>
+            </div>
+        </div>
+
+        <!-- KPIs Centre Technique -->
+        <div v-if="tenantType === 'centre_technique' && technicalKpis" class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm p-3">
+                    <div class="small text-muted">PV Établis</div>
+                    <div class="h4 fw-bold mb-0">{{ technicalKpis.totalPvs }}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm p-3">
+                    <div class="small text-muted">Favorables (Aptes)</div>
+                    <div class="h4 fw-bold text-success mb-0">{{ technicalKpis.favorableCount }}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm p-3">
+                    <div class="small text-muted">Contre-visites</div>
+                    <div class="h4 fw-bold text-warning mb-0">{{ technicalKpis.counterVisitCount }}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm p-3">
+                    <div class="small text-muted">Immobilisations</div>
+                    <div class="h4 fw-bold text-danger mb-0">{{ technicalKpis.immobilizedCount }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPIs Assurance -->
+        <div v-if="tenantType === 'assurance' && insuranceKpis" class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm p-3">
+                    <div class="small text-muted">Polices Actives</div>
+                    <div class="h4 fw-bold text-primary mb-0">{{ insuranceKpis.activePolicies }}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm p-3">
+                    <div class="small text-muted">Sinistres à traiter</div>
+                    <div class="h4 fw-bold text-warning mb-0">{{ insuranceKpis.openClaims }}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm p-3">
+                    <div class="small text-muted">Prises en charge accordées</div>
+                    <div class="h4 fw-bold text-success mb-0">{{ insuranceKpis.approvedClaims }}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm p-3">
+                    <div class="small text-muted">Montant total approuvé</div>
+                    <div class="h4 fw-bold mb-0">{{ fmt(insuranceKpis.approvedTotal) }}</div>
+                </div>
             </div>
         </div>
 
