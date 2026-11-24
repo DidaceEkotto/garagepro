@@ -223,12 +223,12 @@ class PlatformDashboard extends Component
     public function saveSettings(): void
     {
         $this->validate([
-            'subscriptionPrice' => ['required', 'integer', 'min:1000'],
+            'subscriptionPrice' => ['required', 'integer', 'min:1'],
             'trialDays' => ['required', 'integer', 'min:1', 'max:30'],
             'gracePeriodDays' => ['required', 'integer', 'min:0', 'max:30'],
             'structureEmail' => ['required', 'email', 'max:150'],
-            'affiliateCommission' => ['required', 'integer', 'min:0', 'max:500000'],
-            'affiliateReferralDiscount' => ['required', 'integer', 'min:0', 'max:500000'],
+            'affiliateCommission' => ['required', 'integer', 'min:1'],
+            'affiliateReferralDiscount' => ['required', 'integer', 'min:1'],
             'affiliateCommissionTrigger' => ['required', 'in:first_payment,signup'],
             'siteName' => ['required', 'string', 'min:2', 'max:100'],
             'sitePhone' => ['nullable', 'string', 'max:50'],

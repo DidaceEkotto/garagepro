@@ -827,7 +827,7 @@
                 <form wire:submit="saveSettings" class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label small fw-semibold">Prix mensuel (FCFA)</label>
-                        <input wire:model="subscriptionPrice" type="number" class="form-control form-control-sm">
+                        <input wire:model="subscriptionPrice" type="number" min="1" class="form-control form-control-sm">
                     </div>
                     <div class="col-md-3">
                         <label class="form-label small fw-semibold">Durée essai (1 à 30 jours)</label>
@@ -843,11 +843,11 @@
                     </div>
                     <div class="col-md-3">
                         <label class="form-label small fw-semibold">Commission Affiliation Parrain (FCFA)</label>
-                        <input wire:model="affiliateCommission" type="number" min="0" class="form-control form-control-sm">
+                        <input wire:model="affiliateCommission" type="number" min="1" class="form-control form-control-sm">
                     </div>
                     <div class="col-md-3">
                         <label class="form-label small fw-semibold">Réduction Filleul 1er Abonnement (FCFA)</label>
-                        <input wire:model="affiliateReferralDiscount" type="number" min="0" class="form-control form-control-sm">
+                        <input wire:model="affiliateReferralDiscount" type="number" min="1" class="form-control form-control-sm">
                     </div>
                     <div class="col-md-3">
                         <label class="form-label small fw-semibold">Versement commission parrain</label>
