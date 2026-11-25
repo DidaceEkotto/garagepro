@@ -15,6 +15,7 @@ class AiDiagnosticConversation extends Model
         'tenant_id',
         'user_id',
         'vehicle_id',
+        'repair_order_id',
         'title',
         'last_message_at',
     ];
@@ -34,6 +35,11 @@ class AiDiagnosticConversation extends Model
     public function vehicle(): BelongsTo
     {
         return $this->belongsTo(Vehicle::class);
+    }
+
+    public function repairOrder(): BelongsTo
+    {
+        return $this->belongsTo(RepairOrder::class);
     }
 
     public function messages(): HasMany

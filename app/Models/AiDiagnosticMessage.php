@@ -20,17 +20,47 @@ class AiDiagnosticMessage extends Model
         'user_id',
         'role',
         'content',
+        'attachments',
+        'audio_path',
+        'audio_mime',
+        'audio_duration',
         'model',
         'is_off_topic',
         'tokens_used',
+        'client_summary',
+        'client_whatsapp_sent_at',
+    ];
+
+    protected $appends = [
+        'photo_urls',
+        'audio_url',
     ];
 
     protected function casts(): array
     {
         return [
+            'attachments' => 'array',
+            'audio_duration' => 'integer',
             'is_off_topic' => 'boolean',
             'tokens_used' => 'integer',
+            'client_whatsapp_sent_at' => 'datetime',
         ];
+    }
+
+    public function getPhotoUrlsAttribute(): array
+    {
+        $items = is_array($this->attachments) ? $this->attachments : [];
+
+        return collect($items)
+            ->filter(fn ($a) => is_array($a) && ! empty($a['path']))
+            ->map(fn ($a) => asset('storage/'.ltrim((string) $a['path'], '/')))
+            ->values()
+            ->all();
+    }
+
+    public function getAudioUrlAttribute(): ?string
+    {
+        return $this->audio_path ? asset('storage/'.ltrim((string) $this->audio_path, '/')) : null;
     }
 
     public function conversation(): BelongsTo

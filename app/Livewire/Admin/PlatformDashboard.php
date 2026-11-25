@@ -4,6 +4,7 @@ namespace App\Livewire\Admin;
 
 use App\Models\Admin;
 use App\Models\AffiliateLink;
+use App\Models\AiDiagnosticMessage;
 use App\Models\AuditLog;
 use App\Models\BlockedIp;
 use App\Models\Category;
@@ -36,6 +37,7 @@ class PlatformDashboard extends Component
     public int $affiliateCommission = 2500;
     public int $affiliateReferralDiscount = 5000;
     public string $affiliateCommissionTrigger = 'first_payment';
+    public int $aiDailyQuota = 50;
     public string $siteName = 'GaragePro';
     public string $sitePhone = '';
     public string $siteWhatsapp = '';
@@ -145,6 +147,7 @@ class PlatformDashboard extends Component
         $this->affiliateCommission = PlatformSetting::affiliateCommission();
         $this->affiliateReferralDiscount = PlatformSetting::affiliateReferralDiscount();
         $this->affiliateCommissionTrigger = PlatformSetting::affiliateCommissionTrigger();
+        $this->aiDailyQuota = (int) PlatformSetting::getValue('ai_daily_quota', 50);
         $this->maintenanceMode = PlatformSetting::isMaintenanceMode();
         $this->maintenanceMessage = PlatformSetting::maintenanceMessage();
         $site = PlatformSetting::siteSettings();
@@ -230,6 +233,7 @@ class PlatformDashboard extends Component
             'affiliateCommission' => ['required', 'integer', 'min:1'],
             'affiliateReferralDiscount' => ['required', 'integer', 'min:1'],
             'affiliateCommissionTrigger' => ['required', 'in:first_payment,signup'],
+            'aiDailyQuota' => ['required', 'integer', 'min:0', 'max:10000'],
             'siteName' => ['required', 'string', 'min:2', 'max:100'],
             'sitePhone' => ['nullable', 'string', 'max:50'],
             'siteWhatsapp' => ['nullable', 'string', 'max:50'],
@@ -253,6 +257,7 @@ class PlatformDashboard extends Component
         PlatformSetting::setValue('affiliate_commission', $this->affiliateCommission);
         PlatformSetting::setValue('affiliate_referral_discount', $this->affiliateReferralDiscount);
         PlatformSetting::setValue('affiliate_commission_trigger', $this->affiliateCommissionTrigger);
+        PlatformSetting::setValue('ai_daily_quota', $this->aiDailyQuota);
         PlatformSetting::setValue('site_name', trim($this->siteName));
         PlatformSetting::setValue('site_phone', trim($this->sitePhone));
         PlatformSetting::setValue('site_whatsapp', trim($this->siteWhatsapp));
@@ -780,7 +785,37 @@ class PlatformDashboard extends Component
             ->where('is_read', false)
             ->count();
 
+        $aiStats = [
+            'totalDiagnostics' => AiDiagnosticMessage::withoutTenantScope()
+                ->where('role', AiDiagnosticMessage::ROLE_USER)
+                ->count(),
+            'todayDiagnostics' => AiDiagnosticMessage::withoutTenantScope()
+                ->where('role', AiDiagnosticMessage::ROLE_USER)
+                ->whereDate('created_at', now()->toDateString())
+                ->count(),
+            'totalTokens' => (int) AiDiagnosticMessage::withoutTenantScope()
+                ->where('role', AiDiagnosticMessage::ROLE_ASSISTANT)
+                ->sum('tokens_used'),
+            'topTenants' => AiDiagnosticMessage::withoutTenantScope()
+                ->selectRaw('tenant_id, COUNT(*) as diagnostics_count')
+                ->where('role', AiDiagnosticMessage::ROLE_USER)
+                ->groupBy('tenant_id')
+                ->orderByDesc('diagnostics_count')
+                ->take(5)
+                ->get()
+                ->map(function ($row) {
+                    $t = Tenant::find($row->tenant_id);
+
+                    return [
+                        'name' => $t?->name ?? "Garage #{$row->tenant_id}",
+                        'count' => (int) $row->diagnostics_count,
+                    ];
+                })
+                ->all(),
+        ];
+
         return view('livewire.admin.platform-dashboard', [
+            'aiStats' => $aiStats,
             'kpis' => [
                 'activeTenants' => $activeTenants,
                 'trialTenants' => $trialTenants,

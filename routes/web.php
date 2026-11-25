@@ -200,6 +200,14 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
     Route::post('/assistant-ia/messages', [AiDiagnosticController::class, 'send'])
         ->middleware('throttle:30,1')
         ->name('tenant.ai_diagnostic.send');
+    Route::post('/assistant-ia/messages/{messageId}/creer-devis', [AiDiagnosticController::class, 'createQuoteFromMessage'])
+        ->name('tenant.ai_diagnostic.create_quote');
+    Route::post('/assistant-ia/messages/{messageId}/appliquer-or', [AiDiagnosticController::class, 'applyToRepairOrder'])
+        ->name('tenant.ai_diagnostic.apply_ro');
+    Route::post('/assistant-ia/messages/{messageId}/expliquer-client', [AiDiagnosticController::class, 'explainForClient'])
+        ->name('tenant.ai_diagnostic.explain_client');
+    Route::post('/assistant-ia/messages/{messageId}/envoyer-whatsapp', [AiDiagnosticController::class, 'sendClientWhatsapp'])
+        ->name('tenant.ai_diagnostic.send_whatsapp');
     Route::delete('/assistant-ia/{conversationId}', [AiDiagnosticController::class, 'destroy'])->name('tenant.ai_diagnostic.destroy');
 
     // Clients & Véhicules

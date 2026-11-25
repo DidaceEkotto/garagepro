@@ -5,11 +5,18 @@ namespace Tests\Feature\Workflow;
 use App\Models\Agency;
 use App\Models\AiDiagnosticConversation;
 use App\Models\AiDiagnosticMessage;
+use App\Models\Customer;
+use App\Models\PlatformSetting;
+use App\Models\Quote;
+use App\Models\RepairOrder;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\Vehicle;
 use App\Services\TenantRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class AiDiagnosticAssistantTest extends TestCase
@@ -167,5 +174,151 @@ class AiDiagnosticAssistantTest extends TestCase
             'id' => $convA->id,
             'tenant_id' => $tenantA->id,
         ]);
+    }
+
+    public function test_photo_and_voice_saved_in_db_videos_rejected_and_workshop_actions_work(): void
+    {
+        Storage::fake('public');
+        config([
+            'services.gemini.api_key' => 'test-gemini-key',
+            'services.gemini.model' => 'gemini-flash-lite-latest',
+            'services.green_api.url' => 'https://api.green-api.com',
+            'services.green_api.id_instance' => '123456',
+            'services.green_api.api_token_instance' => 'secret',
+        ]);
+
+        Http::fakeSequence()
+            ->push([
+                'candidates' => [[
+                    'content' => ['parts' => [['text' => 'Diagnostic photo + vocal : bobine cylindre 2 défectueuse.']]],
+                ]],
+                'usageMetadata' => ['totalTokenCount' => 210],
+            ], 200)
+            ->push([
+                'candidates' => [[
+                    'content' => ['parts' => [['text' => 'Bonjour Jean, notre atelier a identifié une pièce d\'allumage à remplacer sur votre Toyota.']]],
+                ]],
+                'usageMetadata' => ['totalTokenCount' => 95],
+            ], 200)
+            ->push(['idMessage' => 'wa-ok-1'], 200);
+
+        [$tenant, $user] = $this->createGarageUser('ia-pro', 'Garage IA Pro');
+        $agency = Agency::where('tenant_id', $tenant->id)->firstOrFail();
+
+        $customer = Customer::create([
+            'tenant_id' => $tenant->id,
+            'agency_id' => $agency->id,
+            'name' => 'Jean Client',
+            'phone' => '+237 699000111',
+            'whatsapp_phone' => '+237 699000111',
+            'type' => 'particulier',
+        ]);
+
+        $vehicle = Vehicle::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'license_plate' => 'LT 555 IA',
+            'brand' => 'Toyota',
+            'model' => 'Camry',
+            'mileage' => 95000,
+        ]);
+
+        $ro = RepairOrder::create([
+            'tenant_id' => $tenant->id,
+            'agency_id' => $agency->id,
+            'customer_id' => $customer->id,
+            'vehicle_id' => $vehicle->id,
+            'order_number' => 'OR-IA-001',
+            'status' => 'en_cours',
+            'priority' => 'normale',
+            'fault_codes' => ['P0302'],
+        ]);
+
+        // 1. Les vidéos sont strictement rejetées
+        $fakeVideo = UploadedFile::fake()->create('panne.mp4', 200, 'video/mp4');
+        $this->actingAs($user, 'web')
+            ->post('http://ia-pro.mboacar.com/assistant-ia/messages', [
+                'prompt' => 'Voici une vidéo',
+                'photos' => [$fakeVideo],
+            ])
+            ->assertSessionHasErrors('photos.0');
+
+        // 2. Photo + Message vocal enregistrés en BDD
+        $fakePhoto = UploadedFile::fake()->image('voyant.jpg', 300, 300);
+        $fakeAudio = UploadedFile::fake()->create('vocal.webm', 40, 'audio/webm');
+
+        $this->actingAs($user, 'web')
+            ->post('http://ia-pro.mboacar.com/assistant-ia/messages', [
+                'vehicle_id' => $vehicle->id,
+                'repair_order_id' => $ro->id,
+                'prompt' => 'Voyant moteur allumé + vocal ci-joint',
+                'photos' => [$fakePhoto],
+                'audio' => $fakeAudio,
+                'audio_duration' => 7,
+            ])
+            ->assertRedirect();
+
+        $userMsg = AiDiagnosticMessage::withoutTenantScope()
+            ->where('tenant_id', $tenant->id)
+            ->where('role', 'user')
+            ->firstOrFail();
+
+        $this->assertNotNull($userMsg->audio_path);
+        $this->assertSame(7, $userMsg->audio_duration);
+        $this->assertCount(1, $userMsg->attachments);
+        Storage::disk('public')->assertExists($userMsg->audio_path);
+        Storage::disk('public')->assertExists($userMsg->attachments[0]['path']);
+
+        $aiMsg = AiDiagnosticMessage::withoutTenantScope()
+            ->where('tenant_id', $tenant->id)
+            ->where('role', 'assistant')
+            ->firstOrFail();
+
+        // 3. Créer un brouillon de devis en 1 clic
+        $this->actingAs($user, 'web')
+            ->post("http://ia-pro.mboacar.com/assistant-ia/messages/{$aiMsg->id}/creer-devis", [
+                'vehicle_id' => $vehicle->id,
+            ])
+            ->assertRedirect('/devis')
+            ->assertSessionHas('success');
+
+        $this->assertSame(1, Quote::withoutTenantScope()->where('tenant_id', $tenant->id)->count());
+
+        // 4. Ajouter le diagnostic à l'OR
+        $this->actingAs($user, 'web')
+            ->post("http://ia-pro.mboacar.com/assistant-ia/messages/{$aiMsg->id}/appliquer-or", [
+                'repair_order_id' => $ro->id,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertStringContainsString('bobine cylindre 2', (string) $ro->fresh()->diagnostic_notes);
+
+        // 5. Expliquer au client (vulgarisation) + Envoi WhatsApp
+        $this->actingAs($user, 'web')
+            ->postJson("http://ia-pro.mboacar.com/assistant-ia/messages/{$aiMsg->id}/expliquer-client")
+            ->assertOk()
+            ->assertJson(['ok' => true]);
+
+        $this->assertNotNull($aiMsg->fresh()->client_summary);
+
+        $this->actingAs($user, 'web')
+            ->post("http://ia-pro.mboacar.com/assistant-ia/messages/{$aiMsg->id}/envoyer-whatsapp", [
+                'phone' => '+237 699000111',
+                'summary' => $aiMsg->fresh()->client_summary,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertNotNull($aiMsg->fresh()->client_whatsapp_sent_at);
+
+        // 6. Quota journalier appliqué (1 diagnostic déjà fait -> bloqué si quota = 1)
+        PlatformSetting::setValue('ai_daily_quota', 1);
+        $this->actingAs($user, 'web')
+            ->post('http://ia-pro.mboacar.com/assistant-ia/messages', [
+                'prompt' => 'Deuxième diagnostic du jour',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('error');
     }
 }

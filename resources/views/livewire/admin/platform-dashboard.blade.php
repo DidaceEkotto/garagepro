@@ -823,6 +823,47 @@
                 <p class="text-muted small mb-0">Pilotez la durée d'essai, les tarifs, les commissions d'affiliation et l'identité du site</p>
             </div>
 
+            <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <h6 class="fw-bold mb-0"><i class="bi bi-stars text-primary me-1"></i>Suivi MboaCar IA Auto (Consommation &amp; Quotas)</h6>
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                        Quota actif : {{ $aiDailyQuota > 0 ? $aiDailyQuota.' / garage / jour' : 'Illimité' }}
+                    </span>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <div class="p-3 rounded-3 bg-light border">
+                            <div class="text-muted small">Diagnostics IA aujourd'hui</div>
+                            <div class="h4 fw-bold text-primary mb-0">{{ number_format($aiStats['todayDiagnostics'] ?? 0, 0, ',', ' ') }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 rounded-3 bg-light border">
+                            <div class="text-muted small">Total diagnostics IA</div>
+                            <div class="h4 fw-bold text-dark mb-0">{{ number_format($aiStats['totalDiagnostics'] ?? 0, 0, ',', ' ') }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 rounded-3 bg-light border">
+                            <div class="text-muted small">Tokens Gemini consommés</div>
+                            <div class="h4 fw-bold text-success mb-0">{{ number_format($aiStats['totalTokens'] ?? 0, 0, ',', ' ') }}</div>
+                        </div>
+                    </div>
+                </div>
+                @if(!empty($aiStats['topTenants']))
+                    <div class="small">
+                        <strong class="text-muted d-block mb-1">Garages les plus actifs :</strong>
+                        <div class="d-flex flex-wrap gap-2">
+                            @foreach($aiStats['topTenants'] as $top)
+                                <span class="badge bg-white text-dark border py-1 px-2">
+                                    {{ $top['name'] }} : <strong>{{ $top['count'] }}</strong>
+                                </span>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+            </div>
+
             <div class="card border-0 shadow-sm rounded-4 p-4">
                 <form wire:submit="saveSettings" class="row g-3">
                     <div class="col-md-3">
@@ -855,6 +896,11 @@
                             <option value="first_payment">Au 1er paiement du filleul</option>
                             <option value="signup">Dès l'inscription du filleul</option>
                         </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold">Quota IA Auto / garage / jour</label>
+                        <input wire:model="aiDailyQuota" type="number" min="0" max="10000" class="form-control form-control-sm">
+                        <div class="form-text" style="font-size: 0.7rem;">0 = illimité (par défaut : 50)</div>
                     </div>
 
                     <div class="col-md-4">

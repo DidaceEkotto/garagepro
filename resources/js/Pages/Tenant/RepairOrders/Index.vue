@@ -1,7 +1,7 @@
 <script setup>
 import StaticModal from '@/Components/StaticModal.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -188,6 +188,13 @@ function submitTask() {
                                 <td><span class="badge bg-primary">{{ o.status }}</span></td>
                                 <td class="text-end">
                                     <div class="d-inline-flex gap-1">
+                                        <Link
+                                            :href="`/assistant-ia?repair_order=${o.id}`"
+                                            class="btn btn-outline-primary btn-sm"
+                                            title="Diagnostic IA Auto pour cet OR"
+                                        >
+                                            <i class="bi bi-stars me-1"></i>IA
+                                        </Link>
                                         <a
                                             v-if="o.tracking_token"
                                             :href="`/suivi/${o.tracking_token}`"
