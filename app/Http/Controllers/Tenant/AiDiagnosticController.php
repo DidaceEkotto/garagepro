@@ -226,12 +226,10 @@ class AiDiagnosticController extends Controller
                     'name' => $photoFile->getClientOriginalName(),
                 ];
 
-                $imgBytes = @file_get_contents($photoFile->getRealPath());
-                if ($imgBytes !== false && $imgBytes !== '') {
-                    $mediaParts[] = [
-                        'mime_type' => $mime,
-                        'data' => base64_encode($imgBytes),
-                    ];
+                // Compression automatique (max 1024px, JPEG 75%) pour réduire de ~70% les tokens Vision Gemini
+                $compressed = $this->compressImageForVision($photoFile->getRealPath(), $mime);
+                if ($compressed !== null) {
+                    $mediaParts[] = $compressed;
                 }
             }
         }
@@ -291,12 +289,12 @@ class AiDiagnosticController extends Controller
             ]);
         }
 
-        // Historique récent de la conversation
+        // Historique récent compact (4 derniers messages max pour économiser les tokens d'entrée)
         $history = AiDiagnosticMessage::query()
             ->where('tenant_id', $tenantId)
             ->where('conversation_id', $conversation->id)
             ->orderByDesc('id')
-            ->take(12)
+            ->take(4)
             ->get(['role', 'content'])
             ->reverse()
             ->map(fn ($m) => ['role' => $m->role, 'content' => $m->content])
@@ -324,12 +322,32 @@ class AiDiagnosticController extends Controller
             'is_off_topic' => false,
         ]);
 
-        // 2. Vérifier d'abord dans la base de connaissances MboaCar (prompts similaires déjà résolus en atelier)
+        // 2. Pipeline d'économie de tokens (0 appel Gemini si résoluble localement ou via la BDD)
         $forceOnline = (bool) ($data['force_online'] ?? false);
-        $kbLookup = $prompt !== '' ? $knowledge->lookup($prompt) : ['direct_match' => null, 'learning_hints' => []];
         $matchedMessageId = null;
+        $result = null;
 
-        if (! $forceOnline && ! $hasPhotos && ! $hasAudio && $kbLookup['direct_match'] !== null) {
+        // 2a. Pré-filtre local (salutations & hors-sujet évidents -> 0 token)
+        if (! $forceOnline && ! $hasPhotos && ! $hasAudio && $prompt !== '') {
+            $localFiltered = $knowledge->quickLocalFilter($prompt);
+            if ($localFiltered !== null) {
+                $result = [
+                    'ok' => true,
+                    'reply' => $localFiltered['reply'],
+                    'is_off_topic' => $localFiltered['is_off_topic'],
+                    'model' => $localFiltered['model'],
+                    'tokens_used' => 0,
+                    'error' => null,
+                ];
+            }
+        }
+
+        // 2b. Recherche dans la base de connaissances BDD (réponses résolues ou quasi-identiques -> 0 token)
+        $kbLookup = $result === null && $prompt !== ''
+            ? $knowledge->lookup($prompt)
+            : ['direct_match' => null, 'learning_hints' => []];
+
+        if ($result === null && ! $forceOnline && ! $hasPhotos && ! $hasAudio && $kbLookup['direct_match'] !== null) {
             $matchedMessageId = $kbLookup['direct_match']['message_id'];
             AiDiagnosticMessage::withoutTenantScope()
                 ->where('id', $matchedMessageId)
@@ -343,8 +361,25 @@ class AiDiagnosticController extends Controller
                 'tokens_used' => 0,
                 'error' => null,
             ];
-        } else {
-            // Appel en ligne à Gemini API (enrichi des retours d'expérience résolus en BDD)
+        }
+
+        // 2c. Dictionnaire local des codes OBD-II fréquents (-> 0 token)
+        if ($result === null && ! $forceOnline && ! $hasPhotos && ! $hasAudio && $prompt !== '') {
+            $obdHit = $knowledge->lookupObdDictionary($prompt);
+            if ($obdHit !== null) {
+                $result = [
+                    'ok' => true,
+                    'reply' => $obdHit['reply'],
+                    'is_off_topic' => false,
+                    'model' => 'mboacar-obd',
+                    'tokens_used' => 0,
+                    'error' => null,
+                ];
+            }
+        }
+
+        // 2d. Appel en ligne à Gemini API (enrichi des retours d'expérience résolus en BDD)
+        if ($result === null) {
             $result = $gemini->diagnose(
                 $prompt,
                 $history,
@@ -698,5 +733,70 @@ class AiDiagnosticController extends Controller
         }
 
         return $lines;
+    }
+
+    /**
+     * Redimensionne une photo à 1024 px max (JPEG 75%) avant envoi à Gemini Vision
+     * afin de réduire fortement la consommation de tokens image.
+     *
+     * @return ?array{mime_type: string, data: string}
+     */
+    private function compressImageForVision(string $realPath, string $fallbackMime): ?array
+    {
+        $raw = @file_get_contents($realPath);
+        if ($raw === false || $raw === '') {
+            return null;
+        }
+
+        if (! function_exists('imagecreatefromstring') || ! function_exists('imagejpeg')) {
+            return [
+                'mime_type' => $fallbackMime,
+                'data' => base64_encode($raw),
+            ];
+        }
+
+        $src = @imagecreatefromstring($raw);
+        if (! $src) {
+            return [
+                'mime_type' => $fallbackMime,
+                'data' => base64_encode($raw),
+            ];
+        }
+
+        $origW = imagesx($src);
+        $origH = imagesy($src);
+        $maxDim = 1024;
+
+        $target = $src;
+        if ($origW > $maxDim || $origH > $maxDim) {
+            $ratio = min($maxDim / $origW, $maxDim / $origH);
+            $newW = max(1, (int) round($origW * $ratio));
+            $newH = max(1, (int) round($origH * $ratio));
+            $resized = imagecreatetruecolor($newW, $newH);
+            if ($resized) {
+                $white = imagecolorallocate($resized, 255, 255, 255);
+                imagefill($resized, 0, 0, $white);
+                imagecopyresampled($resized, $src, 0, 0, 0, 0, $newW, $newH, $origW, $origH);
+                imagedestroy($src);
+                $target = $resized;
+            }
+        }
+
+        ob_start();
+        imagejpeg($target, null, 75);
+        $jpegBytes = ob_get_clean();
+        imagedestroy($target);
+
+        if (! is_string($jpegBytes) || $jpegBytes === '') {
+            return [
+                'mime_type' => $fallbackMime,
+                'data' => base64_encode($raw),
+            ];
+        }
+
+        return [
+            'mime_type' => 'image/jpeg',
+            'data' => base64_encode($jpegBytes),
+        ];
     }
 }

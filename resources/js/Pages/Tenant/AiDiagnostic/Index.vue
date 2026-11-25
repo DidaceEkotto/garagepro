@@ -15,7 +15,7 @@ const props = defineProps({
     dailyQuota: { type: Number, default: 50 },
     usedToday: { type: Number, default: 0 },
     isConfigured: { type: Boolean, default: false },
-    modelName: { type: String, default: 'gemini-3.1-flash-lite' },
+    modelName: { type: String, default: 'gemini-flash-lite-latest' },
 });
 
 const { askConfirm } = useConfirm();
@@ -568,8 +568,8 @@ function formatDateTime(iso) {
                                             <span v-if="msg.is_off_topic" class="badge bg-warning text-dark">
                                                 <i class="bi bi-slash-circle me-1"></i>Hors domaine auto
                                             </span>
-                                            <span v-else-if="msg.matched_from_message_id || msg.model === 'mboacar-kb'" class="badge bg-success-subtle text-success border border-success-subtle">
-                                                <i class="bi bi-database-check me-1"></i>Base MboaCar vérifiée
+                                            <span v-else-if="msg.matched_from_message_id || msg.model === 'mboacar-kb' || msg.model === 'mboacar-obd'" class="badge bg-success-subtle text-success border border-success-subtle">
+                                                <i class="bi bi-database-check me-1"></i>{{ msg.model === 'mboacar-obd' ? 'Référentiel OBD MboaCar (0 token)' : 'Base MboaCar vérifiée (0 token)' }}
                                             </span>
                                             <span :class="msg.role === 'user' ? 'text-white-50' : 'text-muted'">
                                                 {{ formatDateTime(msg.created_at) }}
@@ -669,7 +669,7 @@ function formatDateTime(iso) {
                                                 <i class="bi bi-hand-thumbs-down-fill me-1"></i>Non
                                             </button>
                                             <button
-                                                v-if="msg.is_resolved === false && (msg.matched_from_message_id || msg.model === 'mboacar-kb')"
+                                                v-if="msg.is_resolved === false && (msg.matched_from_message_id || msg.model === 'mboacar-kb' || msg.model === 'mboacar-obd')"
                                                 type="button"
                                                 class="btn btn-outline-primary btn-sm py-0 px-2"
                                                 style="font-size: 0.72rem;"

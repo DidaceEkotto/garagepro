@@ -79,10 +79,10 @@ class AiDiagnosticAssistantTest extends TestCase
 
         [$tenantA, $userA] = $this->createGarageUser('ia-alpha', 'Garage Alpha');
 
-        // 1. Question automobile valide
+        // 1. Question automobile valide (non couverte par le dictionnaire OBD -> appelle Gemini)
         $res = $this->actingAs($userA, 'web')
             ->post('http://ia-alpha.mboacar.com/assistant-ia/messages', [
-                'prompt' => 'Code défaut P0300 sur Toyota Corolla 2016',
+                'prompt' => 'Bruit de claquement métallique dans la direction assistée Toyota Corolla en braquant à gauche',
             ]);
 
         $conv = AiDiagnosticConversation::withoutTenantScope()->where('tenant_id', $tenantA->id)->firstOrFail();
@@ -92,7 +92,7 @@ class AiDiagnosticAssistantTest extends TestCase
             'tenant_id' => $tenantA->id,
             'conversation_id' => $conv->id,
             'role' => 'user',
-            'content' => 'Code défaut P0300 sur Toyota Corolla 2016',
+            'content' => 'Bruit de claquement métallique dans la direction assistée Toyota Corolla en braquant à gauche',
             'is_off_topic' => false,
         ]);
 
@@ -105,11 +105,11 @@ class AiDiagnosticAssistantTest extends TestCase
             'tokens_used' => 145,
         ]);
 
-        // 2. Question hors domaine automobile -> détectée et marquée is_off_topic = true
+        // 2. Question hors domaine automobile subtile (envoyée à Gemini) -> détectée et marquée is_off_topic = true
         $this->actingAs($userA, 'web')
             ->post('http://ia-alpha.mboacar.com/assistant-ia/messages', [
                 'conversation_id' => $conv->id,
-                'prompt' => 'Donne-moi une recette de ndolé',
+                'prompt' => 'Quelle est la capitale de la Norvège ?',
             ])
             ->assertRedirect("/assistant-ia?conversation={$conv->id}");
 
@@ -347,10 +347,10 @@ class AiDiagnosticAssistantTest extends TestCase
         [$tenantA, $userA] = $this->createGarageUser('kb-garage-a', 'Garage Alpha KB');
         [$tenantB, $userB] = $this->createGarageUser('kb-garage-b', 'Garage Beta KB');
 
-        // 1. Garage A pose une question P0300 -> appel Gemini #1
+        // 1. Garage A pose une question détaillée P0300 (> 14 mots pour passer sur Gemini) -> appel Gemini #1
         $this->actingAs($userA, 'web')
             ->post('http://kb-garage-a.mboacar.com/assistant-ia/messages', [
-                'prompt' => 'Code défaut P0300 ratés allumage Toyota Corolla 2016 essence ralenti instable',
+                'prompt' => 'Code défaut P0300 ratés allumage Toyota Corolla 2016 essence ralenti instable à chaud après changement des bougies et bobines neuves que vérifier ensuite',
             ])
             ->assertRedirect();
 
@@ -397,7 +397,7 @@ class AiDiagnosticAssistantTest extends TestCase
         // 4. Garage B pose un prompt similaire P0300 -> réponse récupérée directement en BDD (0 nouvel appel Gemini !)
         $this->actingAs($userB, 'web')
             ->post('http://kb-garage-b.mboacar.com/assistant-ia/messages', [
-                'prompt' => 'Toyota Corolla 2016 essence code P0300 ratés allumage ralenti instable',
+                'prompt' => 'Toyota Corolla 2016 essence code P0300 ratés allumage ralenti instable à chaud après changement bougies bobines neuves',
             ])
             ->assertRedirect();
 
@@ -418,11 +418,80 @@ class AiDiagnosticAssistantTest extends TestCase
         // 5. Si Garage B force une recherche en ligne (force_online = true) -> appelle bien Gemini (#2)
         $this->actingAs($userB, 'web')
             ->post('http://kb-garage-b.mboacar.com/assistant-ia/messages', [
-                'prompt' => 'Toyota Corolla 2016 essence code P0300 ratés allumage ralenti instable',
+                'prompt' => 'Toyota Corolla 2016 essence code P0300 ratés allumage ralenti instable à chaud après changement bougies bobines neuves',
                 'force_online' => true,
             ])
             ->assertRedirect();
 
         Http::assertSentCount(2);
+    }
+
+    public function test_token_saving_zero_api_calls_for_greetings_off_topic_obd_and_general_cache(): void
+    {
+        config([
+            'services.gemini.api_key' => 'test-gemini-key',
+            'services.gemini.model' => 'gemini-flash-lite-latest',
+        ]);
+
+        Http::fake([
+            '*' => Http::response([
+                'candidates' => [[
+                    'content' => ['parts' => [['text' => 'Vérifiez le démarreur, le relais et la tension batterie (12,6V).']]],
+                ]],
+                'usageMetadata' => ['totalTokenCount' => 88],
+            ], 200),
+        ]);
+
+        [$tenantA, $userA] = $this->createGarageUser('eco-a', 'Garage Eco A');
+        [$tenantB, $userB] = $this->createGarageUser('eco-b', 'Garage Eco B');
+
+        // 1. Salutation simple -> 0 appel Gemini
+        $this->actingAs($userA, 'web')
+            ->post('http://eco-a.mboacar.com/assistant-ia/messages', ['prompt' => 'Bonjour'])
+            ->assertRedirect();
+
+        // 2. Hors-sujet évident (cuisine) -> 0 appel Gemini
+        $this->actingAs($userA, 'web')
+            ->post('http://eco-a.mboacar.com/assistant-ia/messages', ['prompt' => 'Donne-moi une recette de ndolé'])
+            ->assertRedirect();
+
+        // 3. Code OBD-II connu du référentiel local (P0420) -> 0 appel Gemini
+        $this->actingAs($userA, 'web')
+            ->post('http://eco-a.mboacar.com/assistant-ia/messages', ['prompt' => 'Que signifie le code défaut P0420 ?'])
+            ->assertRedirect();
+
+        Http::assertNothingSent();
+
+        $this->assertDatabaseHas('ai_diagnostic_messages', [
+            'tenant_id' => $tenantA->id,
+            'role' => 'assistant',
+            'model' => 'mboacar-obd',
+            'tokens_used' => 0,
+        ]);
+
+        // 4. Question complexe sans clic "Résolu" -> 1 appel Gemini, puis réutilisée automatiquement (>= 0.85) par Garage B à 0 token !
+        $this->actingAs($userA, 'web')
+            ->post('http://eco-a.mboacar.com/assistant-ia/messages', [
+                'prompt' => 'Le démarreur tourne lentement le matin malgré batterie neuve sur Nissan Qashqai',
+            ])
+            ->assertRedirect();
+
+        Http::assertSentCount(1);
+
+        $this->actingAs($userB, 'web')
+            ->post('http://eco-b.mboacar.com/assistant-ia/messages', [
+                'prompt' => 'Démarreur tourne lentement le matin malgré batterie neuve Nissan Qashqai',
+            ])
+            ->assertRedirect();
+
+        // Toujours 1 seul appel Gemini au total !
+        Http::assertSentCount(1);
+
+        $this->assertDatabaseHas('ai_diagnostic_messages', [
+            'tenant_id' => $tenantB->id,
+            'role' => 'assistant',
+            'model' => 'mboacar-kb',
+            'tokens_used' => 0,
+        ]);
     }
 }
