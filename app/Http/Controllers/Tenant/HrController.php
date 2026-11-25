@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
+use App\Models\Agency;
 use App\Models\Employee;
 use App\Models\EmployeeAdjustment;
 use App\Models\EmployeeAttendance;
 use App\Models\Expense;
 use App\Models\Payslip;
+use App\Models\User;
 use App\Services\GreenApiService;
 use App\Services\TenantContext;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -43,6 +45,29 @@ class HrController extends Controller
         $periodMonth = $carbonDate->format('Y-m');
         $dayKey = strtolower($carbonDate->format('D'));
         $isWorkDay = in_array($dayKey, $workDays, true);
+
+        // Garantit que le propriétaire du compte (1er utilisateur du tenant) est toujours présent dans /rh pour être pointé
+        $owner = User::withoutTenantScope()
+            ->where('tenant_id', $tenant->id)
+            ->orderBy('id')
+            ->first();
+
+        if ($owner && ! Employee::where('user_id', $owner->id)->exists()) {
+            $ownerAgencyId = $owner->default_agency_id ?: Agency::where('tenant_id', $tenant->id)->value('id');
+            if ($ownerAgencyId) {
+                Employee::create([
+                    'tenant_id' => $tenant->id,
+                    'agency_id' => $ownerAgencyId,
+                    'user_id' => $owner->id,
+                    'full_name' => $owner->name,
+                    'role_title' => 'Gérant / Propriétaire',
+                    'phone' => $owner->phone,
+                    'base_salary' => 0,
+                    'hired_at' => $owner->created_at?->toDateString() ?? now()->toDateString(),
+                    'is_active' => true,
+                ]);
+            }
+        }
 
         $employees = Employee::with('agency')->where('is_active', true)->orderBy('full_name')->get();
 

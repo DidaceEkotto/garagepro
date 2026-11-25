@@ -202,7 +202,10 @@ function submit() {
                                     @input="onSlugInput"
                                 />
                                 <span class="input-group-text">.{{ baseDomain }}</span>
-                                <div v-if="form.errors.slug" class="invalid-feedback">{{ form.errors.slug }}</div>
+                            </div>
+                            <div v-if="form.errors.slug" class="text-danger small mt-1">{{ form.errors.slug }}</div>
+                            <div class="form-text text-warning-emphasis mt-1" style="font-size: 0.78rem;">
+                                <i class="bi bi-lock-fill me-1"></i>Attention : une fois votre compte créé, ce sous-domaine est définitif et ne pourra plus être modifié, même dans les paramètres.
                             </div>
                         </div>
 

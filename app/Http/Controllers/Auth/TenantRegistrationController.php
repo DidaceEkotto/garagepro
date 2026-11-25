@@ -11,6 +11,7 @@ use App\Models\AffiliateReferral;
 use App\Models\Agency;
 use App\Models\AuditLog;
 use App\Models\Country;
+use App\Models\Employee;
 use App\Models\OneTimeLoginToken;
 use App\Models\PlatformSetting;
 use App\Models\Tenant;
@@ -351,6 +352,23 @@ class TenantRegistrationController extends Controller
             ]);
 
             $user->assignRole('gerant');
+
+            // Crée automatiquement la fiche RH du propriétaire afin qu'il puisse être pointé dans /rh
+            Employee::firstOrCreate(
+                [
+                    'tenant_id' => $tenant->id,
+                    'user_id' => $user->id,
+                ],
+                [
+                    'agency_id' => $agencies[0]->id,
+                    'full_name' => $user->name,
+                    'role_title' => 'Gérant / Propriétaire',
+                    'phone' => $user->phone,
+                    'base_salary' => 0,
+                    'hired_at' => now()->toDateString(),
+                    'is_active' => true,
+                ]
+            );
 
             foreach ($agencies as $agency) {
                 $user->agencies()->attach($agency->id, ['tenant_id' => $tenant->id]);
