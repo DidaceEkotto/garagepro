@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import LanguageSwitcher from '../Components/LanguageSwitcher.vue';
+import LandingAiShowcase from '../Components/LandingAiShowcase.vue';
 import LandingFooter from '../Components/LandingFooter.vue';
 import BackToTop from '../Components/BackToTop.vue';
 import { useI18n } from '../composables/useI18n';
@@ -123,6 +124,11 @@ onUnmounted(() => {
                 <div id="mainNav" class="collapse navbar-collapse mobile-nav-collapse">
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-lg-4 gap-lg-2">
                         <li class="nav-item"><a class="nav-link text-white" href="#fonctionnalites">{{ t('nav.features') }}</a></li>
+                        <li class="nav-item">
+                            <a class="nav-link text-info fw-semibold" href="#ia-auto">
+                                <i class="bi bi-stars me-1"></i>IA Auto
+                            </a>
+                        </li>
                         <li class="nav-item"><a class="nav-link text-white" href="#tarifs">{{ t('nav.pricing') }}</a></li>
                         <li class="nav-item">
                             <Link class="nav-link text-warning fw-semibold" href="/marketplace">
@@ -374,6 +380,9 @@ onUnmounted(() => {
             </div>
         </div>
     </section>
+
+    <!-- Showcase MboaCar IA Auto avec simulation animée en boucle -->
+    <LandingAiShowcase />
 
     <!-- Tarifs -->
     <section id="tarifs" class="py-5 bg-white border-top">
