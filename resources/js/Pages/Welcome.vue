@@ -70,6 +70,17 @@ function onScroll() {
     isScrolled.value = window.scrollY > 40;
 }
 
+function scrollToSection(sectionId) {
+    const el = document.getElementById(sectionId);
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    const navCollapse = document.getElementById('mainNav');
+    if (navCollapse?.classList.contains('show')) {
+        window.bootstrap?.Collapse.getInstance(navCollapse)?.hide();
+    }
+}
+
 onMounted(() => {
     window.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
@@ -123,13 +134,13 @@ onUnmounted(() => {
                 </button>
                 <div id="mainNav" class="collapse navbar-collapse mobile-nav-collapse">
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-lg-4 gap-lg-2">
-                        <li class="nav-item"><a class="nav-link text-white" href="#fonctionnalites">{{ t('nav.features') }}</a></li>
+                        <li class="nav-item"><a class="nav-link text-white" href="#fonctionnalites" @click.prevent="scrollToSection('fonctionnalites')">{{ t('nav.features') }}</a></li>
                         <li class="nav-item">
-                            <a class="nav-link text-info fw-semibold" href="#ia-auto">
+                            <a class="nav-link text-info fw-semibold" href="#ia-auto" @click.prevent="scrollToSection('ia-auto')">
                                 <i class="bi bi-stars me-1"></i>IA Auto
                             </a>
                         </li>
-                        <li class="nav-item"><a class="nav-link text-white" href="#tarifs">{{ t('nav.pricing') }}</a></li>
+                        <li class="nav-item"><a class="nav-link text-white" href="#tarifs" @click.prevent="scrollToSection('tarifs')">{{ t('nav.pricing') }}</a></li>
                         <li class="nav-item">
                             <Link class="nav-link text-warning fw-semibold" href="/marketplace">
                                 <i class="bi bi-shop me-1"></i>Marketplace
