@@ -29,6 +29,12 @@ class AiDiagnosticMessage extends Model
         'tokens_used',
         'client_summary',
         'client_whatsapp_sent_at',
+        'is_resolved',
+        'feedback_note',
+        'feedback_at',
+        'is_approved_for_knowledge',
+        'matched_from_message_id',
+        'reuse_count',
     ];
 
     protected $appends = [
@@ -44,6 +50,11 @@ class AiDiagnosticMessage extends Model
             'is_off_topic' => 'boolean',
             'tokens_used' => 'integer',
             'client_whatsapp_sent_at' => 'datetime',
+            'is_resolved' => 'boolean',
+            'feedback_at' => 'datetime',
+            'is_approved_for_knowledge' => 'boolean',
+            'matched_from_message_id' => 'integer',
+            'reuse_count' => 'integer',
         ];
     }
 

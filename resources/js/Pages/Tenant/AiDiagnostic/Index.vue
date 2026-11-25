@@ -371,6 +371,33 @@ function submitClientWhatsapp() {
     });
 }
 
+function submitFeedback(msg, isResolved) {
+    router.post(
+        `/assistant-ia/messages/${msg.id}/feedback`,
+        { is_resolved: isResolved },
+        { preserveScroll: true }
+    );
+}
+
+function retryOnline(assistantMsg) {
+    const msgs = props.activeConversation?.messages ?? [];
+    const idx = msgs.findIndex((m) => m.id === assistantMsg.id);
+    if (idx <= 0) return;
+    const prevUserMsg = [...msgs.slice(0, idx)].reverse().find((m) => m.role === 'user');
+    if (!prevUserMsg?.content) return;
+
+    router.post(
+        '/assistant-ia/messages',
+        {
+            conversation_id: props.activeConversation?.id,
+            vehicle_id: form.vehicle_id || props.activeConversation?.vehicle_id || null,
+            prompt: prevUserMsg.content,
+            force_online: true,
+        },
+        { preserveScroll: true }
+    );
+}
+
 function formatDateTime(iso) {
     if (!iso) return '';
     return new Date(iso).toLocaleString('fr-FR', {
@@ -541,6 +568,9 @@ function formatDateTime(iso) {
                                             <span v-if="msg.is_off_topic" class="badge bg-warning text-dark">
                                                 <i class="bi bi-slash-circle me-1"></i>Hors domaine auto
                                             </span>
+                                            <span v-else-if="msg.matched_from_message_id || msg.model === 'mboacar-kb'" class="badge bg-success-subtle text-success border border-success-subtle">
+                                                <i class="bi bi-database-check me-1"></i>Base MboaCar vérifiée
+                                            </span>
                                             <span :class="msg.role === 'user' ? 'text-white-50' : 'text-muted'">
                                                 {{ formatDateTime(msg.created_at) }}
                                             </span>
@@ -608,6 +638,46 @@ function formatDateTime(iso) {
                                             <i class="bi bi-whatsapp me-1"></i>Expliquer au client
                                             <i v-if="msg.client_whatsapp_sent_at" class="bi bi-check2-all ms-1"></i>
                                         </button>
+                                    </div>
+
+                                    <!-- Retour garagiste : MboaCar IA Auto a-t-il résolu votre problème ? -->
+                                    <div
+                                        v-if="msg.role === 'assistant' && !msg.is_off_topic"
+                                        class="mt-2 pt-2 border-top d-flex flex-wrap align-items-center justify-content-between gap-2"
+                                        style="font-size: 0.75rem;"
+                                    >
+                                        <span class="text-muted">
+                                            <i class="bi bi-question-circle me-1"></i>MboaCar IA Auto a-t-il résolu votre problème ?
+                                        </span>
+                                        <div class="d-flex flex-wrap align-items-center gap-1">
+                                            <button
+                                                type="button"
+                                                class="btn btn-sm py-0 px-2"
+                                                :class="msg.is_resolved === true ? 'btn-success' : 'btn-outline-success'"
+                                                style="font-size: 0.72rem;"
+                                                @click="submitFeedback(msg, true)"
+                                            >
+                                                <i class="bi bi-hand-thumbs-up-fill me-1"></i>Oui, résolu
+                                            </button>
+                                            <button
+                                                type="button"
+                                                class="btn btn-sm py-0 px-2"
+                                                :class="msg.is_resolved === false ? 'btn-danger' : 'btn-outline-danger'"
+                                                style="font-size: 0.72rem;"
+                                                @click="submitFeedback(msg, false)"
+                                            >
+                                                <i class="bi bi-hand-thumbs-down-fill me-1"></i>Non
+                                            </button>
+                                            <button
+                                                v-if="msg.is_resolved === false && (msg.matched_from_message_id || msg.model === 'mboacar-kb')"
+                                                type="button"
+                                                class="btn btn-outline-primary btn-sm py-0 px-2"
+                                                style="font-size: 0.72rem;"
+                                                @click="retryOnline(msg)"
+                                            >
+                                                <i class="bi bi-cloud-arrow-down me-1"></i>Rechercher en ligne (Gemini)
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

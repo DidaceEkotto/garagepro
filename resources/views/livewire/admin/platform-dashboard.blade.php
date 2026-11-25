@@ -7,6 +7,7 @@
                 'items' => [
                     ['key' => 'overview', 'route' => 'admin.dashboard', 'label' => "Vue d'ensemble", 'icon' => 'bi-speedometer2'],
                     ['key' => 'tenants', 'route' => 'admin.tenants', 'label' => 'Garages (Tenants)', 'icon' => 'bi-buildings'],
+                    ['key' => 'ai_diagnostics', 'route' => 'admin.ai_diagnostics', 'label' => 'Modération IA Auto', 'icon' => 'bi-stars'],
                     ['key' => 'messages', 'route' => 'admin.messages', 'label' => 'Messagerie', 'icon' => 'bi-chat-dots', 'badge' => $unreadAdminMessages],
                 ],
             ],
@@ -1127,6 +1128,229 @@
                         </a>
                     </div>
                 </form>
+            </div>
+        @endif
+
+        {{-- 12. MODÉRATION IA AUTO & BASE DE CONNAISSANCES --}}
+        @if($activeSection === 'ai_diagnostics')
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+                <div>
+                    <h1 class="h4 fw-bold mb-0"><i class="bi bi-stars text-primary me-2"></i>Modération MboaCar IA Auto &amp; Base de connaissances</h1>
+                    <p class="text-muted small mb-0">Consultez toutes les discussions IA (y compris celles supprimées par les garages) et gérez les réponses réutilisables</p>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-6 col-md-3">
+                    <div class="card border-0 shadow-sm rounded-4 p-3">
+                        <div class="text-muted small">Diagnostics totaux</div>
+                        <div class="h4 fw-bold text-primary mb-0">{{ number_format($aiStats['totalDiagnostics'] ?? 0, 0, ',', ' ') }}</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card border-0 shadow-sm rounded-4 p-3">
+                        <div class="text-muted small">Résolus en atelier</div>
+                        <div class="h4 fw-bold text-success mb-0">{{ number_format($aiStats['resolvedCount'] ?? 0, 0, ',', ' ') }}</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card border-0 shadow-sm rounded-4 p-3">
+                        <div class="text-muted small">Réutilisations BDD IA</div>
+                        <div class="h4 fw-bold text-info mb-0">{{ number_format($aiStats['kbReuseCount'] ?? 0, 0, ',', ' ') }}</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card border-0 shadow-sm rounded-4 p-3">
+                        <div class="text-muted small">Archivées (suppr. garage)</div>
+                        <div class="h4 fw-bold text-danger mb-0">{{ number_format($aiStats['deletedConversationsCount'] ?? 0, 0, ',', ' ') }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm rounded-4 p-3 mb-3">
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-5">
+                        <input
+                            wire:model.live.debounce.300ms="aiSearch"
+                            type="search"
+                            class="form-control form-control-sm"
+                            placeholder="Rechercher par garage, titre ou mot-clé..."
+                        >
+                    </div>
+                    <div class="col-md-7 d-flex flex-wrap gap-1 justify-content-md-end">
+                        @foreach([
+                            'all' => 'Toutes',
+                            'deleted' => 'Supprimées par garage',
+                            'resolved' => 'Résolues',
+                            'unresolved' => 'Non résolues',
+                            'off_topic' => 'Hors-sujet',
+                        ] as $fKey => $fLabel)
+                            <button
+                                type="button"
+                                wire:click="$set('aiFilter', '{{ $fKey }}')"
+                                class="btn btn-sm {{ $aiFilter === $fKey ? 'btn-primary' : 'btn-outline-secondary' }}"
+                            >
+                                {{ $fLabel }}
+                            </button>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-lg-4">
+                    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                        <div class="card-header bg-white py-2 px-3 fw-bold small border-bottom">
+                            Conversations ({{ $aiConversations->count() }})
+                        </div>
+                        <div class="list-group list-group-flush" style="max-height: 640px; overflow-y: auto;">
+                            @forelse($aiConversations as $conv)
+                                <button
+                                    type="button"
+                                    wire:click="selectAiConversation({{ $conv->id }})"
+                                    class="list-group-item list-group-item-action text-start py-2 px-3 {{ $selectedAiConversation && $selectedAiConversation->id === $conv->id ? 'active' : '' }}"
+                                >
+                                    <div class="d-flex justify-content-between align-items-center gap-1">
+                                        <span class="fw-semibold small text-truncate">{{ $conv->tenant?->name ?? 'Garage #'.$conv->tenant_id }}</span>
+                                        @if($conv->deleted_at)
+                                            <span class="badge bg-danger" style="font-size: 0.65rem;">Supprimée</span>
+                                        @endif
+                                    </div>
+                                    <div class="small text-truncate {{ $selectedAiConversation && $selectedAiConversation->id === $conv->id ? 'text-white' : 'text-dark' }}">
+                                        {{ $conv->title }}
+                                    </div>
+                                    <div style="font-size: 0.7rem;" class="{{ $selectedAiConversation && $selectedAiConversation->id === $conv->id ? 'text-white-50' : 'text-muted' }}">
+                                        {{ $conv->user?->name ?? 'Utilisateur' }} • {{ $conv->messages_count }} msg • {{ optional($conv->last_message_at ?? $conv->updated_at)->format('d/m H:i') }}
+                                    </div>
+                                </button>
+                            @empty
+                                <div class="p-4 text-center text-muted small">Aucune conversation IA trouvée.</div>
+                            @endforelse
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-8">
+                    @if($selectedAiConversation)
+                        <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                            <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                <div>
+                                    <div class="fw-bold d-flex align-items-center gap-2">
+                                        <span>{{ $selectedAiConversation->title }}</span>
+                                        @if($selectedAiConversation->deleted_at)
+                                            <span class="badge bg-danger">Supprimée par le garage le {{ $selectedAiConversation->deleted_at->format('d/m/Y H:i') }}</span>
+                                        @endif
+                                    </div>
+                                    <div class="small text-muted">
+                                        Garage : <strong>{{ $selectedAiConversation->tenant?->name }}</strong>
+                                        • Utilisateur : {{ $selectedAiConversation->user?->name }}
+                                        @if($selectedAiConversation->vehicle)
+                                            • Véhicule : {{ $selectedAiConversation->vehicle->license_plate }} ({{ $selectedAiConversation->vehicle->brand }} {{ $selectedAiConversation->vehicle->model }})
+                                        @endif
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    @if($selectedAiConversation->deleted_at)
+                                        <button type="button" wire:click="restoreAiConversation({{ $selectedAiConversation->id }})" class="btn btn-outline-success btn-sm">
+                                            <i class="bi bi-arrow-counterclockwise me-1"></i>Restaurer
+                                        </button>
+                                    @endif
+                                    <button
+                                        type="button"
+                                        wire:click="forceDeleteAiConversation({{ $selectedAiConversation->id }})"
+                                        wire:confirm="Supprimer DÉFINITIVEMENT cette conversation de la base de données ?"
+                                        class="btn btn-outline-danger btn-sm"
+                                    >
+                                        <i class="bi bi-trash me-1"></i>Purger
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body p-3 vstack gap-3" style="max-height: 600px; overflow-y: auto; background: #f8fafc;">
+                                @foreach($selectedAiConversation->messages as $m)
+                                    <div class="p-3 rounded-3 border {{ $m->role === 'user' ? 'bg-primary-subtle border-primary-subtle' : ($m->is_off_topic ? 'bg-warning-subtle border-warning' : 'bg-white') }}">
+                                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2" style="font-size: 0.75rem;">
+                                            <div class="fw-bold">
+                                                @if($m->role === 'user')
+                                                    <i class="bi bi-person-fill text-primary me-1"></i>{{ $m->user?->name ?? 'Garagiste' }}
+                                                @else
+                                                    <i class="bi bi-stars text-primary me-1"></i>MboaCar IA Auto ({{ $m->model ?? 'gemini' }})
+                                                @endif
+                                                <span class="text-muted fw-normal ms-1">{{ $m->created_at?->format('d/m/Y H:i') }}</span>
+                                            </div>
+                                            <div class="d-flex flex-wrap align-items-center gap-1">
+                                                @if($m->is_off_topic)
+                                                    <span class="badge bg-warning text-dark">Hors-sujet</span>
+                                                @endif
+                                                @if($m->matched_from_message_id)
+                                                    <span class="badge bg-info text-dark">Réponse BDD (#{{ $m->matched_from_message_id }})</span>
+                                                @endif
+                                                @if($m->reuse_count > 0)
+                                                    <span class="badge bg-primary-subtle text-primary border">Réutilisée {{ $m->reuse_count }}×</span>
+                                                @endif
+                                                @if($m->role === 'assistant')
+                                                    @if($m->is_resolved === true)
+                                                        <span class="badge bg-success">Résolu</span>
+                                                    @elseif($m->is_resolved === false)
+                                                        <span class="badge bg-danger">Non résolu</span>
+                                                    @endif
+                                                    <span class="badge {{ $m->is_approved_for_knowledge ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-secondary' }}">
+                                                        {{ $m->is_approved_for_knowledge ? 'BDD IA : Actif' : 'BDD IA : Exclu' }}
+                                                    </span>
+                                                @endif
+                                            </div>
+                                        </div>
+
+                                        @if(!empty($m->photo_urls))
+                                            <div class="d-flex flex-wrap gap-2 mb-2">
+                                                @foreach($m->photo_urls as $url)
+                                                    <a href="{{ $url }}" target="_blank" rel="noopener">
+                                                        <img src="{{ $url }}" alt="Photo" class="rounded border" style="width: 72px; height: 72px; object-fit: cover;">
+                                                    </a>
+                                                @endforeach
+                                            </div>
+                                        @endif
+
+                                        @if($m->audio_url)
+                                            <div class="mb-2">
+                                                <audio src="{{ $m->audio_url }}" controls style="height: 32px; max-width: 100%;"></audio>
+                                            </div>
+                                        @endif
+
+                                        @if($editingAiMessageId === $m->id)
+                                            <form wire:submit="saveEditAiMessage" class="vstack gap-2">
+                                                <textarea wire:model="editingAiMessageContent" rows="5" class="form-control form-control-sm"></textarea>
+                                                <div class="d-flex gap-2">
+                                                    <button type="submit" class="btn btn-primary btn-sm">Enregistrer la correction</button>
+                                                    <button type="button" wire:click="cancelEditAiMessage" class="btn btn-outline-secondary btn-sm">Annuler</button>
+                                                </div>
+                                            </form>
+                                        @else
+                                            <div class="small" style="white-space: pre-wrap;">{{ $m->content }}</div>
+                                        @endif
+
+                                        @if($m->role === 'assistant' && $editingAiMessageId !== $m->id)
+                                            <div class="mt-2 pt-2 border-top d-flex flex-wrap gap-1">
+                                                <button type="button" wire:click="toggleAiKnowledgeApproval({{ $m->id }})" class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size: 0.72rem;">
+                                                    <i class="bi bi-database-check me-1"></i>{{ $m->is_approved_for_knowledge ? 'Exclure de la BDD IA' : 'Autoriser dans BDD IA' }}
+                                                </button>
+                                                <button type="button" wire:click="markAiMessageResolved({{ $m->id }}, {{ $m->is_resolved ? 'false' : 'true' }})" class="btn btn-outline-success btn-sm py-0 px-2" style="font-size: 0.72rem;">
+                                                    <i class="bi bi-check-circle me-1"></i>{{ $m->is_resolved ? 'Retirer Résolu' : 'Marquer Résolu' }}
+                                                </button>
+                                                <button type="button" wire:click="startEditAiMessage({{ $m->id }})" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.72rem;">
+                                                    <i class="bi bi-pencil me-1"></i>Modérer / Corriger
+                                                </button>
+                                            </div>
+                                        @endif
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @else
+                        <div class="card border-0 shadow-sm rounded-4 p-5 text-center text-muted small">
+                            Sélectionnez une conversation IA à gauche pour l'inspecter et la modérer.
+                        </div>
+                    @endif
+                </div>
             </div>
         @endif
     </div>

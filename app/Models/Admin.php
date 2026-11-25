@@ -84,11 +84,11 @@ class Admin extends Authenticatable
     public function allowedSections(): array
     {
         return match ($this->role ?? self::ROLE_SUPER_ADMIN) {
-            self::ROLE_SUPPORT => ['overview', 'tenants', 'messages', 'affiliation', 'profile'],
+            self::ROLE_SUPPORT => ['overview', 'tenants', 'ai_diagnostics', 'messages', 'affiliation', 'profile'],
             self::ROLE_MARKETING => ['overview', 'categories', 'banners', 'testimonials', 'countries', 'terms', 'privacy', 'profile'],
-            self::ROLE_MODERATOR => ['overview', 'tenants', 'affiliation', 'security', 'profile'],
+            self::ROLE_MODERATOR => ['overview', 'tenants', 'ai_diagnostics', 'affiliation', 'security', 'profile'],
             default => [
-                'overview', 'tenants', 'messages', 'affiliation',
+                'overview', 'tenants', 'ai_diagnostics', 'messages', 'affiliation',
                 'categories', 'banners', 'testimonials', 'countries',
                 'terms', 'privacy',
                 'security', 'admins', 'settings', 'profile',

@@ -208,6 +208,8 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
         ->name('tenant.ai_diagnostic.explain_client');
     Route::post('/assistant-ia/messages/{messageId}/envoyer-whatsapp', [AiDiagnosticController::class, 'sendClientWhatsapp'])
         ->name('tenant.ai_diagnostic.send_whatsapp');
+    Route::post('/assistant-ia/messages/{messageId}/feedback', [AiDiagnosticController::class, 'submitFeedback'])
+        ->name('tenant.ai_diagnostic.feedback');
     Route::delete('/assistant-ia/{conversationId}', [AiDiagnosticController::class, 'destroy'])->name('tenant.ai_diagnostic.destroy');
 
     // Clients & Véhicules
@@ -458,6 +460,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/logout', [AdminAuthController::class, 'logout'])->name('logout');
         Route::get('/', fn () => view('admin.dashboard', ['section' => 'overview']))->name('dashboard');
         Route::get('/garages', fn () => view('admin.dashboard', ['section' => 'tenants']))->name('tenants');
+        Route::get('/ia-diagnostics', fn () => view('admin.dashboard', ['section' => 'ai_diagnostics']))->name('ai_diagnostics');
         Route::get('/messagerie', fn () => view('admin.dashboard', ['section' => 'messages']))->name('messages');
         Route::get('/affiliation', fn () => view('admin.dashboard', ['section' => 'affiliation']))->name('affiliation');
         Route::get('/categories', fn () => view('admin.dashboard', ['section' => 'categories']))->name('categories');

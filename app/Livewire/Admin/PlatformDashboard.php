@@ -4,6 +4,7 @@ namespace App\Livewire\Admin;
 
 use App\Models\Admin;
 use App\Models\AffiliateLink;
+use App\Models\AiDiagnosticConversation;
 use App\Models\AiDiagnosticMessage;
 use App\Models\AuditLog;
 use App\Models\BlockedIp;
@@ -38,6 +39,11 @@ class PlatformDashboard extends Component
     public int $affiliateReferralDiscount = 5000;
     public string $affiliateCommissionTrigger = 'first_payment';
     public int $aiDailyQuota = 50;
+    public string $aiSearch = '';
+    public string $aiFilter = 'all';
+    public ?int $selectedAiConversationId = null;
+    public ?int $editingAiMessageId = null;
+    public string $editingAiMessageContent = '';
     public string $siteName = 'GaragePro';
     public string $sitePhone = '';
     public string $siteWhatsapp = '';
@@ -127,7 +133,7 @@ class PlatformDashboard extends Component
         }
 
         $allowed = [
-            'overview', 'tenants', 'messages', 'affiliation',
+            'overview', 'tenants', 'ai_diagnostics', 'messages', 'affiliation',
             'categories', 'banners', 'testimonials', 'countries',
             'terms', 'privacy',
             'security', 'admins', 'settings', 'profile',
@@ -766,6 +772,102 @@ class PlatformDashboard extends Component
         $this->feedbackMessage = 'Politique de confidentialité enregistrée.';
     }
 
+    public function selectAiConversation(int $conversationId): void
+    {
+        $this->selectedAiConversationId = $conversationId;
+        $this->editingAiMessageId = null;
+        $this->editingAiMessageContent = '';
+    }
+
+    public function restoreAiConversation(int $conversationId): void
+    {
+        $actor = Auth::guard('admin')->user();
+        abort_unless($actor && $actor->canAccessSection('ai_diagnostics'), 403);
+
+        $conv = AiDiagnosticConversation::withoutTenantScope()->withTrashed()->findOrFail($conversationId);
+        $conv->restore();
+        AuditLog::record('admin.ai_conversation_restored', subject: $conv, actor: $actor);
+        $this->feedbackMessage = 'Conversation IA restaurée dans l\'espace du garage.';
+    }
+
+    public function forceDeleteAiConversation(int $conversationId): void
+    {
+        $actor = Auth::guard('admin')->user();
+        abort_unless($actor && $actor->canAccessSection('ai_diagnostics'), 403);
+
+        $conv = AiDiagnosticConversation::withoutTenantScope()->withTrashed()->findOrFail($conversationId);
+        $conv->forceDelete();
+        if ($this->selectedAiConversationId === $conversationId) {
+            $this->selectedAiConversationId = null;
+        }
+        AuditLog::record('admin.ai_conversation_force_deleted', actor: $actor, metadata: ['conversation_id' => $conversationId]);
+        $this->feedbackMessage = 'Conversation IA supprimée définitivement.';
+    }
+
+    public function toggleAiKnowledgeApproval(int $messageId): void
+    {
+        $actor = Auth::guard('admin')->user();
+        abort_unless($actor && $actor->canAccessSection('ai_diagnostics'), 403);
+
+        $msg = AiDiagnosticMessage::withoutTenantScope()->findOrFail($messageId);
+        $msg->update(['is_approved_for_knowledge' => ! $msg->is_approved_for_knowledge]);
+        AuditLog::record('admin.ai_knowledge_toggled', subject: $msg, actor: $actor);
+        $this->feedbackMessage = $msg->is_approved_for_knowledge
+            ? 'Réponse autorisée dans la base de connaissances IA.'
+            : 'Réponse exclue de la base de connaissances IA.';
+    }
+
+    public function markAiMessageResolved(int $messageId, bool $resolved): void
+    {
+        $actor = Auth::guard('admin')->user();
+        abort_unless($actor && $actor->canAccessSection('ai_diagnostics'), 403);
+
+        $msg = AiDiagnosticMessage::withoutTenantScope()->findOrFail($messageId);
+        $msg->update([
+            'is_resolved' => $resolved,
+            'feedback_at' => now(),
+        ]);
+        AuditLog::record('admin.ai_message_resolution_updated', subject: $msg, actor: $actor);
+        $this->feedbackMessage = $resolved
+            ? 'Diagnostic marqué comme résolu (éligible à la réutilisation IA).'
+            : 'Diagnostic marqué comme non résolu.';
+    }
+
+    public function startEditAiMessage(int $messageId): void
+    {
+        $msg = AiDiagnosticMessage::withoutTenantScope()->findOrFail($messageId);
+        $this->editingAiMessageId = $msg->id;
+        $this->editingAiMessageContent = $msg->content;
+    }
+
+    public function cancelEditAiMessage(): void
+    {
+        $this->editingAiMessageId = null;
+        $this->editingAiMessageContent = '';
+    }
+
+    public function saveEditAiMessage(): void
+    {
+        $actor = Auth::guard('admin')->user();
+        abort_unless($actor && $actor->canAccessSection('ai_diagnostics'), 403);
+
+        if (! $this->editingAiMessageId) {
+            return;
+        }
+
+        $this->validate([
+            'editingAiMessageContent' => ['required', 'string', 'min:5', 'max:8000'],
+        ]);
+
+        $msg = AiDiagnosticMessage::withoutTenantScope()->findOrFail($this->editingAiMessageId);
+        $msg->update(['content' => trim($this->editingAiMessageContent)]);
+
+        AuditLog::record('admin.ai_message_moderated', subject: $msg, actor: $actor);
+        $this->editingAiMessageId = null;
+        $this->editingAiMessageContent = '';
+        $this->feedbackMessage = 'Réponse IA mise à jour par modération.';
+    }
+
     public function render()
     {
         $activeTenants = Tenant::where('status', Tenant::STATUS_ACTIVE)->count();
@@ -796,6 +898,16 @@ class PlatformDashboard extends Component
             'totalTokens' => (int) AiDiagnosticMessage::withoutTenantScope()
                 ->where('role', AiDiagnosticMessage::ROLE_ASSISTANT)
                 ->sum('tokens_used'),
+            'resolvedCount' => AiDiagnosticMessage::withoutTenantScope()
+                ->where('role', AiDiagnosticMessage::ROLE_ASSISTANT)
+                ->where('is_resolved', true)
+                ->count(),
+            'kbReuseCount' => (int) AiDiagnosticMessage::withoutTenantScope()
+                ->where('role', AiDiagnosticMessage::ROLE_ASSISTANT)
+                ->sum('reuse_count'),
+            'deletedConversationsCount' => AiDiagnosticConversation::withoutTenantScope()
+                ->onlyTrashed()
+                ->count(),
             'topTenants' => AiDiagnosticMessage::withoutTenantScope()
                 ->selectRaw('tenant_id, COUNT(*) as diagnostics_count')
                 ->where('role', AiDiagnosticMessage::ROLE_USER)
@@ -814,8 +926,49 @@ class PlatformDashboard extends Component
                 ->all(),
         ];
 
+        $aiConversations = collect();
+        $selectedAiConversation = null;
+
+        if ($this->activeSection === 'ai_diagnostics') {
+            $search = trim($this->aiSearch);
+            $aiConversations = AiDiagnosticConversation::withoutTenantScope()
+                ->withTrashed()
+                ->with(['tenant:id,name,slug', 'user:id,name', 'vehicle:id,license_plate,brand,model'])
+                ->withCount('messages')
+                ->when($this->aiFilter === 'deleted', fn ($q) => $q->onlyTrashed())
+                ->when($this->aiFilter === 'resolved', fn ($q) => $q->whereHas('messages', fn ($mq) => $mq->withoutTenantScope()->where('is_resolved', true)))
+                ->when($this->aiFilter === 'unresolved', fn ($q) => $q->whereHas('messages', fn ($mq) => $mq->withoutTenantScope()->where('is_resolved', false)))
+                ->when($this->aiFilter === 'off_topic', fn ($q) => $q->whereHas('messages', fn ($mq) => $mq->withoutTenantScope()->where('is_off_topic', true)))
+                ->when($search !== '', function ($q) use ($search) {
+                    $q->where(function ($sub) use ($search) {
+                        $sub->where('title', 'like', "%{$search}%")
+                            ->orWhereHas('tenant', fn ($tq) => $tq->where('name', 'like', "%{$search}%"))
+                            ->orWhereHas('messages', fn ($mq) => $mq->withoutTenantScope()->where('content', 'like', "%{$search}%"));
+                    });
+                })
+                ->orderByDesc('last_message_at')
+                ->orderByDesc('id')
+                ->take(60)
+                ->get();
+
+            $targetConvId = $this->selectedAiConversationId ?: $aiConversations->first()?->id;
+            if ($targetConvId) {
+                $selectedAiConversation = AiDiagnosticConversation::withoutTenantScope()
+                    ->withTrashed()
+                    ->with([
+                        'tenant:id,name,slug,email',
+                        'user:id,name,email',
+                        'vehicle:id,license_plate,brand,model,year',
+                        'messages' => fn ($mq) => $mq->withoutTenantScope()->with('user:id,name')->orderBy('id'),
+                    ])
+                    ->find($targetConvId);
+            }
+        }
+
         return view('livewire.admin.platform-dashboard', [
             'aiStats' => $aiStats,
+            'aiConversations' => $aiConversations,
+            'selectedAiConversation' => $selectedAiConversation,
             'kpis' => [
                 'activeTenants' => $activeTenants,
                 'trialTenants' => $trialTenants,

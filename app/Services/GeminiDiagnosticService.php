@@ -47,9 +47,10 @@ class GeminiDiagnosticService
         array $history = [],
         ?Vehicle $vehicle = null,
         array $mediaParts = [],
-        array $vehicleHistoryLines = []
+        array $vehicleHistoryLines = [],
+        array $knowledgeHints = []
     ): array {
-        $systemPrompt = $this->buildSystemInstruction($vehicle, $vehicleHistoryLines);
+        $systemPrompt = $this->buildSystemInstruction($vehicle, $vehicleHistoryLines, $knowledgeHints);
 
         $contents = [];
         foreach (array_slice($history, -12) as $msg) {
@@ -284,8 +285,9 @@ class GeminiDiagnosticService
 
     /**
      * @param  array<int, string>  $vehicleHistoryLines
+     * @param  array<int, string>  $knowledgeHints
      */
-    private function buildSystemInstruction(?Vehicle $vehicle, array $vehicleHistoryLines = []): string
+    private function buildSystemInstruction(?Vehicle $vehicle, array $vehicleHistoryLines = [], array $knowledgeHints = []): string
     {
         $instruction = <<<'PROMPT'
 Tu es MboaCar IA, un expert senior en diagnostic automobile, mécanique, électricité/électronique embarquée, codes défaut OBD-II, carrosserie, climatisation, pneumatiques, contrôle technique et entretien des véhicules (voitures, SUV, utilitaires, poids lourds, motos).
@@ -323,6 +325,11 @@ PROMPT;
         if ($vehicleHistoryLines !== []) {
             $instruction .= "\n\nHISTORIQUE RÉCENT DE CE VÉHICULE DANS CE GARAGE (tiens-en compte pour repérer les pannes récurrentes) :\n- "
                 .implode("\n- ", $vehicleHistoryLines);
+        }
+
+        if ($knowledgeHints !== []) {
+            $instruction .= "\n\nRETOURS D'EXPÉRIENCE RÉSOLUS EN ATELIER MBOACAR (inspire-toi de ces solutions déjà validées sur le terrain si pertinentes, sans jamais mentionner d'autres garages) :\n- "
+                .implode("\n- ", $knowledgeHints);
         }
 
         return $instruction;

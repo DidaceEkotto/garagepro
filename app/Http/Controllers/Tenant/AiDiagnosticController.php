@@ -13,6 +13,7 @@ use App\Models\QuoteItem;
 use App\Models\RepairOrder;
 use App\Models\Vehicle;
 use App\Models\VehicleInspection;
+use App\Services\AiKnowledgeService;
 use App\Services\GeminiDiagnosticService;
 use App\Services\GreenApiService;
 use App\Services\NumberSequenceService;
@@ -133,7 +134,8 @@ class AiDiagnosticController extends Controller
     public function send(
         Request $request,
         TenantContext $tenantContext,
-        GeminiDiagnosticService $gemini
+        GeminiDiagnosticService $gemini,
+        AiKnowledgeService $knowledge
     ): RedirectResponse {
         $tenantId = $tenantContext->id();
         $user = $request->user('web');
@@ -161,6 +163,7 @@ class AiDiagnosticController extends Controller
             'photos.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:6144'],
             'audio' => ['nullable', 'file', 'max:10240'],
             'audio_duration' => ['nullable', 'integer', 'min:0', 'max:600'],
+            'force_online' => ['nullable', 'boolean'],
         ]);
 
         $prompt = trim((string) ($data['prompt'] ?? ''));
@@ -321,8 +324,36 @@ class AiDiagnosticController extends Controller
             'is_off_topic' => false,
         ]);
 
-        // 2. Appel à Gemini API (Texte + Vision + Audio + Historique véhicule)
-        $result = $gemini->diagnose($prompt, $history, $vehicle, $mediaParts, $vehicleHistoryLines);
+        // 2. Vérifier d'abord dans la base de connaissances MboaCar (prompts similaires déjà résolus en atelier)
+        $forceOnline = (bool) ($data['force_online'] ?? false);
+        $kbLookup = $prompt !== '' ? $knowledge->lookup($prompt) : ['direct_match' => null, 'learning_hints' => []];
+        $matchedMessageId = null;
+
+        if (! $forceOnline && ! $hasPhotos && ! $hasAudio && $kbLookup['direct_match'] !== null) {
+            $matchedMessageId = $kbLookup['direct_match']['message_id'];
+            AiDiagnosticMessage::withoutTenantScope()
+                ->where('id', $matchedMessageId)
+                ->increment('reuse_count');
+
+            $result = [
+                'ok' => true,
+                'reply' => $kbLookup['direct_match']['reply'],
+                'is_off_topic' => false,
+                'model' => 'mboacar-kb',
+                'tokens_used' => 0,
+                'error' => null,
+            ];
+        } else {
+            // Appel en ligne à Gemini API (enrichi des retours d'expérience résolus en BDD)
+            $result = $gemini->diagnose(
+                $prompt,
+                $history,
+                $vehicle,
+                $mediaParts,
+                $vehicleHistoryLines,
+                $kbLookup['learning_hints']
+            );
+        }
 
         // 3. Enregistrement de la réponse IA en base de données
         AiDiagnosticMessage::create([
@@ -334,6 +365,7 @@ class AiDiagnosticController extends Controller
             'model' => $result['model'],
             'is_off_topic' => (bool) $result['is_off_topic'],
             'tokens_used' => $result['tokens_used'],
+            'matched_from_message_id' => $matchedMessageId,
         ]);
 
         $conversation->update([
@@ -560,6 +592,43 @@ class AiDiagnosticController extends Controller
         AuditLog::record('ai_diagnostic.client_whatsapp_sent', subject: $message, actor: $request->user('web'), tenantId: $tenantId, request: $request);
 
         return back()->with('success', "Explication client envoyée sur WhatsApp ({$data['phone']}).");
+    }
+
+    /**
+     * Enregistre le retour du garagiste : est-ce que MboaCar IA Auto a résolu le problème ?
+     * Les réponses marquées comme résolues enrichissent automatiquement la base de connaissances IA.
+     */
+    public function submitFeedback(
+        Request $request,
+        int $messageId,
+        TenantContext $tenantContext
+    ): RedirectResponse {
+        $tenantId = $tenantContext->id();
+
+        $message = AiDiagnosticMessage::query()
+            ->where('tenant_id', $tenantId)
+            ->where('id', $messageId)
+            ->where('role', AiDiagnosticMessage::ROLE_ASSISTANT)
+            ->firstOrFail();
+
+        $data = $request->validate([
+            'is_resolved' => ['required', 'boolean'],
+            'feedback_note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $message->update([
+            'is_resolved' => (bool) $data['is_resolved'],
+            'feedback_note' => isset($data['feedback_note']) ? trim((string) $data['feedback_note']) : null,
+            'feedback_at' => now(),
+        ]);
+
+        AuditLog::record('ai_diagnostic.feedback_submitted', subject: $message, actor: $request->user('web'), tenantId: $tenantId, request: $request);
+
+        $msg = $data['is_resolved']
+            ? 'Merci ! Ce diagnostic est enregistré comme résolu pour améliorer MboaCar IA Auto.'
+            : 'Merci pour votre retour ! Vous pouvez relancer une analyse IA fraîche si besoin.';
+
+        return back()->with('success', $msg);
     }
 
     public function destroy(

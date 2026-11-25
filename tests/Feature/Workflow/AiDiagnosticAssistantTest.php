@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Workflow;
 
+use App\Models\Admin;
 use App\Models\Agency;
 use App\Models\AiDiagnosticConversation;
 use App\Models\AiDiagnosticMessage;
@@ -320,5 +321,108 @@ class AiDiagnosticAssistantTest extends TestCase
             ])
             ->assertRedirect()
             ->assertSessionHas('error');
+    }
+
+    public function test_soft_delete_stays_visible_in_admin_and_resolved_answers_are_reused_from_db(): void
+    {
+        config([
+            'services.gemini.api_key' => 'test-gemini-key',
+            'services.gemini.model' => 'gemini-flash-lite-latest',
+        ]);
+
+        Http::fakeSequence()
+            ->push([
+                'candidates' => [[
+                    'content' => ['parts' => [['text' => 'Solution validée P0300 Toyota Corolla : remplacer les bobines et bougies usées.']]],
+                ]],
+                'usageMetadata' => ['totalTokenCount' => 120],
+            ], 200)
+            ->push([
+                'candidates' => [[
+                    'content' => ['parts' => [['text' => 'Nouvelle analyse en ligne fraîche depuis Gemini pour P0300.']]],
+                ]],
+                'usageMetadata' => ['totalTokenCount' => 110],
+            ], 200);
+
+        [$tenantA, $userA] = $this->createGarageUser('kb-garage-a', 'Garage Alpha KB');
+        [$tenantB, $userB] = $this->createGarageUser('kb-garage-b', 'Garage Beta KB');
+
+        // 1. Garage A pose une question P0300 -> appel Gemini #1
+        $this->actingAs($userA, 'web')
+            ->post('http://kb-garage-a.mboacar.com/assistant-ia/messages', [
+                'prompt' => 'Code défaut P0300 ratés allumage Toyota Corolla 2016 essence ralenti instable',
+            ])
+            ->assertRedirect();
+
+        Http::assertSentCount(1);
+
+        $convA = AiDiagnosticConversation::withoutTenantScope()->where('tenant_id', $tenantA->id)->firstOrFail();
+        $aiMsgA = AiDiagnosticMessage::withoutTenantScope()
+            ->where('conversation_id', $convA->id)
+            ->where('role', 'assistant')
+            ->firstOrFail();
+
+        // 2. Garage A confirme que MboaCar IA Auto a résolu le problème
+        $this->actingAs($userA, 'web')
+            ->post("http://kb-garage-a.mboacar.com/assistant-ia/messages/{$aiMsgA->id}/feedback", [
+                'is_resolved' => true,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertTrue($aiMsgA->fresh()->is_resolved);
+
+        // 3. Garage A supprime sa conversation -> disparaît de son espace, mais reste en BDD (soft-delete) pour l'admin !
+        $this->actingAs($userA, 'web')
+            ->delete("http://kb-garage-a.mboacar.com/assistant-ia/{$convA->id}")
+            ->assertRedirect('/assistant-ia');
+
+        $this->assertSoftDeleted('ai_diagnostic_conversations', ['id' => $convA->id]);
+
+        // L'admin voit la page /admin/ia-diagnostics avec la conversation supprimée
+        $admin = Admin::create([
+            'name' => 'Super Admin',
+            'email' => 'superadmin-ia@mboacar.com',
+            'password' => 'Password123!',
+            'role' => Admin::ROLE_SUPER_ADMIN,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($admin, 'admin')
+            ->get('http://mboacar.com/admin/ia-diagnostics')
+            ->assertOk()
+            ->assertSee('Garage Alpha KB')
+            ->assertSee('Supprimée');
+
+        // 4. Garage B pose un prompt similaire P0300 -> réponse récupérée directement en BDD (0 nouvel appel Gemini !)
+        $this->actingAs($userB, 'web')
+            ->post('http://kb-garage-b.mboacar.com/assistant-ia/messages', [
+                'prompt' => 'Toyota Corolla 2016 essence code P0300 ratés allumage ralenti instable',
+            ])
+            ->assertRedirect();
+
+        // Toujours 1 seul appel HTTP Gemini : la réponse de Garage B vient directement de la BDD !
+        Http::assertSentCount(1);
+
+        $aiMsgB = AiDiagnosticMessage::withoutTenantScope()
+            ->where('tenant_id', $tenantB->id)
+            ->where('role', 'assistant')
+            ->firstOrFail();
+
+        $this->assertSame('mboacar-kb', $aiMsgB->model);
+        $this->assertSame($aiMsgA->id, $aiMsgB->matched_from_message_id);
+        $this->assertSame(0, $aiMsgB->tokens_used);
+        $this->assertSame(1, $aiMsgA->fresh()->reuse_count);
+        $this->assertStringContainsString('Solution validée P0300', $aiMsgB->content);
+
+        // 5. Si Garage B force une recherche en ligne (force_online = true) -> appelle bien Gemini (#2)
+        $this->actingAs($userB, 'web')
+            ->post('http://kb-garage-b.mboacar.com/assistant-ia/messages', [
+                'prompt' => 'Toyota Corolla 2016 essence code P0300 ratés allumage ralenti instable',
+                'force_online' => true,
+            ])
+            ->assertRedirect();
+
+        Http::assertSentCount(2);
     }
 }
