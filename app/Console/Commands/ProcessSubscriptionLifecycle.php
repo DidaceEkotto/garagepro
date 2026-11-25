@@ -7,6 +7,7 @@ use App\Mail\TrialReminderMail;
 use App\Models\AuditLog;
 use App\Models\PlatformSetting;
 use App\Models\Tenant;
+use App\Services\GreenApiService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Mail;
 
@@ -73,15 +74,34 @@ class ProcessSubscriptionLifecycle extends Command
                 }
             });
 
-        // 4a. Abonnements actifs arrivant à échéance dans les 7 prochains jours -> rappel tous les 2 jours
+        // 4a. Abonnements actifs arrivant à échéance dans les 7 prochains jours -> rappel tous les 2 jours (Email + WhatsApp)
+        $greenApi = app(GreenApiService::class);
+        $baseDomain = config('garagepro.tenant_base_domain', 'mboacar.com');
+        $siteName = PlatformSetting::siteSettings()['name'] ?? 'MboaCar';
+
         Tenant::where('status', Tenant::STATUS_ACTIVE)
             ->whereBetween('subscription_ends_at', [now(), now()->addDays(7)])
-            ->each(function (Tenant $tenant) use ($price): void {
+            ->with(['users' => fn ($q) => $q->withoutGlobalScope('tenant')->orderBy('id')])
+            ->each(function (Tenant $tenant) use ($price, $greenApi, $baseDomain, $siteName): void {
                 $settings = $tenant->settings ?? [];
                 $lastSent = ! empty($settings['last_sub_reminder_at']) ? \Illuminate\Support\Carbon::parse($settings['last_sub_reminder_at']) : null;
                 if (! $lastSent || $lastSent->lte(now()->subDays(2))) {
-                    Mail::to($tenant->email)->queue(new SubscriptionReminderMail($tenant, $price));
+                    $daysRemaining = max(0, (int) now()->startOfDay()->diffInDays($tenant->subscription_ends_at->copy()->startOfDay(), false));
+                    Mail::to($tenant->email)->queue(new SubscriptionReminderMail($tenant, $price, $daysRemaining, 'subscription'));
                     $settings['last_sub_reminder_at'] = now()->toIso8601String();
+                    $settings['last_email_reminder_at'] = now()->toIso8601String();
+
+                    $phone = $tenant->phone ?: $tenant->users->first()?->phone;
+                    if ($phone && $greenApi->isConfigured()) {
+                        $msg = "Bonjour {$tenant->name},\n\nIl ne reste plus que {$daysRemaining} jour(s) avant l'échéance de votre abonnement {$siteName} ("
+                            .number_format($price, 0, ',', ' ')." FCFA/mois).\n"
+                            ."Renouvelez dès maintenant depuis votre espace : https://{$tenant->slug}.{$baseDomain}/abonnement\n\nL'équipe {$siteName}";
+                        $wa = $greenApi->sendMessage($phone, $msg);
+                        if ($wa['ok']) {
+                            $settings['last_whatsapp_reminder_at'] = now()->toIso8601String();
+                        }
+                    }
+
                     $tenant->update(['settings' => $settings]);
                 }
             });

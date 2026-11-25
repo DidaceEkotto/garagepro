@@ -22,19 +22,35 @@ class SubscriptionReminderMail extends Mailable implements ShouldQueue
     public function __construct(
         public readonly Tenant $tenant,
         public readonly int $priceFcfa,
+        public readonly ?int $daysRemaining = null,
+        public readonly string $contextType = 'subscription',
     ) {}
 
     public function envelope(): Envelope
     {
+        $siteName = \App\Models\PlatformSetting::siteSettings()['name'] ?? 'MboaCar';
+        $prefix = $this->daysRemaining !== null && $this->daysRemaining > 0
+            ? "Rappel (J-{$this->daysRemaining}) : Renouvellement de votre abonnement {$siteName}"
+            : "Renouvellement de votre abonnement {$siteName}";
+
         return new Envelope(
-            subject: "Renouvellement de votre abonnement MboaCar — {$this->tenant->name}",
+            subject: "{$prefix} — {$this->tenant->name}",
         );
     }
 
     public function content(): Content
     {
+        $site = \App\Models\PlatformSetting::siteSettings();
+        $baseDomain = config('garagepro.tenant_base_domain', 'mboacar.com');
+        $renewUrl = "https://{$this->tenant->slug}.{$baseDomain}/abonnement";
+
         return new Content(
             view: 'emails.subscription-reminder',
+            with: [
+                'siteName' => $site['name'] ?? 'MboaCar',
+                'logoUrl' => $site['logo_url'] ?? asset('assets/images/logo.png'),
+                'renewUrl' => $renewUrl,
+            ],
         );
     }
 }

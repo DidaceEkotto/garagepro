@@ -6,7 +6,7 @@
                 'title' => 'Pilotage',
                 'items' => [
                     ['key' => 'overview', 'route' => 'admin.dashboard', 'label' => "Vue d'ensemble", 'icon' => 'bi-speedometer2'],
-                    ['key' => 'tenants', 'route' => 'admin.tenants', 'label' => 'Garages (Tenants)', 'icon' => 'bi-buildings'],
+                    ['key' => 'tenants', 'route' => 'admin.tenants', 'label' => 'Établissements', 'icon' => 'bi-buildings', 'badge' => $tenantCounts['expiring_7d'] ?? 0],
                     ['key' => 'ai_diagnostics', 'route' => 'admin.ai_diagnostics', 'label' => 'Modération IA Auto', 'icon' => 'bi-stars'],
                     ['key' => 'messages', 'route' => 'admin.messages', 'label' => 'Messagerie', 'icon' => 'bi-chat-dots', 'badge' => $unreadAdminMessages],
                 ],
@@ -117,6 +117,12 @@
             </div>
         @endif
 
+        @if($feedbackError)
+            <div class="alert alert-danger border-0 shadow-sm alert-dismissible fade show mb-4">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ $feedbackError }}
+            </div>
+        @endif
+
         @if($errors->any())
             <div class="alert alert-danger border-0 shadow-sm mb-4 small">
                 <ul class="mb-0 ps-3">
@@ -129,37 +135,195 @@
 
         {{-- 1. VUE D'ENSEMBLE --}}
         @if($activeSection === 'overview')
-            <div class="d-flex justify-content-between align-items-center mb-4">
+            @php
+                $renderTrend = function (array $trend) {
+                    $dir = $trend['direction'] ?? 'stable';
+                    $pct = $trend['percent'] ?? 0;
+                    if ($dir === 'up') {
+                        return '<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-graph-up-arrow me-1"></i>En hausse (+'.$pct.'%)</span>';
+                    }
+                    if ($dir === 'down') {
+                        return '<span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-graph-down-arrow me-1"></i>En baisse ('.$pct.'%)</span>';
+                    }
+                    return '<span class="badge bg-secondary-subtle text-secondary border"><i class="bi bi-dash-lg me-1"></i>Stable (0%)</span>';
+                };
+            @endphp
+
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
                 <div>
-                    <h1 class="h4 fw-bold mb-0">Vue d'ensemble Plateforme</h1>
-                    <p class="text-muted small mb-0">Indicateurs clés, paiements récents et activité globale</p>
+                    <h1 class="h4 fw-bold mb-0">Vue d'ensemble Financière & Abonnements</h1>
+                    <p class="text-muted small mb-0">Chiffre d'affaires, comparatifs mensuels (hausse/baisse), abonnés payants et essais gratuits</p>
+                </div>
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" wire:click="setAnalyticsMonths(6)" class="btn {{ $analyticsMonths === 6 ? 'btn-primary' : 'btn-outline-secondary' }}">6 mois</button>
+                    <button type="button" wire:click="setAnalyticsMonths(12)" class="btn {{ $analyticsMonths === 12 ? 'btn-primary' : 'btn-outline-secondary' }}">12 mois</button>
                 </div>
             </div>
 
+            @if(($kpis['expiringSoonCount'] ?? 0) > 0)
+                <div class="alert alert-warning border-0 shadow-sm rounded-4 d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+                    <div class="small">
+                        <i class="bi bi-bell-fill text-warning me-2"></i>
+                        <strong>{{ $kpis['expiringSoonCount'] }} établissement(s)</strong> arrive(nt) à échéance dans <strong>7 jours ou moins</strong> (ou est/sont expiré(s)).
+                    </div>
+                    <a href="{{ route('admin.tenants') }}" class="btn btn-warning btn-sm fw-semibold text-dark">
+                        <i class="bi bi-send-check me-1"></i>Relancer par WhatsApp / E-mail
+                    </a>
+                </div>
+            @endif
+
+            {{-- Ligne 1 : Chiffre d'affaires & Revenus --}}
+            <div class="row g-3 mb-3">
+                <div class="col-sm-6 col-xl-3">
+                    <div class="card border-0 shadow-sm rounded-4 h-100"><div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <span class="small text-muted">CA Total Encaissé</span>
+                            <i class="bi bi-cash-stack text-success fs-5"></i>
+                        </div>
+                        <div class="h4 fw-bold text-dark mb-1">{{ number_format($analytics['total_revenue'], 0, ',', ' ') }} FCFA</div>
+                        <div class="small text-muted">{{ $analytics['total_payments_count'] }} paiement(s) validé(s)</div>
+                    </div></div>
+                </div>
+                <div class="col-sm-6 col-xl-3">
+                    <div class="card border-0 shadow-sm rounded-4 h-100"><div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <span class="small text-muted">CA Mois en cours</span>
+                            <i class="bi bi-bar-chart-line text-primary fs-5"></i>
+                        </div>
+                        <div class="h4 fw-bold text-primary mb-1">{{ number_format($analytics['current_month_revenue'], 0, ',', ' ') }} FCFA</div>
+                        <div class="d-flex flex-wrap align-items-center gap-2 mt-1">
+                            {!! $renderTrend($analytics['revenue_trend']) !!}
+                            <span class="text-muted" style="font-size: 0.72rem;">vs {{ number_format($analytics['previous_month_revenue'], 0, ',', ' ') }} FCFA mois dernier</span>
+                        </div>
+                    </div></div>
+                </div>
+                <div class="col-sm-6 col-xl-3">
+                    <div class="card border-0 shadow-sm rounded-4 h-100"><div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <span class="small text-muted">MRR Estimé</span>
+                            <i class="bi bi-repeat text-info fs-5"></i>
+                        </div>
+                        <div class="h4 fw-bold mb-1">{{ number_format($kpis['mrr'], 0, ',', ' ') }} FCFA</div>
+                        <div class="small text-muted">{{ $kpis['activeTenants'] }} payant(s) × {{ number_format($subscriptionPrice, 0, ',', ' ') }} FCFA</div>
+                    </div></div>
+                </div>
+                <div class="col-sm-6 col-xl-3">
+                    <div class="card border-0 shadow-sm rounded-4 h-100"><div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <span class="small text-muted">Taux de Conversion</span>
+                            <i class="bi bi-percent text-warning fs-5"></i>
+                        </div>
+                        <div class="h4 fw-bold text-dark mb-1">{{ $analytics['conversion_rate'] }} %</div>
+                        <div class="small text-muted">{{ $kpis['activeTenants'] }} payant(s) sur {{ $kpis['totalTenants'] }} compte(s)</div>
+                    </div></div>
+                </div>
+            </div>
+
+            {{-- Ligne 2 : Abonnés payants vs Essais gratuits & Nouveaux abonnés --}}
             <div class="row g-3 mb-4">
                 <div class="col-sm-6 col-xl-3">
-                    <div class="card border-0 shadow-sm rounded-4"><div class="card-body">
-                        <div class="small text-muted">Tenants Actifs</div>
-                        <div class="h3 fw-bold text-success mb-0">{{ $kpis['activeTenants'] }}</div>
+                    <div class="card border-0 shadow-sm rounded-4 h-100"><div class="card-body">
+                        <div class="small text-muted mb-1">Abonnés Payants (Actifs)</div>
+                        <div class="h3 fw-bold text-success mb-1">{{ $kpis['activeTenants'] }}</div>
+                        <div class="d-flex flex-wrap align-items-center gap-1">
+                            {!! $renderTrend($analytics['paid_trend']) !!}
+                            <span class="text-muted" style="font-size: 0.72rem;">{{ $analytics['current_month_paid'] }} payé(s) ce mois vs {{ $analytics['previous_month_paid'] }}</span>
+                        </div>
                     </div></div>
                 </div>
                 <div class="col-sm-6 col-xl-3">
-                    <div class="card border-0 shadow-sm rounded-4"><div class="card-body">
-                        <div class="small text-muted">Essais en cours</div>
-                        <div class="h3 fw-bold text-primary mb-0">{{ $kpis['trialTenants'] }}</div>
+                    <div class="card border-0 shadow-sm rounded-4 h-100"><div class="card-body">
+                        <div class="small text-muted mb-1">Essais Gratuits en cours</div>
+                        <div class="h3 fw-bold text-primary mb-1">{{ $kpis['trialTenants'] }}</div>
+                        <div class="d-flex flex-wrap align-items-center gap-1">
+                            {!! $renderTrend($analytics['trial_trend']) !!}
+                            <span class="text-muted" style="font-size: 0.72rem;">{{ $analytics['current_month_trials'] }} ce mois vs {{ $analytics['previous_month_trials'] }}</span>
+                        </div>
                     </div></div>
                 </div>
                 <div class="col-sm-6 col-xl-3">
-                    <div class="card border-0 shadow-sm rounded-4"><div class="card-body">
-                        <div class="small text-muted">MRR Estimé</div>
-                        <div class="h3 fw-bold mb-0">{{ number_format($kpis['mrr'], 0, ',', ' ') }} FCFA</div>
+                    <div class="card border-0 shadow-sm rounded-4 h-100"><div class="card-body">
+                        <div class="small text-muted mb-1">Nouveaux Abonnés (Ce mois)</div>
+                        <div class="h3 fw-bold text-dark mb-1">{{ $analytics['current_month_new_tenants'] }}</div>
+                        <div class="d-flex flex-wrap align-items-center gap-1">
+                            {!! $renderTrend($analytics['new_tenants_trend']) !!}
+                            <span class="text-muted" style="font-size: 0.72rem;">vs {{ $analytics['previous_month_new_tenants'] }} le mois dernier</span>
+                        </div>
                     </div></div>
                 </div>
                 <div class="col-sm-6 col-xl-3">
-                    <div class="card border-0 shadow-sm rounded-4"><div class="card-body">
-                        <div class="small text-muted">Impayés (Past Due)</div>
-                        <div class="h3 fw-bold text-danger mb-0">{{ $kpis['pastDueTenants'] }}</div>
+                    <div class="card border-0 shadow-sm rounded-4 h-100"><div class="card-body">
+                        <div class="small text-muted mb-1">Impayés / Échéances ≤ 7j</div>
+                        <div class="h3 fw-bold text-danger mb-1">{{ $kpis['pastDueTenants'] }} <span class="fs-6 fw-normal text-muted">/ {{ $kpis['expiringSoonCount'] }} à relancer</span></div>
+                        <div class="small text-muted">
+                            <span class="me-2"><i class="bi bi-wrench-adjustable text-primary"></i> {{ $tenantCounts['garage'] }} Garages</span>
+                            <span class="me-2"><i class="bi bi-clipboard2-check text-info"></i> {{ $tenantCounts['centre_technique'] }} CT</span>
+                            <span><i class="bi bi-shield-check text-success"></i> {{ $tenantCounts['assurance'] }} Assur.</span>
+                        </div>
                     </div></div>
+                </div>
+            </div>
+
+            {{-- Comparatif Mensuel (Graphique + Tableau) --}}
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+                <div class="card-header bg-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div>
+                        <span class="fw-bold"><i class="bi bi-calendar3 text-primary me-2"></i>Comparatif Mensuel ({{ $analyticsMonths }} derniers mois)</span>
+                        <div class="small text-muted">Évolution du chiffre d'affaires, des abonnés payants, des essais gratuits et des nouveaux inscrits</div>
+                    </div>
+                </div>
+                <div class="card-body border-bottom bg-light-subtle">
+                    <div class="d-flex align-items-end justify-content-between gap-2" style="height: 150px;">
+                        @foreach($analytics['monthly_chart'] as $mc)
+                            <div class="flex-fill d-flex flex-column align-items-center justify-content-end h-100">
+                                <div class="text-muted fw-semibold mb-1" style="font-size: 0.68rem;">
+                                    {{ $mc['revenue'] > 0 ? number_format($mc['revenue'], 0, ',', ' ') : '0' }}
+                                </div>
+                                <div
+                                    class="w-100 rounded-top {{ ($mc['revenue_trend']['direction'] ?? 'stable') === 'down' ? 'bg-danger' : 'bg-primary' }}"
+                                    style="max-width: 48px; height: {{ max(4, $mc['bar_percent']) }}%; opacity: {{ $mc['revenue'] > 0 ? '0.9' : '0.2' }}; transition: height 0.3s;"
+                                    title="{{ $mc['label'] }} : {{ number_format($mc['revenue'], 0, ',', ' ') }} FCFA"
+                                ></div>
+                                <div class="small text-muted mt-1 text-nowrap" style="font-size: 0.7rem;">{{ $mc['short_label'] }}</div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-3">Mois</th>
+                                <th>Chiffre d'affaires</th>
+                                <th>Tendance CA</th>
+                                <th>Abonnés payants</th>
+                                <th>Essais gratuits</th>
+                                <th>Nouveaux inscrits</th>
+                                <th class="pe-3">Tendance Inscrits</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($analytics['monthly_comparison'] as $row)
+                                <tr>
+                                    <td class="ps-3 fw-semibold">{{ $row['label'] }}</td>
+                                    <td class="fw-bold text-dark">
+                                        {{ number_format($row['revenue'], 0, ',', ' ') }} FCFA
+                                        <span class="text-muted fw-normal small">({{ $row['transactions_count'] }} paiem.)</span>
+                                    </td>
+                                    <td>{!! $renderTrend($row['revenue_trend']) !!}</td>
+                                    <td>
+                                        <span class="fw-semibold text-success">{{ $row['paid_subscribers'] }}</span>
+                                        <span class="ms-1">{!! $renderTrend($row['paid_trend']) !!}</span>
+                                    </td>
+                                    <td>
+                                        <span class="fw-semibold text-primary">{{ $row['trial_signups'] }}</span>
+                                    </td>
+                                    <td class="fw-semibold">{{ $row['new_tenants'] }}</td>
+                                    <td class="pe-3">{!! $renderTrend($row['new_tenants_trend']) !!}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -170,18 +334,19 @@
                         <div class="table-responsive">
                             <table class="table table-sm mb-0 align-middle">
                                 <thead class="table-light">
-                                    <tr><th>Référence</th><th>Montant</th><th>Statut</th><th>Date</th></tr>
+                                    <tr><th>Établissement</th><th>Référence</th><th>Montant</th><th>Statut</th><th>Date</th></tr>
                                 </thead>
                                 <tbody>
                                     @forelse($recentPayments as $p)
                                     <tr>
+                                        <td class="small fw-semibold">{{ $p->tenant?->name ?? '—' }}</td>
                                         <td><code>{{ $p->reference_code }}</code></td>
                                         <td class="fw-semibold">{{ number_format($p->amount, 0, ',', ' ') }} {{ $p->currency }}</td>
                                         <td><span class="badge {{ $p->status === 'success' ? 'bg-success' : 'bg-warning text-dark' }}">{{ $p->status }}</span></td>
                                         <td class="small text-muted">{{ $p->created_at?->format('d/m H:i') }}</td>
                                     </tr>
                                     @empty
-                                    <tr><td colspan="4" class="text-center text-muted py-3">Aucun paiement.</td></tr>
+                                    <tr><td colspan="5" class="text-center text-muted py-3">Aucun paiement.</td></tr>
                                     @endforelse
                                 </tbody>
                             </table>
@@ -214,11 +379,88 @@
             </div>
         @endif
 
-        {{-- 2. GARAGES (TENANTS) --}}
+        {{-- 2. ÉTABLISSEMENTS (GARAGES, CENTRES TECHNIQUES, ASSURANCES AUTO) --}}
         @if($activeSection === 'tenants')
-            <div class="mb-4">
-                <h1 class="h4 fw-bold mb-0">Gestion des Garages (Tenants)</h1>
-                <p class="text-muted small mb-0">Administration des comptes, prolongations d'essai, suspensions et accès support</p>
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+                <div>
+                    <h1 class="h4 fw-bold mb-0">Gestion des Établissements ({{ $tenantCounts['total'] }})</h1>
+                    <p class="text-muted small mb-0">Garages, Centres Techniques et Assurances Auto — Suivi des abonnements et relances WhatsApp / E-mail à J-7</p>
+                </div>
+                @if($tenantCounts['expiring_7d'] > 0)
+                    <button
+                        type="button"
+                        wire:click="remindAllExpiringTenants"
+                        wire:loading.attr="disabled"
+                        wire:confirm="Envoyer une relance E-mail + WhatsApp à tous les {{ $tenantCounts['expiring_7d'] }} établissement(s) à 7 jours ou moins de leur échéance ?"
+                        class="btn btn-warning btn-sm fw-semibold text-dark"
+                    >
+                        <i class="bi bi-megaphone-fill me-1"></i>Relancer tous les comptes ≤ 7j ({{ $tenantCounts['expiring_7d'] }})
+                    </button>
+                @endif
+            </div>
+
+            {{-- Cartes filtres rapides --}}
+            <div class="row g-2 mb-3">
+                <div class="col-6 col-md">
+                    <button type="button" wire:click="resetTenantFilters" class="card border-0 shadow-sm rounded-3 w-100 text-start p-2 {{ $tenantTypeFilter === 'all' && $tenantStatusFilter === 'all' ? 'border border-primary bg-primary-subtle' : 'bg-white' }}">
+                        <div class="small text-muted">Total</div>
+                        <div class="h5 fw-bold mb-0">{{ $tenantCounts['total'] }}</div>
+                    </button>
+                </div>
+                <div class="col-6 col-md">
+                    <button type="button" wire:click="$set('tenantTypeFilter', 'garage')" class="card border-0 shadow-sm rounded-3 w-100 text-start p-2 {{ $tenantTypeFilter === 'garage' ? 'border border-primary bg-primary-subtle' : 'bg-white' }}">
+                        <div class="small text-muted"><i class="bi bi-wrench-adjustable text-primary me-1"></i>Garages</div>
+                        <div class="h5 fw-bold mb-0">{{ $tenantCounts['garage'] }}</div>
+                    </button>
+                </div>
+                <div class="col-6 col-md">
+                    <button type="button" wire:click="$set('tenantTypeFilter', 'centre_technique')" class="card border-0 shadow-sm rounded-3 w-100 text-start p-2 {{ $tenantTypeFilter === 'centre_technique' ? 'border border-info bg-info-subtle' : 'bg-white' }}">
+                        <div class="small text-muted"><i class="bi bi-clipboard2-check text-info me-1"></i>Centres Techniques</div>
+                        <div class="h5 fw-bold mb-0">{{ $tenantCounts['centre_technique'] }}</div>
+                    </button>
+                </div>
+                <div class="col-6 col-md">
+                    <button type="button" wire:click="$set('tenantTypeFilter', 'assurance')" class="card border-0 shadow-sm rounded-3 w-100 text-start p-2 {{ $tenantTypeFilter === 'assurance' ? 'border border-success bg-success-subtle' : 'bg-white' }}">
+                        <div class="small text-muted"><i class="bi bi-shield-check text-success me-1"></i>Assurances Auto</div>
+                        <div class="h5 fw-bold mb-0">{{ $tenantCounts['assurance'] }}</div>
+                    </button>
+                </div>
+                <div class="col-12 col-md">
+                    <button type="button" wire:click="$set('tenantStatusFilter', 'expiring_7d')" class="card border-0 shadow-sm rounded-3 w-100 text-start p-2 {{ $tenantStatusFilter === 'expiring_7d' ? 'border border-warning bg-warning-subtle' : 'bg-white' }}">
+                        <div class="small text-muted"><i class="bi bi-alarm text-danger me-1"></i>Échéance ≤ 7 jours</div>
+                        <div class="h5 fw-bold text-danger mb-0">{{ $tenantCounts['expiring_7d'] }}</div>
+                    </button>
+                </div>
+            </div>
+
+            {{-- Barre de recherche & filtres --}}
+            <div class="card border-0 shadow-sm rounded-4 mb-3">
+                <div class="card-body py-2 px-3">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-5">
+                            <input wire:model.live.debounce.300ms="tenantSearch" type="text" class="form-control form-control-sm" placeholder="Rechercher par nom, sous-domaine, email, téléphone ou ville...">
+                        </div>
+                        <div class="col-md-3">
+                            <select wire:model.live="tenantTypeFilter" class="form-select form-select-sm no-select2">
+                                <option value="all">Tous les types</option>
+                                <option value="garage">Garage / Atelier</option>
+                                <option value="centre_technique">Centre Technique</option>
+                                <option value="assurance">Assurance Auto</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <select wire:model.live="tenantStatusFilter" class="form-select form-select-sm no-select2">
+                                <option value="all">Tous les statuts</option>
+                                <option value="expiring_7d">Échéance ≤ 7 jours (À relancer)</option>
+                                <option value="active">Payants actifs</option>
+                                <option value="trialing">Essais gratuits</option>
+                                <option value="past_due">Impayés (délai de grâce)</option>
+                                <option value="expired">Expirés</option>
+                                <option value="suspended">Suspendus</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
@@ -226,31 +468,131 @@
                     <table class="table table-hover mb-0 align-middle">
                         <thead class="table-light">
                             <tr>
-                                <th>Garage</th>
-                                <th>Sous-domaine</th>
-                                <th>Email</th>
+                                <th>Établissement</th>
+                                <th>Type</th>
+                                <th>Contact</th>
                                 <th>Statut</th>
+                                <th>Échéance / Relance</th>
                                 <th class="text-end">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach($tenants as $t)
-                            <tr>
-                                <td class="fw-semibold">{{ $t->name }}</td>
-                                <td><code>{{ $t->slug }}</code></td>
-                                <td class="small text-muted">{{ $t->email }}</td>
-                                <td><span class="badge bg-info text-dark">{{ $t->status }}</span></td>
-                                <td class="text-end text-nowrap">
-                                    <button wire:click="extendTrial({{ $t->id }}, 7)" class="btn btn-outline-primary btn-sm">+7j essai</button>
-                                    @if($t->status === 'suspended')
-                                        <button wire:click="reactivateTenant({{ $t->id }})" class="btn btn-outline-success btn-sm">Réactiver</button>
-                                    @else
-                                        <button wire:click="suspendTenant({{ $t->id }})" class="btn btn-outline-danger btn-sm">Suspendre</button>
-                                    @endif
-                                    <button wire:click="impersonateTenant({{ $t->id }})" class="btn btn-dark btn-sm">Support</button>
-                                </td>
-                            </tr>
-                            @endforeach
+                            @forelse($filteredTenants as $t)
+                                @php
+                                    $meta = $tenantMeta[$t->id] ?? [];
+                                    $type = $t->type ?: 'garage';
+                                    $typeBadge = match ($type) {
+                                        'centre_technique' => ['label' => 'Centre Technique', 'class' => 'bg-info-subtle text-info-emphasis border border-info-subtle', 'icon' => 'bi-clipboard2-check'],
+                                        'assurance' => ['label' => 'Assurance Auto', 'class' => 'bg-success-subtle text-success border border-success-subtle', 'icon' => 'bi-shield-check'],
+                                        default => ['label' => 'Garage', 'class' => 'bg-primary-subtle text-primary border border-primary-subtle', 'icon' => 'bi-wrench-adjustable'],
+                                    };
+                                    $statusBadge = match ($t->status) {
+                                        'active' => ['label' => 'Payant actif', 'class' => 'bg-success'],
+                                        'trialing' => ['label' => 'Essai gratuit', 'class' => 'bg-primary'],
+                                        'past_due' => ['label' => 'Impayé (grâce)', 'class' => 'bg-warning text-dark'],
+                                        'expired' => ['label' => 'Expiré', 'class' => 'bg-danger'],
+                                        'suspended' => ['label' => 'Suspendu', 'class' => 'bg-dark'],
+                                        default => ['label' => $t->status, 'class' => 'bg-secondary'],
+                                    };
+                                    $daysLeft = $meta['days_remaining'] ?? null;
+                                    $canRemind = ! empty($meta['can_remind']);
+                                @endphp
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold">{{ $t->name }}</div>
+                                        <div class="small text-muted">
+                                            <code>{{ $t->slug }}</code>
+                                            @if($t->city)
+                                                · {{ $t->city }}
+                                            @endif
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge {{ $typeBadge['class'] }}">
+                                            <i class="bi {{ $typeBadge['icon'] }} me-1"></i>{{ $typeBadge['label'] }}
+                                        </span>
+                                    </td>
+                                    <td class="small">
+                                        <div><i class="bi bi-envelope text-muted me-1"></i>{{ $meta['email'] ?: '—' }}</div>
+                                        <div class="text-muted"><i class="bi bi-whatsapp text-success me-1"></i>{{ $meta['phone'] ?: 'Non renseigné' }}</div>
+                                    </td>
+                                    <td>
+                                        <span class="badge {{ $statusBadge['class'] }}">{{ $statusBadge['label'] }}</span>
+                                    </td>
+                                    <td class="small">
+                                        @if(!empty($meta['expires_at']))
+                                            <div class="fw-semibold">{{ $meta['expires_at']->format('d/m/Y') }}</div>
+                                            @if($daysLeft !== null && $daysLeft > 7)
+                                                <span class="text-muted">Dans {{ $daysLeft }} jour(s)</span>
+                                            @elseif($daysLeft !== null && $daysLeft > 0)
+                                                <span class="badge bg-warning text-dark">Expire dans {{ $daysLeft }}j</span>
+                                            @elseif($daysLeft === 0)
+                                                <span class="badge bg-danger">Expire aujourd'hui</span>
+                                            @elseif($daysLeft !== null)
+                                                <span class="badge bg-danger">Expiré ({{ abs($daysLeft) }}j)</span>
+                                            @endif
+                                        @else
+                                            <span class="text-muted">—</span>
+                                        @endif
+                                        @if(!empty($meta['last_email_reminder_at']) || !empty($meta['last_whatsapp_reminder_at']))
+                                            <div class="text-muted mt-1" style="font-size: 0.7rem;">
+                                                @if(!empty($meta['last_email_reminder_at']))
+                                                    <span class="me-1" title="Dernière relance E-mail"><i class="bi bi-envelope-check text-primary"></i> {{ \Illuminate\Support\Carbon::parse($meta['last_email_reminder_at'])->format('d/m H:i') }}</span>
+                                                @endif
+                                                @if(!empty($meta['last_whatsapp_reminder_at']))
+                                                    <span title="Dernière relance WhatsApp"><i class="bi bi-whatsapp text-success"></i> {{ \Illuminate\Support\Carbon::parse($meta['last_whatsapp_reminder_at'])->format('d/m H:i') }}</span>
+                                                @endif
+                                            </div>
+                                        @endif
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="d-inline-flex flex-wrap justify-content-end gap-1">
+                                            @if($canRemind)
+                                                <button
+                                                    type="button"
+                                                    wire:click="remindTenantWhatsapp({{ $t->id }})"
+                                                    wire:loading.attr="disabled"
+                                                    class="btn btn-success btn-sm py-0 px-2"
+                                                    title="Relancer par WhatsApp (≤ 7 jours)"
+                                                >
+                                                    <i class="bi bi-whatsapp me-1"></i>WhatsApp
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    wire:click="remindTenantEmail({{ $t->id }})"
+                                                    wire:loading.attr="disabled"
+                                                    class="btn btn-primary btn-sm py-0 px-2"
+                                                    title="Relancer par E-mail (≤ 7 jours)"
+                                                >
+                                                    <i class="bi bi-envelope-fill me-1"></i>E-mail
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    wire:click="remindTenantBoth({{ $t->id }})"
+                                                    wire:loading.attr="disabled"
+                                                    class="btn btn-warning btn-sm py-0 px-2 text-dark fw-semibold"
+                                                    title="Relancer par WhatsApp + E-mail"
+                                                >
+                                                    <i class="bi bi-send-check me-1"></i>Les 2
+                                                </button>
+                                            @endif
+                                            <button type="button" wire:click="extendTrial({{ $t->id }}, 7)" class="btn btn-outline-primary btn-sm py-0 px-2">+7j essai</button>
+                                            @if($t->status === 'suspended')
+                                                <button type="button" wire:click="reactivateTenant({{ $t->id }})" class="btn btn-outline-success btn-sm py-0 px-2">Réactiver</button>
+                                            @else
+                                                <button type="button" wire:click="suspendTenant({{ $t->id }})" class="btn btn-outline-danger btn-sm py-0 px-2">Suspendre</button>
+                                            @endif
+                                            <button type="button" wire:click="impersonateTenant({{ $t->id }})" class="btn btn-dark btn-sm py-0 px-2">Support</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted py-4">
+                                        Aucun établissement trouvé pour les filtres sélectionnés.
+                                    </td>
+                                </tr>
+                            @endforelse
                         </tbody>
                     </table>
                 </div>

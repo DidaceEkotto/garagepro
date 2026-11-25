@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Mail\SubscriptionReminderMail;
 use App\Models\Admin;
 use App\Models\AffiliateLink;
 use App\Models\AiDiagnosticConversation;
@@ -18,7 +19,10 @@ use App\Models\PlatformSetting;
 use App\Models\SubCategory;
 use App\Models\Tenant;
 use App\Models\Testimonial;
+use App\Services\GreenApiService;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Livewire\Component;
@@ -117,6 +121,12 @@ class PlatformDashboard extends Component
     public string $newIp = '';
     public string $newIpReason = '';
     public string $feedbackMessage = '';
+    public string $feedbackError = '';
+
+    public string $tenantSearch = '';
+    public string $tenantTypeFilter = 'all';
+    public string $tenantStatusFilter = 'all';
+    public int $analyticsMonths = 6;
 
     public string $testiAuthor = '';
     public string $testiRole = 'Gérant';
@@ -346,7 +356,7 @@ class PlatformDashboard extends Component
         }
 
         $token = OneTimeLoginToken::issueFor($tenant, $gerant, ttlMinutes: 2);
-        $baseDomain = config('garagepro.tenant_base_domain', 'garagepro.app');
+        $baseDomain = config('garagepro.tenant_base_domain', 'mboacar.com');
         $tenantUrl = "https://{$tenant->slug}.{$baseDomain}";
 
         AuditLog::record('admin.impersonate_tenant', subject: $tenant, actor: Auth::guard('admin')->user(), tenantId: $tenant->id);
@@ -359,6 +369,360 @@ class PlatformDashboard extends Component
         }
 
         $this->redirect($signedUrl);
+    }
+
+    public function setAnalyticsMonths(int $months): void
+    {
+        $this->analyticsMonths = in_array($months, [6, 12], true) ? $months : 6;
+    }
+
+    public function resetTenantFilters(): void
+    {
+        $this->tenantTypeFilter = 'all';
+        $this->tenantStatusFilter = 'all';
+        $this->tenantSearch = '';
+    }
+
+    public function remindTenantEmail(int $tenantId): void
+    {
+        $this->feedbackMessage = '';
+        $this->feedbackError = '';
+
+        $tenant = Tenant::with(['users' => fn ($q) => $q->withoutGlobalScope('tenant')->orderBy('id')])->findOrFail($tenantId);
+        $meta = $this->resolveTenantExpiration($tenant);
+
+        if (! $meta['can_remind']) {
+            $this->feedbackError = "La relance n'est disponible que lorsqu'il reste 7 jours ou moins avant l'échéance de {$tenant->name}.";
+
+            return;
+        }
+
+        $email = trim((string) ($tenant->email ?: $tenant->users->first()?->email));
+        if ($email === '') {
+            $this->feedbackError = "Aucune adresse e-mail renseignée pour {$tenant->name}.";
+
+            return;
+        }
+
+        $price = PlatformSetting::subscriptionPrice();
+
+        try {
+            Mail::to($email)->sendNow(new SubscriptionReminderMail(
+                tenant: $tenant,
+                priceFcfa: $price,
+                daysRemaining: $meta['days_remaining'],
+                contextType: $meta['context'],
+            ));
+
+            $settings = $tenant->settings ?? [];
+            $settings['last_email_reminder_at'] = now()->toIso8601String();
+            $settings['last_sub_reminder_at'] = now()->toIso8601String();
+            $tenant->update(['settings' => $settings]);
+
+            AuditLog::record('admin.tenant_reminded_email', subject: $tenant, actor: Auth::guard('admin')->user(), tenantId: $tenant->id, metadata: [
+                'email' => $email,
+                'days_remaining' => $meta['days_remaining'],
+            ]);
+
+            $this->feedbackMessage = "Relance par e-mail envoyée avec succès à {$tenant->name} ({$email}).";
+        } catch (\Throwable $e) {
+            $this->feedbackError = "Échec de l'envoi de l'e-mail à {$tenant->name} : {$e->getMessage()}";
+        }
+    }
+
+    public function remindTenantWhatsapp(int $tenantId): void
+    {
+        $this->feedbackMessage = '';
+        $this->feedbackError = '';
+
+        $tenant = Tenant::with(['users' => fn ($q) => $q->withoutGlobalScope('tenant')->orderBy('id')])->findOrFail($tenantId);
+        $meta = $this->resolveTenantExpiration($tenant);
+
+        if (! $meta['can_remind']) {
+            $this->feedbackError = "La relance n'est disponible que lorsqu'il reste 7 jours ou moins avant l'échéance de {$tenant->name}.";
+
+            return;
+        }
+
+        $phone = $this->resolveTenantPhone($tenant);
+        if (! $phone) {
+            $this->feedbackError = "Aucun numéro WhatsApp/téléphone renseigné pour {$tenant->name}.";
+
+            return;
+        }
+
+        $price = PlatformSetting::subscriptionPrice();
+        $message = $this->buildReminderWhatsappMessage($tenant, $meta['days_remaining'], $meta['context'], $price);
+
+        $result = app(GreenApiService::class)->sendMessage($phone, $message);
+        if (! $result['ok']) {
+            $this->feedbackError = "Échec WhatsApp pour {$tenant->name} : ".($result['error'] ?? 'erreur inconnue');
+
+            return;
+        }
+
+        $settings = $tenant->settings ?? [];
+        $settings['last_whatsapp_reminder_at'] = now()->toIso8601String();
+        $tenant->update(['settings' => $settings]);
+
+        AuditLog::record('admin.tenant_reminded_whatsapp', subject: $tenant, actor: Auth::guard('admin')->user(), tenantId: $tenant->id, metadata: [
+            'phone' => $phone,
+            'days_remaining' => $meta['days_remaining'],
+        ]);
+
+        $this->feedbackMessage = "Relance WhatsApp envoyée avec succès à {$tenant->name} ({$phone}).";
+    }
+
+    public function remindTenantBoth(int $tenantId): void
+    {
+        $this->feedbackMessage = '';
+        $this->feedbackError = '';
+
+        $tenant = Tenant::with(['users' => fn ($q) => $q->withoutGlobalScope('tenant')->orderBy('id')])->findOrFail($tenantId);
+        $meta = $this->resolveTenantExpiration($tenant);
+
+        if (! $meta['can_remind']) {
+            $this->feedbackError = "La relance n'est disponible que lorsqu'il reste 7 jours ou moins avant l'échéance de {$tenant->name}.";
+
+            return;
+        }
+
+        $price = PlatformSetting::subscriptionPrice();
+        $settings = $tenant->settings ?? [];
+        $sentChannels = [];
+        $errors = [];
+
+        $email = trim((string) ($tenant->email ?: $tenant->users->first()?->email));
+        if ($email !== '') {
+            try {
+                Mail::to($email)->sendNow(new SubscriptionReminderMail(
+                    tenant: $tenant,
+                    priceFcfa: $price,
+                    daysRemaining: $meta['days_remaining'],
+                    contextType: $meta['context'],
+                ));
+                $settings['last_email_reminder_at'] = now()->toIso8601String();
+                $settings['last_sub_reminder_at'] = now()->toIso8601String();
+                $sentChannels[] = "E-mail ({$email})";
+            } catch (\Throwable $e) {
+                $errors[] = "E-mail : {$e->getMessage()}";
+            }
+        } else {
+            $errors[] = 'Aucun e-mail renseigné';
+        }
+
+        $phone = $this->resolveTenantPhone($tenant);
+        if ($phone) {
+            $waMsg = $this->buildReminderWhatsappMessage($tenant, $meta['days_remaining'], $meta['context'], $price);
+            $wa = app(GreenApiService::class)->sendMessage($phone, $waMsg);
+            if ($wa['ok']) {
+                $settings['last_whatsapp_reminder_at'] = now()->toIso8601String();
+                $sentChannels[] = "WhatsApp ({$phone})";
+            } else {
+                $errors[] = 'WhatsApp : '.($wa['error'] ?? 'échec');
+            }
+        } else {
+            $errors[] = 'Aucun numéro WhatsApp renseigné';
+        }
+
+        if (! empty($sentChannels)) {
+            $tenant->update(['settings' => $settings]);
+            AuditLog::record('admin.tenant_reminded_multi', subject: $tenant, actor: Auth::guard('admin')->user(), tenantId: $tenant->id, metadata: [
+                'channels' => $sentChannels,
+                'days_remaining' => $meta['days_remaining'],
+            ]);
+            $this->feedbackMessage = "Relance envoyée à {$tenant->name} via : ".implode(' & ', $sentChannels).'.';
+        }
+
+        if (! empty($errors)) {
+            $this->feedbackError = 'Détails non envoyés : '.implode(' | ', $errors);
+        }
+    }
+
+    public function remindAllExpiringTenants(): void
+    {
+        $this->feedbackMessage = '';
+        $this->feedbackError = '';
+
+        $price = PlatformSetting::subscriptionPrice();
+        $greenApi = app(GreenApiService::class);
+        $allTenants = Tenant::with(['users' => fn ($q) => $q->withoutGlobalScope('tenant')->orderBy('id')])->get();
+
+        $emailCount = 0;
+        $waCount = 0;
+        $eligibleCount = 0;
+
+        foreach ($allTenants as $tenant) {
+            $meta = $this->resolveTenantExpiration($tenant);
+            if (! $meta['can_remind']) {
+                continue;
+            }
+            $eligibleCount++;
+            $settings = $tenant->settings ?? [];
+            $updated = false;
+
+            $email = trim((string) ($tenant->email ?: $tenant->users->first()?->email));
+            if ($email !== '') {
+                try {
+                    Mail::to($email)->sendNow(new SubscriptionReminderMail(
+                        tenant: $tenant,
+                        priceFcfa: $price,
+                        daysRemaining: $meta['days_remaining'],
+                        contextType: $meta['context'],
+                    ));
+                    $settings['last_email_reminder_at'] = now()->toIso8601String();
+                    $settings['last_sub_reminder_at'] = now()->toIso8601String();
+                    $emailCount++;
+                    $updated = true;
+                } catch (\Throwable) {
+                    // Continue with other tenants
+                }
+            }
+
+            $phone = $this->resolveTenantPhone($tenant);
+            if ($phone && $greenApi->isConfigured()) {
+                $waMsg = $this->buildReminderWhatsappMessage($tenant, $meta['days_remaining'], $meta['context'], $price);
+                $wa = $greenApi->sendMessage($phone, $waMsg);
+                if ($wa['ok']) {
+                    $settings['last_whatsapp_reminder_at'] = now()->toIso8601String();
+                    $waCount++;
+                    $updated = true;
+                }
+            }
+
+            if ($updated) {
+                $tenant->update(['settings' => $settings]);
+            }
+        }
+
+        if ($eligibleCount === 0) {
+            $this->feedbackMessage = 'Aucun compte à 7 jours ou moins de son échéance à relancer.';
+
+            return;
+        }
+
+        AuditLog::record('admin.tenants_bulk_reminded', actor: Auth::guard('admin')->user(), metadata: [
+            'eligible' => $eligibleCount,
+            'emails_sent' => $emailCount,
+            'whatsapp_sent' => $waCount,
+        ]);
+
+        $this->feedbackMessage = "Relance groupée terminée ({$eligibleCount} compte(s) éligible(s)) : {$emailCount} e-mail(s) et {$waCount} message(s) WhatsApp envoyé(s).";
+    }
+
+    private function computeTrend(int|float $current, int|float $previous): array
+    {
+        $diff = $current - $previous;
+
+        if ($previous == 0 && $current == 0) {
+            return [
+                'direction' => 'stable',
+                'percent' => 0.0,
+                'diff' => 0,
+                'label' => 'Stable',
+            ];
+        }
+
+        if ($previous == 0 && $current > 0) {
+            return [
+                'direction' => 'up',
+                'percent' => 100.0,
+                'diff' => $diff,
+                'label' => 'En hausse',
+            ];
+        }
+
+        $percent = round((($current - $previous) / $previous) * 100, 1);
+
+        if ($percent > 0) {
+            return [
+                'direction' => 'up',
+                'percent' => $percent,
+                'diff' => $diff,
+                'label' => 'En hausse',
+            ];
+        }
+
+        if ($percent < 0) {
+            return [
+                'direction' => 'down',
+                'percent' => $percent,
+                'diff' => $diff,
+                'label' => 'En baisse',
+            ];
+        }
+
+        return [
+            'direction' => 'stable',
+            'percent' => 0.0,
+            'diff' => 0,
+            'label' => 'Stable',
+        ];
+    }
+
+    private function resolveTenantExpiration(Tenant $tenant): array
+    {
+        $context = $tenant->status === Tenant::STATUS_TRIALING ? 'trial' : 'subscription';
+
+        $expiresAt = match ($tenant->status) {
+            Tenant::STATUS_ACTIVE => $tenant->subscription_ends_at,
+            Tenant::STATUS_TRIALING => $tenant->trial_ends_at,
+            Tenant::STATUS_PAST_DUE => $tenant->grace_ends_at ?? $tenant->subscription_ends_at,
+            Tenant::STATUS_EXPIRED => $tenant->subscription_ends_at ?? $tenant->trial_ends_at,
+            default => $tenant->subscription_ends_at ?? $tenant->trial_ends_at,
+        };
+
+        $daysRemaining = $expiresAt
+            ? (int) now()->startOfDay()->diffInDays($expiresAt->copy()->startOfDay(), false)
+            : null;
+
+        $eligibleStatus = in_array($tenant->status, [
+            Tenant::STATUS_ACTIVE,
+            Tenant::STATUS_TRIALING,
+            Tenant::STATUS_PAST_DUE,
+            Tenant::STATUS_EXPIRED,
+        ], true);
+
+        $canRemind = $eligibleStatus && (
+            ($daysRemaining !== null && $daysRemaining <= 7)
+            || in_array($tenant->status, [Tenant::STATUS_PAST_DUE, Tenant::STATUS_EXPIRED], true)
+        );
+
+        return [
+            'expires_at' => $expiresAt,
+            'days_remaining' => $daysRemaining,
+            'can_remind' => $canRemind,
+            'context' => $context,
+        ];
+    }
+
+    private function resolveTenantPhone(Tenant $tenant): ?string
+    {
+        $phone = trim((string) ($tenant->phone ?: $tenant->users->first()?->phone));
+
+        return $phone !== '' ? $phone : null;
+    }
+
+    private function buildReminderWhatsappMessage(Tenant $tenant, ?int $daysRemaining, string $contextType, int $price): string
+    {
+        $siteName = PlatformSetting::siteSettings()['name'] ?? 'MboaCar';
+        $baseDomain = config('garagepro.tenant_base_domain', 'mboacar.com');
+        $renewUrl = "https://{$tenant->slug}.{$baseDomain}/abonnement";
+        $label = $contextType === 'trial' ? "période d'essai gratuit" : 'abonnement mensuel';
+
+        if ($daysRemaining !== null && $daysRemaining > 0) {
+            $deadlineLine = "Il ne vous reste plus que *{$daysRemaining} jour(s)* avant l'échéance de votre {$label}.";
+        } elseif ($daysRemaining === 0) {
+            $deadlineLine = "Votre {$label} arrive à échéance *aujourd'hui*.";
+        } else {
+            $deadlineLine = "Votre {$label} est arrivé à échéance.";
+        }
+
+        return "Bonjour *{$tenant->name}*,\n\n"
+            ."{$deadlineLine}\n"
+            ."Tarif mensuel : *".number_format($price, 0, ',', ' ')." FCFA*.\n\n"
+            ."Renouvelez dès maintenant depuis votre espace pour éviter toute interruption :\n{$renewUrl}\n\n"
+            ."L'équipe {$siteName}";
     }
 
     public function blockIpManual(): void
@@ -870,9 +1234,176 @@ class PlatformDashboard extends Component
 
     public function render()
     {
-        $activeTenants = Tenant::where('status', Tenant::STATUS_ACTIVE)->count();
-        $trialTenants = Tenant::where('status', Tenant::STATUS_TRIALING)->count();
-        $pastDueTenants = Tenant::where('status', Tenant::STATUS_PAST_DUE)->count();
+        // Charge TOUS les établissements (garages, centres techniques, assurances auto) sans limite arbitraire
+        $allTenants = Tenant::query()
+            ->with(['users' => fn ($q) => $q->withoutGlobalScope('tenant')->orderBy('id')])
+            ->latest('id')
+            ->get();
+
+        $tenantMeta = [];
+        $expiringSoonCount = 0;
+        foreach ($allTenants as $t) {
+            $exp = $this->resolveTenantExpiration($t);
+            $phone = $this->resolveTenantPhone($t);
+            $settings = $t->settings ?? [];
+            if ($exp['can_remind']) {
+                $expiringSoonCount++;
+            }
+            $tenantMeta[$t->id] = [
+                'expires_at' => $exp['expires_at'],
+                'days_remaining' => $exp['days_remaining'],
+                'can_remind' => $exp['can_remind'],
+                'context' => $exp['context'],
+                'phone' => $phone,
+                'email' => trim((string) ($t->email ?: $t->users->first()?->email)),
+                'last_email_reminder_at' => $settings['last_email_reminder_at'] ?? $settings['last_sub_reminder_at'] ?? null,
+                'last_whatsapp_reminder_at' => $settings['last_whatsapp_reminder_at'] ?? null,
+            ];
+        }
+
+        $activeTenants = $allTenants->where('status', Tenant::STATUS_ACTIVE)->count();
+        $trialTenants = $allTenants->where('status', Tenant::STATUS_TRIALING)->count();
+        $pastDueTenants = $allTenants->where('status', Tenant::STATUS_PAST_DUE)->count();
+        $expiredTenants = $allTenants->where('status', Tenant::STATUS_EXPIRED)->count();
+        $suspendedTenants = $allTenants->where('status', Tenant::STATUS_SUSPENDED)->count();
+        $totalTenants = $allTenants->count();
+
+        $tenantCounts = [
+            'total' => $totalTenants,
+            'garage' => $allTenants->filter(fn ($t) => ($t->type ?? Tenant::TYPE_GARAGE) === Tenant::TYPE_GARAGE)->count(),
+            'centre_technique' => $allTenants->where('type', Tenant::TYPE_TECHNICAL_CENTER)->count(),
+            'assurance' => $allTenants->where('type', Tenant::TYPE_INSURANCE)->count(),
+            'expiring_7d' => $expiringSoonCount,
+        ];
+
+        // Filtrage pour la vue /admin/garages
+        $searchTerm = mb_strtolower(trim($this->tenantSearch));
+        $filteredTenants = $allTenants->filter(function (Tenant $t) use ($searchTerm, $tenantMeta): bool {
+            $type = $t->type ?: Tenant::TYPE_GARAGE;
+            if ($this->tenantTypeFilter !== 'all' && $type !== $this->tenantTypeFilter) {
+                return false;
+            }
+
+            if ($this->tenantStatusFilter === 'expiring_7d') {
+                if (empty($tenantMeta[$t->id]['can_remind'])) {
+                    return false;
+                }
+            } elseif ($this->tenantStatusFilter !== 'all' && $t->status !== $this->tenantStatusFilter) {
+                return false;
+            }
+
+            if ($searchTerm !== '') {
+                $haystack = mb_strtolower(implode(' ', [
+                    $t->name,
+                    $t->slug,
+                    $t->email,
+                    $t->phone,
+                    $t->city,
+                    $tenantMeta[$t->id]['phone'] ?? '',
+                ]));
+                if (! str_contains($haystack, $searchTerm)) {
+                    return false;
+                }
+            }
+
+            return true;
+        })->values();
+
+        // Analytics financiers & abonnés (comparatifs mensuels)
+        $subscriptionPayments = Payment::withoutTenantScope()
+            ->where('status', Payment::STATUS_SUCCESS)
+            ->where('payable_type', Tenant::class)
+            ->get(['id', 'tenant_id', 'amount', 'paid_at', 'created_at']);
+
+        $totalRevenue = (int) $subscriptionPayments->sum('amount');
+        $totalPaymentsCount = $subscriptionPayments->count();
+
+        $monthsCount = in_array($this->analyticsMonths, [6, 12], true) ? $this->analyticsMonths : 6;
+        $monthBuckets = [];
+        // On calcule $monthsCount + 1 mois pour avoir la variation du premier mois affiché
+        for ($i = $monthsCount; $i >= 0; $i--) {
+            $monthStart = now()->startOfMonth()->subMonths($i);
+            $monthEnd = $monthStart->copy()->endOfMonth();
+            $key = $monthStart->format('Y-m');
+
+            $monthPayments = $subscriptionPayments->filter(function ($p) use ($monthStart, $monthEnd): bool {
+                $dt = $p->paid_at ?: $p->created_at;
+
+                return $dt && $dt->between($monthStart, $monthEnd);
+            });
+
+            $monthNewTenants = $allTenants->filter(
+                fn (Tenant $t) => $t->created_at && $t->created_at->between($monthStart, $monthEnd)
+            );
+
+            $monthTrialSignups = $monthNewTenants->filter(
+                fn (Tenant $t) => $t->status === Tenant::STATUS_TRIALING || $t->trial_ends_at !== null
+            )->count();
+
+            $monthBuckets[] = [
+                'key' => $key,
+                'label' => ucfirst($monthStart->locale('fr')->translatedFormat('F Y')),
+                'short_label' => ucfirst($monthStart->locale('fr')->translatedFormat('M y')),
+                'revenue' => (int) $monthPayments->sum('amount'),
+                'transactions_count' => $monthPayments->count(),
+                'paid_subscribers' => $monthPayments->pluck('tenant_id')->filter()->unique()->count(),
+                'new_tenants' => $monthNewTenants->count(),
+                'trial_signups' => $monthTrialSignups,
+            ];
+        }
+
+        $maxMonthRevenue = max(1, (int) collect($monthBuckets)->slice(1)->max('revenue'));
+        $monthlyComparison = [];
+        for ($idx = 1; $idx < count($monthBuckets); $idx++) {
+            $curr = $monthBuckets[$idx];
+            $prev = $monthBuckets[$idx - 1];
+            $monthlyComparison[] = [
+                'key' => $curr['key'],
+                'label' => $curr['label'],
+                'short_label' => $curr['short_label'],
+                'revenue' => $curr['revenue'],
+                'transactions_count' => $curr['transactions_count'],
+                'paid_subscribers' => $curr['paid_subscribers'],
+                'new_tenants' => $curr['new_tenants'],
+                'trial_signups' => $curr['trial_signups'],
+                'revenue_trend' => $this->computeTrend($curr['revenue'], $prev['revenue']),
+                'paid_trend' => $this->computeTrend($curr['paid_subscribers'], $prev['paid_subscribers']),
+                'new_tenants_trend' => $this->computeTrend($curr['new_tenants'], $prev['new_tenants']),
+                'trial_trend' => $this->computeTrend($curr['trial_signups'], $prev['trial_signups']),
+                'bar_percent' => $curr['revenue'] > 0 ? max(6, (int) round(($curr['revenue'] / $maxMonthRevenue) * 100)) : 0,
+            ];
+        }
+
+        $currentBucket = end($monthlyComparison) ?: [
+            'revenue' => 0, 'paid_subscribers' => 0, 'new_tenants' => 0, 'trial_signups' => 0, 'transactions_count' => 0,
+            'revenue_trend' => $this->computeTrend(0, 0),
+            'paid_trend' => $this->computeTrend(0, 0),
+            'new_tenants_trend' => $this->computeTrend(0, 0),
+            'trial_trend' => $this->computeTrend(0, 0),
+        ];
+        $previousBucket = count($monthlyComparison) >= 2 ? $monthlyComparison[count($monthlyComparison) - 2] : [
+            'revenue' => 0, 'paid_subscribers' => 0, 'new_tenants' => 0, 'trial_signups' => 0, 'transactions_count' => 0,
+        ];
+
+        $analytics = [
+            'total_revenue' => $totalRevenue,
+            'total_payments_count' => $totalPaymentsCount,
+            'current_month_revenue' => $currentBucket['revenue'],
+            'previous_month_revenue' => $previousBucket['revenue'],
+            'revenue_trend' => $currentBucket['revenue_trend'],
+            'current_month_paid' => $currentBucket['paid_subscribers'],
+            'previous_month_paid' => $previousBucket['paid_subscribers'],
+            'paid_trend' => $currentBucket['paid_trend'],
+            'current_month_new_tenants' => $currentBucket['new_tenants'],
+            'previous_month_new_tenants' => $previousBucket['new_tenants'],
+            'new_tenants_trend' => $currentBucket['new_tenants_trend'],
+            'current_month_trials' => $currentBucket['trial_signups'],
+            'previous_month_trials' => $previousBucket['trial_signups'],
+            'trial_trend' => $currentBucket['trial_trend'],
+            'conversion_rate' => $totalTenants > 0 ? round(($activeTenants / $totalTenants) * 100, 1) : 0.0,
+            'monthly_comparison' => array_reverse($monthlyComparison),
+            'monthly_chart' => $monthlyComparison,
+        ];
 
         $adminMessages = PlatformMessage::with('tenant')
             ->where(function ($q) {
@@ -969,15 +1500,23 @@ class PlatformDashboard extends Component
             'aiStats' => $aiStats,
             'aiConversations' => $aiConversations,
             'selectedAiConversation' => $selectedAiConversation,
+            'analytics' => $analytics,
+            'tenantCounts' => $tenantCounts,
+            'tenantMeta' => $tenantMeta,
+            'filteredTenants' => $filteredTenants,
             'kpis' => [
                 'activeTenants' => $activeTenants,
                 'trialTenants' => $trialTenants,
                 'pastDueTenants' => $pastDueTenants,
+                'expiredTenants' => $expiredTenants,
+                'suspendedTenants' => $suspendedTenants,
+                'totalTenants' => $totalTenants,
+                'expiringSoonCount' => $expiringSoonCount,
                 'mrr' => $activeTenants * $this->subscriptionPrice,
             ],
-            'tenants' => Tenant::latest()->take(25)->get(),
+            'tenants' => $allTenants,
             'blockedIps' => BlockedIp::latest()->take(25)->get(),
-            'recentPayments' => Payment::withoutTenantScope()->latest()->take(15)->get(),
+            'recentPayments' => Payment::withoutTenantScope()->with('tenant:id,name,slug,type')->latest()->take(15)->get(),
             'auditLogs' => AuditLog::latest('id')->take(20)->get(),
             'testimonials' => Testimonial::latest()->get(),
             'countries' => Country::orderBy('name')->get(),
