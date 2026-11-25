@@ -385,7 +385,8 @@ function formatDateTime(iso) {
 <template>
     <Head title="Assistant IA Diagnostic Auto" />
     <TenantLayout>
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <div class="ai-workspace-shell">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 flex-shrink-0">
             <div>
                 <div class="d-flex flex-wrap align-items-center gap-2">
                     <h1 class="h4 fw-bold mb-0">
@@ -420,10 +421,10 @@ function formatDateTime(iso) {
             </span>
         </div>
 
-        <div class="row g-3">
+        <div class="row g-3 ai-workspace-grid">
             <!-- Historique privé des conversations du garage -->
-            <div class="col-lg-4 col-xl-3">
-                <div class="card border-0 shadow-sm ai-sidebar-card">
+            <div class="col-lg-4 col-xl-3 ai-workspace-col">
+                <div class="card border-0 shadow-sm ai-sidebar-card d-flex flex-column">
                     <div class="card-header bg-white py-2 px-3 d-flex justify-content-between align-items-center border-bottom">
                         <span class="fw-bold small">
                             <i class="bi bi-clock-history text-primary me-1"></i>Vos diagnostics ({{ conversations.length }})
@@ -471,7 +472,7 @@ function formatDateTime(iso) {
             </div>
 
             <!-- Zone de discussion IA -->
-            <div class="col-lg-8 col-xl-9">
+            <div class="col-lg-8 col-xl-9 ai-workspace-col">
                 <div class="card border-0 shadow-sm ai-chat-card d-flex flex-column">
                     <!-- Barre de contexte véhicule + historique -->
                     <div class="card-header bg-white py-2 px-3 border-bottom d-flex flex-wrap justify-content-between align-items-center gap-2">
@@ -722,6 +723,7 @@ function formatDateTime(iso) {
                 </div>
             </div>
         </div>
+        </div>
 
         <!-- Modale : Ajouter le diagnostic à un Ordre de Réparation -->
         <StaticModal id="modalApplyAiToRo" title="Ajouter le diagnostic à un Ordre de Réparation">
@@ -787,19 +789,56 @@ function formatDateTime(iso) {
 </template>
 
 <style scoped>
-.ai-sidebar-card,
-.ai-chat-card {
-    height: calc(100vh - 185px);
-    min-height: 540px;
+@media (min-width: 992px) {
+    .ai-workspace-shell {
+        position: sticky;
+        top: 72px;
+        height: calc(100vh - 96px);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .ai-workspace-grid {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .ai-workspace-col {
+        height: 100%;
+        min-height: 0;
+    }
+
+    .ai-sidebar-card,
+    .ai-chat-card {
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+    }
+}
+
+@media (max-width: 991.98px) {
+    .ai-sidebar-card {
+        max-height: 260px;
+    }
+
+    .ai-chat-card {
+        height: calc(100vh - 140px);
+        min-height: 460px;
+    }
 }
 
 .ai-conv-list {
     overflow-y: auto;
-    flex: 1;
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 .ai-messages-area {
     overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
     background-color: #f8fafc;
 }
 
