@@ -113,6 +113,9 @@ Route::get('/demo/quitter', [DemoController::class, 'exitAndRedirect'])->name('d
 // Carnet d'entretien numérique & Suivi client en direct
 Route::get('/carnet/{token}', [PublicTrackingController::class, 'vehiclePassport'])->name('public.vehicle.passport');
 Route::get('/pv-visite/{token}', [TechnicalInspectionController::class, 'publicShow'])->name('public.technical_pv.show');
+Route::get('/pv-visite/{token}/pdf', [TechnicalInspectionController::class, 'publicPdf'])
+    ->middleware('throttle:pdf')
+    ->name('public.technical_pv.pdf');
 Route::post('/pv-visite/{token}/demander-devis', [TechnicalInspectionController::class, 'requestRepairQuote'])
     ->middleware('throttle:10,1')
     ->name('public.technical_pv.request_quote');
@@ -350,19 +353,31 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
     });
 
     // 7. Centre de Contrôle Technique (PV Visite Technique & QR)
-    Route::middleware('tenant.type:centre_technique')->group(function () {
+    Route::middleware(['tenant.type:centre_technique', 'tenant.permission:vehicles.manage|receptions.manage|quality_control.manage'])->group(function () {
         Route::get('/visite-technique', [TechnicalInspectionController::class, 'index'])->name('tenant.technical_inspection.index');
         Route::post('/visite-technique', [TechnicalInspectionController::class, 'store'])->name('tenant.technical_inspection.store');
+        Route::put('/visite-technique/{technicalInspection}', [TechnicalInspectionController::class, 'update'])->name('tenant.technical_inspection.update');
+        Route::get('/visite-technique/{technicalInspection}/pdf', [TechnicalInspectionController::class, 'pdf'])
+            ->middleware('throttle:pdf')
+            ->name('tenant.technical_inspection.pdf');
         Route::post('/visite-technique/{technicalInspection}/whatsapp', [TechnicalInspectionController::class, 'sendWhatsapp'])->name('tenant.technical_inspection.whatsapp');
     });
 
     // 8. Assurances Automobile (Polices, Sinistres & Prises en charge — passerelle Assurance <-> Garage)
-    Route::middleware('tenant.type:assurance,garage')->group(function () {
+    Route::middleware(['tenant.type:assurance,garage', 'tenant.permission:clients.manage|quotes.manage|invoices.manage'])->group(function () {
         Route::get('/assurances', [InsuranceController::class, 'index'])->name('tenant.insurance.index');
         Route::post('/assurances/polices', [InsuranceController::class, 'storePolicy'])->name('tenant.insurance.policies.store');
+        Route::put('/assurances/polices/{policy}', [InsuranceController::class, 'updatePolicy'])->name('tenant.insurance.policies.update');
+        Route::delete('/assurances/polices/{policy}', [InsuranceController::class, 'destroyPolicy'])->name('tenant.insurance.policies.destroy');
+        Route::get('/assurances/polices/{policy}/pdf', [InsuranceController::class, 'policyPdf'])
+            ->middleware('throttle:pdf')
+            ->name('tenant.insurance.policies.pdf');
         Route::post('/assurances/sinistres', [InsuranceController::class, 'storeClaim'])->name('tenant.insurance.claims.store');
         Route::post('/assurances/sinistres/{claimId}/approuver', [InsuranceController::class, 'approveClaim'])->name('tenant.insurance.claims.approve');
         Route::patch('/assurances/sinistres/{claimId}/statut', [InsuranceController::class, 'updateClaimStatus'])->name('tenant.insurance.claims.status');
+        Route::get('/assurances/sinistres/{claimId}/pdf', [InsuranceController::class, 'claimPdf'])
+            ->middleware('throttle:pdf')
+            ->name('tenant.insurance.claims.pdf');
     });
 
     // Facturation, avoirs & PDF

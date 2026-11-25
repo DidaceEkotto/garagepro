@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 /**
@@ -21,6 +22,7 @@ class TechnicalInspection extends Model
     protected $fillable = [
         'tenant_id',
         'agency_id',
+        'parent_inspection_id',
         'vehicle_id',
         'customer_id',
         'inspector_id',
@@ -87,5 +89,15 @@ class TechnicalInspection extends Model
     public function inspector(): BelongsTo
     {
         return $this->belongsTo(User::class, 'inspector_id');
+    }
+
+    public function parentInspection(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_inspection_id');
+    }
+
+    public function counterVisits(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_inspection_id');
     }
 }

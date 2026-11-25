@@ -93,7 +93,9 @@ class DashboardController extends Controller
         ] : null;
 
         $insuranceKpis = $tenantType === 'assurance' ? [
-            'activePolicies' => InsurancePolicy::where('status', 'active')->count(),
+            'activePolicies' => InsurancePolicy::where('status', 'active')
+                ->whereDate('expires_at', '>=', now()->toDateString())
+                ->count(),
             'openClaims' => InsuranceClaim::withoutTenantScope()
                 ->where(fn ($q) => $q->where('tenant_id', $tenant->id)->orWhere('insurance_tenant_id', $tenant->id))
                 ->whereIn('status', ['declare', 'expertise'])
