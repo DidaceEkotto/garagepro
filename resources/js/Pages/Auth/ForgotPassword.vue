@@ -75,8 +75,8 @@ function submit() {
                                     required
                                     autofocus
                                 />
-                                <div v-if="form.errors.email" class="invalid-feedback">{{ form.errors.email }}</div>
                             </div>
+                            <div v-if="form.errors.email" class="text-danger small mt-1">{{ form.errors.email }}</div>
                         </div>
 
                         <div class="mb-4">
