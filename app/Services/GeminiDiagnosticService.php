@@ -20,7 +20,7 @@ class GeminiDiagnosticService
 
     public function model(): string
     {
-        return trim((string) config('services.gemini.model', 'gemini-2.5-flash')) ?: 'gemini-2.5-flash';
+        return trim((string) config('services.gemini.model', 'gemini-3.8-flash')) ?: 'gemini-3.8-flash';
     }
 
     /**

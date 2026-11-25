@@ -9,7 +9,7 @@ const props = defineProps({
     activeConversation: { type: Object, default: null },
     vehicles: { type: Array, default: () => [] },
     isConfigured: { type: Boolean, default: false },
-    modelName: { type: String, default: 'gemini-2.5-flash' },
+    modelName: { type: String, default: 'gemini-3.8-flash' },
 });
 
 const { askConfirm } = useConfirm();
