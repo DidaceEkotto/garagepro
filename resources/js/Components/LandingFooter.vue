@@ -11,7 +11,7 @@ const props = defineProps({
 
 const { t } = useI18n();
 const page = usePage();
-const resolvedAppName = computed(() => props.appName || page.props.app?.name || 'GaragePro');
+const resolvedAppName = computed(() => props.appName || page.props.app?.name || 'MboaCar');
 const site = computed(() => page.props.app?.site || {});
 </script>
 

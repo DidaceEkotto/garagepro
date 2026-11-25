@@ -118,7 +118,7 @@ class PaymentController extends Controller
             tenant: $tenant,
             payable: $tenant,
             amount: $finalAmount,
-            description: "Abonnement mensuel GaragePro — {$tenant->name}",
+            description: "Abonnement mensuel MboaCar — {$tenant->name}",
             customerEmail: $user->email,
             customerName: $tenant->name,
             returnUrl: $returnUrl,

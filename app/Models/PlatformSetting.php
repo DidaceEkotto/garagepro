@@ -153,7 +153,7 @@ class PlatformSetting extends Model
     {
         return (string) static::getValue(
             'terms_of_use',
-            '<h2>1. Objet</h2><p>Les présentes Conditions Générales d\'Utilisation régissent l\'accès et l\'utilisation de la plateforme GaragePro et de son Marketplace.</p><h2>2. Compte Professionnel</h2><p>Chaque garage est responsable de la confidentialité de ses identifiants et de l\'exactitude des informations publiées.</p>'
+            '<h2>1. Objet</h2><p>Les présentes Conditions Générales d\'Utilisation régissent l\'accès et l\'utilisation de la plateforme MboaCar et de son Marketplace.</p><h2>2. Compte Professionnel</h2><p>Chaque garage est responsable de la confidentialité de ses identifiants et de l\'exactitude des informations publiées.</p>'
         );
     }
 
@@ -161,7 +161,7 @@ class PlatformSetting extends Model
     {
         return (string) static::getValue(
             'privacy_policy',
-            '<h2>1. Collecte des données</h2><p>GaragePro collecte uniquement les données nécessaires à la gestion de votre atelier, à la facturation et au traitement des commandes Marketplace.</p><h2>2. Sécurité &amp; Confidentialité</h2><p>Vos données sont isolées par garage et protégées par chiffrement et journalisation d\'audit.</p>'
+            '<h2>1. Collecte des données</h2><p>MboaCar collecte uniquement les données nécessaires à la gestion de votre atelier, à la facturation et au traitement des commandes Marketplace.</p><h2>2. Sécurité &amp; Confidentialité</h2><p>Vos données sont isolées par garage et protégées par chiffrement et journalisation d\'audit.</p>'
         );
     }
 

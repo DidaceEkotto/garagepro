@@ -22,7 +22,7 @@
     <div class="receipt-box">
         <div class="header">
             <div>
-                <h2 style="margin:0;">{{ $tenant?->name ?? 'GaragePro' }}</h2>
+                <h2 style="margin:0;">{{ $tenant?->name ?? 'MboaCar' }}</h2>
                 <div style="font-size:12px;color:#64748b;">{{ $payment->agency?->name ?? 'Agence principale' }}</div>
             </div>
             <div style="text-align:right;">

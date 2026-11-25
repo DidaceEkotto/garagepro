@@ -41,7 +41,7 @@ function fmt(n) {
     <Head title="Abonnement" />
     <TenantLayout>
         <div class="mb-4">
-            <h1 class="h4 fw-bold mb-0">Abonnement GaragePro</h1>
+            <h1 class="h4 fw-bold mb-0">Abonnement MboaCar</h1>
             <p class="text-muted small mb-0">Gestion de votre formule mensuelle, paiements SaSPay et historique des souscriptions</p>
         </div>
 

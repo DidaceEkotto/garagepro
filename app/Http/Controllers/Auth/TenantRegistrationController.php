@@ -490,6 +490,6 @@ class TenantRegistrationController extends Controller
         );
 
         return redirect()->route('tenant.dashboard')
-            ->with('success', 'Bienvenue sur votre espace GaragePro ! Votre essai gratuit de 7 jours est actif.');
+            ->with('success', 'Bienvenue sur votre espace MboaCar ! Votre essai gratuit de 7 jours est actif.');
     }
 }

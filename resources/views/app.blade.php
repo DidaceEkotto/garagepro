@@ -23,7 +23,7 @@
         );
 
         $locale = app()->getLocale();
-        $siteName = !empty($siteMeta['name']) && $siteMeta['name'] !== 'GaragePro' && $siteMeta['name'] !== 'Laravel'
+        $siteName = !empty($siteMeta['name']) && $siteMeta['name'] !== 'MboaCar' && $siteMeta['name'] !== 'Laravel'
             ? $siteMeta['name']
             : 'MboaCar';
 

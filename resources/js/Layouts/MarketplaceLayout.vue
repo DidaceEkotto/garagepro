@@ -13,7 +13,7 @@ const { t } = useI18n();
 const { isNavigating } = usePageLoading();
 const page = usePage();
 const flash = computed(() => page.props.flash);
-const appName = computed(() => page.props.app?.name ?? 'GaragePro');
+const appName = computed(() => page.props.app?.name ?? 'MboaCar');
 const megaCategories = computed(() => page.props.marketplaceCategories ?? []);
 const megaMenuOpen = ref(false);
 

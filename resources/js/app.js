@@ -10,6 +10,18 @@ import { initPageLoadingListener } from './composables/usePageLoading';
 
 initPageLoadingListener();
 
+// Empêche le focus trap des modales Bootstrap 5 de refermer les menus Mois/Année de jQuery UI Datepicker (et Select2)
+document.addEventListener(
+    'focusin',
+    (e) => {
+        const target = e.target;
+        if (target instanceof Element && target.closest('#ui-datepicker-div, .select2-container')) {
+            e.stopImmediatePropagation();
+        }
+    },
+    true
+);
+
 // Chargement à la demande : jQuery UI uniquement si un .admin-datepicker existe
 // (DatePickerInput.vue le charge déjà paresseusement quand il est monté)
 if (document.querySelector('.admin-datepicker')) {
@@ -86,7 +98,7 @@ function initSelect2() {
 }
 
 createInertiaApp({
-    title: (title) => title ? `${title} - GaragePro` : 'GaragePro',
+    title: (title) => (title ? `${title} - MboaCar` : 'MboaCar'),
     resolve: (name) => {
         const pages = import.meta.glob('./Pages/**/*.vue');
         const loader = pages[`./Pages/${name}.vue`];

@@ -28,7 +28,7 @@ class TrialReminderMail extends Mailable implements ShouldQueue
     {
         $subject = $this->daysRemaining <= 0
             ? "Dernier jour d'essai gratuit — {$this->tenant->name}"
-            : "Votre essai GaragePro expire dans {$this->daysRemaining} jours";
+            : "Votre essai MboaCar expire dans {$this->daysRemaining} jours";
 
         return new Envelope(subject: $subject);
     }

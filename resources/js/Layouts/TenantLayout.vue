@@ -106,7 +106,7 @@ const menuGroups = computed(() => {
             title: t('layout.dashboard'),
             items: [
                 { label: t('layout.dashboard'), href: '/tableau-de-bord', icon: 'bi-speedometer2', permissions: [] },
-                { label: 'Assistant IA Auto', href: '/assistant-ia', icon: 'bi-stars', permissions: [] },
+                { label: t('layoutExtra.aiAssistant'), href: '/assistant-ia', icon: 'bi-stars', permissions: [] },
             ],
         },
         {
@@ -150,7 +150,6 @@ const menuGroups = computed(() => {
                 { label: t('layout.settings'), href: '/parametres-espace', icon: 'bi-gear', permissions: ['settings.manage'] },
                 { label: t('layoutExtra.affiliation'), href: '/affiliation', icon: 'bi-ticket-perforated', permissions: ['settings.manage', 'payments.manage'] },
                 { label: t('layout.subscription'), href: '/abonnement', icon: 'bi-credit-card', permissions: ['settings.manage', 'payments.manage'] },
-                { label: t('layoutExtra.tutorial'), href: '/tutoriel', icon: 'bi-book', permissions: [] },
             ],
         },
     ];
@@ -384,7 +383,7 @@ function resetDemo() {
                     </ul>
                 </div>
 
-                <!-- Menu déroulant Marketplace -->
+                <!-- Menu déroulant Marketplace (avant Tutoriel & Guide) -->
                 <div v-if="!tenant?.isReadOnly && (tenant?.type === 'garage' || !tenant?.type)" class="mb-3">
                     <button
                         type="button"
@@ -424,12 +423,28 @@ function resetDemo() {
                         </li>
                     </ul>
                 </div>
+
+                <!-- Tutoriel & Guide toujours en dernier lieu -->
+                <div v-if="!tenant?.isReadOnly" class="mt-auto pt-2 border-top">
+                    <ul class="nav nav-pills flex-column gap-1">
+                        <li class="nav-item">
+                            <Link
+                                href="/tutoriel"
+                                class="nav-link sidebar-link d-flex align-items-center gap-2 py-2 px-3 small"
+                                :class="{ active: isActive('/tutoriel') }"
+                            >
+                                <i class="bi bi-book"></i>
+                                <span>{{ t('layoutExtra.tutorial') }}</span>
+                            </Link>
+                        </li>
+                    </ul>
+                </div>
             </aside>
 
             <!-- Mobile Offcanvas Sidebar -->
             <div id="mobileSidebar" class="offcanvas offcanvas-start" tabindex="-1">
                 <div class="offcanvas-header border-bottom">
-                    <h5 class="offcanvas-title fw-bold">{{ tenant?.name ?? 'GaragePro' }}</h5>
+                    <h5 class="offcanvas-title fw-bold">{{ tenant?.name ?? 'MboaCar' }}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
                 </div>
                 <div class="offcanvas-body">
@@ -446,6 +461,34 @@ function resetDemo() {
                                 >
                                     <i :class="`bi ${item.icon}`"></i>
                                     <span>{{ item.label }}</span>
+                                </Link>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div v-if="!tenant?.isReadOnly && (tenant?.type === 'garage' || !tenant?.type)" class="mb-3">
+                        <div class="text-uppercase text-muted fw-bold px-2 mb-1" style="font-size: 0.7rem;">
+                            {{ t('layoutExtra.marketplace') }}
+                        </div>
+                        <ul class="nav nav-pills flex-column gap-1">
+                            <li class="nav-item">
+                                <Link href="/marketplace-gestion/produits" class="nav-link sidebar-link d-flex align-items-center gap-2 py-2 px-3 small" :class="{ active: isActive('/marketplace-gestion/produits') }">
+                                    <i class="bi bi-box2-heart"></i><span>{{ t('layoutExtra.myProducts') }}</span>
+                                </Link>
+                            </li>
+                            <li class="nav-item">
+                                <Link href="/marketplace-gestion/commandes" class="nav-link sidebar-link d-flex align-items-center gap-2 py-2 px-3 small" :class="{ active: isActive('/marketplace-gestion/commandes') }">
+                                    <i class="bi bi-bag-check"></i><span>{{ t('layoutExtra.orders') }}</span>
+                                </Link>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div v-if="!tenant?.isReadOnly" class="pt-2 border-top">
+                        <ul class="nav nav-pills flex-column gap-1">
+                            <li class="nav-item">
+                                <Link href="/tutoriel" class="nav-link sidebar-link d-flex align-items-center gap-2 py-2 px-3 small" :class="{ active: isActive('/tutoriel') }">
+                                    <i class="bi bi-book"></i><span>{{ t('layoutExtra.tutorial') }}</span>
                                 </Link>
                             </li>
                         </ul>

@@ -27,7 +27,7 @@ class MarketplaceNewOrderMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: "[Marketplace GaragePro] Nouvelle commande {$this->order->order_number}",
+            subject: "[Marketplace MboaCar] Nouvelle commande {$this->order->order_number}",
         );
     }
 
@@ -53,7 +53,7 @@ class MarketplaceNewOrderMail extends Mailable
                 .'<p><strong>Articles commandés :</strong></p>'
                 ."<ul>{$rowsHtml}</ul>"
                 ."<p><strong>Total pour votre garage : {$totalFormatted}</strong></p>"
-                .'<p>Connectez-vous à votre espace GaragePro (menu Marketplace &rarr; Commandes) pour traiter cette commande.</p>'
+                .'<p>Connectez-vous à votre espace MboaCar (menu Marketplace &rarr; Commandes) pour traiter cette commande.</p>'
         );
     }
 }

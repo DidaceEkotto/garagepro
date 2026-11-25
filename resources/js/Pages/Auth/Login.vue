@@ -188,7 +188,7 @@ function submit() {
                                 <label for="remember" class="form-check-label small">{{ t('auth.rememberMe') }}</label>
                             </div>
                             <Link href="/mot-de-passe-oublie" class="small text-decoration-none fw-semibold text-primary">
-                                Mot de passe oublié ?
+                                {{ t('layoutExtra.forgotPassword') }}
                             </Link>
                         </div>
 

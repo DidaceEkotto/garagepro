@@ -17,6 +17,9 @@ const props = defineProps({
     defaultCountry: { type: String, default: 'CM' },
 });
 
+const currentYear = new Date().getFullYear();
+const yearOptions = Array.from({ length: Math.max(1, currentYear - 1960 + 1) }, (_, i) => currentYear - i);
+
 const creatingMissingCategory = ref(false);
 const creatingMissingSubCategory = ref(false);
 
@@ -251,11 +254,17 @@ function deleteProduct(id) {
                     </div>
                     <div class="col-md-2">
                         <label class="form-label small">Année min</label>
-                        <input v-model="form.vehicle_year_from" type="number" min="1950" max="2100" class="form-control" placeholder="2015" />
+                        <select v-model="form.vehicle_year_from" class="form-select">
+                            <option value="">--</option>
+                            <option v-for="y in yearOptions" :key="`from-${y}`" :value="String(y)">{{ y }}</option>
+                        </select>
                     </div>
                     <div class="col-md-2">
                         <label class="form-label small">Année max</label>
-                        <input v-model="form.vehicle_year_to" type="number" min="1950" max="2100" class="form-control" placeholder="2024" />
+                        <select v-model="form.vehicle_year_to" class="form-select">
+                            <option value="">--</option>
+                            <option v-for="y in yearOptions" :key="`to-${y}`" :value="String(y)">{{ y }}</option>
+                        </select>
                     </div>
                 </div>
 

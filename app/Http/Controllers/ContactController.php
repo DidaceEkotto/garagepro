@@ -15,7 +15,7 @@ class ContactController extends Controller
     public function show(): Response
     {
         return Inertia::render('Contact', [
-            'appName' => config('app.name', 'GaragePro'),
+            'appName' => config('app.name', 'MboaCar'),
             'structureEmail' => PlatformSetting::structureEmail(),
         ]);
     }

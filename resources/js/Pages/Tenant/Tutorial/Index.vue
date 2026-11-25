@@ -37,6 +37,50 @@ const sections = [
         tip: 'Si vous gérez plusieurs agences, vérifiez en haut de la barre de navigation quelle agence est actuellement active.',
     },
     {
+        id: 'ai_assistant',
+        category: 'atelier',
+        title: 'Assistant IA Diagnostic Auto (MboaCar IA)',
+        route: '/assistant-ia',
+        icon: 'bi-stars',
+        badge: 'Nouveau • IA 100% Auto',
+        summary: 'Copilote intelligent strictement spécialisé dans le diagnostic automobile (codes OBD-II, pannes mécaniques/électriques, photos de voyants/pièces et messages vocaux d\'atelier), privé et cloisonné par garage.',
+        steps: [
+            'Sélectionnez un véhicule en haut du chat pour injecter automatiquement sa fiche et son historique d\'atelier (5 derniers OR et 3 dernières inspections).',
+            'Posez une question texte, joignez jusqu\'à 4 photos (voyants, valise OBD, pièces — vidéos interdites) ou enregistrez un message vocal mains libres (enregistré en base de données).',
+            'Depuis chaque diagnostic IA, cliquez en 1 clic sur « Créer brouillon Devis », « Ajouter à un OR » ou « Expliquer au client » pour envoyer une version claire et rassurante sur WhatsApp.',
+            'Cliquez sur « Oui, résolu » ou « Non » après chaque réponse : les diagnostics validés enrichissent automatiquement la base de connaissances MboaCar pour répondre instantanément aux pannes similaires.',
+            'Vous pouvez aussi lancer l\'IA directement depuis n\'importe quel ordre de réparation dans /ordres-reparation via le bouton « IA ».',
+        ],
+        fields: [
+            { name: 'Spécialisation 100 % Auto', desc: 'Refuse automatiquement toute question hors domaine automobile.' },
+            { name: 'Confidentialité & Isolation', desc: 'Chaque garage ne voit que ses propres conversations et photos.' },
+            { name: 'Référentiel OBD-II & Base vérifiée', desc: 'Les codes OBD fréquents et diagnostics résolus répondent instantanément.' },
+        ],
+        example: 'Un véhicule arrive avec le code P0300 : le mécanicien ouvre /assistant-ia, sélectionne le véhicule, joint une photo de la valise OBD, obtient les causes et contrôles en 2 secondes puis envoie une explication simple au client sur WhatsApp.',
+        tip: 'L\'IA reste une aide au diagnostic : effectuez toujours une vérification physique en atelier avant de commander une pièce.',
+    },
+    {
+        id: 'security_and_media',
+        category: 'admin',
+        title: 'Carnet QR Multi-Garages, Lightbox Photos & Sécurité Compte',
+        route: '/vehicules',
+        icon: 'bi-shield-check',
+        badge: 'Sécurité & Qualité',
+        summary: 'Profitez du carnet numérique public avec QR code agrégeant l\'historique multi-garages, de la visionneuse Lightbox sur toutes vos photos, des rappels devis E-mail/WhatsApp et de la réinitialisation de mot de passe OTP réservée au propriétaire.',
+        steps: [
+            'Dans /vehicules, ouvrez le Carnet numérique (/carnet/) : toute personne qui scanne le QR code accède à l\'historique complet des réparations du véhicule, même s\'il est passé dans plusieurs garages MboaCar.',
+            'Cliquez sur n\'importe quelle photo de l\'espace professionnel (Réceptions, Inspections, Clients, Produits, Profil, Assistant IA) pour l\'ouvrir en plein écran avec navigation Précédent/Suivant, compteur et bouton Télécharger.',
+            'Dans /devis, cliquez sur « Rappel » pour relancer le client par E-mail ou WhatsApp (bascule automatique si un seul canal est renseigné).',
+            'En cas d\'oubli de mot de passe (/mot-de-passe-oublie), seul le propriétaire principal du compte peut recevoir un code OTP sécurisé par E-mail ou WhatsApp.',
+        ],
+        fields: [
+            { name: 'Alerte pointage RH (/rh)', desc: 'Si aucune fiche de pointage n\'est remplie un jour ouvré, une alerte WhatsApp automatique est envoyée au propriétaire du compte.' },
+            { name: 'Édition complète', desc: 'Vous pouvez modifier vos Clients (/clients), Véhicules (/vehicules) et Réceptions (/receptions) à tout moment.' },
+        ],
+        example: 'Lors de la revente d\'une voiture entretenue chez vous, l\'acheteur scanne l\'étiquette QR du carnet d\'entretien et vérifie immédiatement toutes les interventions certifiées.',
+        tip: 'Imprimez ou téléchargez le QR code directement depuis /carnet/ pour le remettre au client.',
+    },
+    {
         id: 'clients',
         category: 'atelier',
         title: 'Clients',
@@ -653,7 +697,7 @@ const filteredSections = computed(() => {
                 <div class="row align-items-center g-3">
                     <div class="col-lg-7">
                         <span class="badge bg-white text-primary mb-2">Documentation officielle</span>
-                        <h1 class="h3 fw-bold mb-1">Guide complet &amp; Tutoriel GaragePro</h1>
+                        <h1 class="h3 fw-bold mb-1">Guide complet &amp; Tutoriel MboaCar</h1>
                         <p class="mb-0 opacity-75 small">
                             Découvrez le fonctionnement détaillé de chaque menu avec des étapes concrètes, des définitions de champs et des exemples réels pour bien démarrer.
                         </p>

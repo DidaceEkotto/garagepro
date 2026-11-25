@@ -44,7 +44,7 @@ class PlatformDashboard extends Component
     public ?int $selectedAiConversationId = null;
     public ?int $editingAiMessageId = null;
     public string $editingAiMessageContent = '';
-    public string $siteName = 'GaragePro';
+    public string $siteName = 'MboaCar';
     public string $sitePhone = '';
     public string $siteWhatsapp = '';
     public string $siteSecondaryEmail = '';
@@ -461,7 +461,7 @@ class PlatformDashboard extends Component
             'tenant_id' => $this->adminMsgTenantId,
             'sender_type' => PlatformMessage::TYPE_ADMIN,
             'sender_id' => $admin?->id,
-            'sender_name' => 'Administration GaragePro',
+            'sender_name' => 'Administration MboaCar',
             'recipient_type' => PlatformMessage::TYPE_TENANT,
             'recipient_id' => $this->adminMsgTenantId,
             'subject' => $this->adminMsgSubject,
@@ -502,7 +502,7 @@ class PlatformDashboard extends Component
             'parent_id' => $original->id,
             'sender_type' => PlatformMessage::TYPE_ADMIN,
             'sender_id' => $admin?->id,
-            'sender_name' => 'Administration GaragePro',
+            'sender_name' => 'Administration MboaCar',
             'recipient_type' => PlatformMessage::TYPE_TENANT,
             'recipient_id' => $original->tenant_id,
             'subject' => $subject,

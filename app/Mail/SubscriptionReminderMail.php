@@ -27,7 +27,7 @@ class SubscriptionReminderMail extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: "Renouvellement de votre abonnement GaragePro — {$this->tenant->name}",
+            subject: "Renouvellement de votre abonnement MboaCar — {$this->tenant->name}",
         );
     }
 

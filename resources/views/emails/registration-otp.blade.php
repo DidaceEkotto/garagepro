@@ -7,7 +7,7 @@
 <body style="font-family: Arial, Helvetica, sans-serif; background-color: #f8fafc; padding: 24px; color: #0f172a; margin: 0;">
     @php
         $site = \App\Models\PlatformSetting::siteSettings();
-        $siteName = !empty($site['name']) && $site['name'] !== 'GaragePro' ? $site['name'] : 'MboaCar';
+        $siteName = !empty($site['name']) && $site['name'] !== 'MboaCar' ? $site['name'] : 'MboaCar';
         $rawLogo = $site['logo_url'] ?? '/assets/images/logo.png';
         $logoUrl = str_starts_with($rawLogo, 'http://') || str_starts_with($rawLogo, 'https://') ? $rawLogo : url($rawLogo);
     @endphp

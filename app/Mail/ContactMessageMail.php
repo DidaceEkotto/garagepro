@@ -25,7 +25,7 @@ class ContactMessageMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: '[GaragePro Contact] '.$this->contactSubject,
+            subject: '[MboaCar Contact] '.$this->contactSubject,
             replyTo: [new Address($this->senderEmail, $this->senderName)],
         );
     }
@@ -33,7 +33,7 @@ class ContactMessageMail extends Mailable
     public function content(): Content
     {
         return new Content(
-            htmlString: '<h2>Nouveau message depuis GaragePro</h2>'
+            htmlString: '<h2>Nouveau message depuis MboaCar</h2>'
                 .'<p><strong>Nom :</strong> '.e($this->senderName).'</p>'
                 .'<p><strong>Email :</strong> '.e($this->senderEmail).'</p>'
                 .'<p><strong>Téléphone :</strong> '.e($this->senderPhone ?: '-').'</p>'

@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 
 /**
- * Permet de tester l'ensemble de GaragePro en mode sandbox sans inscription.
+ * Permet de tester l'ensemble de MboaCar en mode sandbox sans inscription.
  */
 class DemoController extends Controller
 {

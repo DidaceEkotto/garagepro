@@ -34,7 +34,7 @@ class ExportController extends Controller
             'rows' => $rows,
         ])->render();
 
-        $filename = "garagepro-{$type}-".now()->format('Y-m-d').'.xls';
+        $filename = "mboacar-{$type}-".now()->format('Y-m-d').'.xls';
 
         return response("\xEF\xBB\xBF".$html, 200, [
             'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',

@@ -24,6 +24,13 @@ onMounted(async () => {
             yearRange: '1940:2035',
             dayNamesMin: ['Di', 'Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa'],
             monthNamesShort: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'],
+            beforeShow: (_input, inst) => {
+                setTimeout(() => {
+                    if (inst?.dpDiv) {
+                        inst.dpDiv.css('z-index', 2060);
+                    }
+                }, 0);
+            },
             onSelect: (dateText) => {
                 emit('update:modelValue', dateText);
                 emit('change', dateText);

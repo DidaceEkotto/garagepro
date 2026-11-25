@@ -13,7 +13,7 @@ use Spatie\Permission\PermissionRegistrar;
 class TenantRoleService
 {
     /**
-     * Liste des permissions métier de GaragePro.
+     * Liste des permissions métier de MboaCar.
      */
     public const PERMISSIONS = [
         // Agences & Utilisateurs

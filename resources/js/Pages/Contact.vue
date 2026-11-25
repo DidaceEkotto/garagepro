@@ -7,7 +7,7 @@ import BackToTop from '../Components/BackToTop.vue';
 import { useI18n } from '../composables/useI18n';
 
 const props = defineProps({
-    appName: { type: String, default: 'GaragePro' },
+    appName: { type: String, default: 'MboaCar' },
     structureEmail: { type: String, default: 'jeannotgates@gmail.com' },
 });
 

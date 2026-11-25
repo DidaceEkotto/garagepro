@@ -218,7 +218,7 @@ function fmt(n) {
                     <ul class="mb-0 ps-3 vstack gap-1 text-dark">
                         <li>L'<strong>auto-parrainage</strong> (s'inscrire soi-même avec son propre code ou même adresse e-mail).</li>
                         <li>La création de <strong>faux comptes</strong> ou inscriptions multiples depuis la même connexion IP.</li>
-                        <li>Le spam publicitaire ou l'usurpation d'identité de GaragePro.</li>
+                        <li>Le spam publicitaire ou l'usurpation d'identité de MboaCar.</li>
                         <li>En cas de fraude détectée, l'administration se réserve le droit de <strong>bloquer le lien</strong> et d'annuler les gains.</li>
                     </ul>
                 </div>

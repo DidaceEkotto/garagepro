@@ -219,7 +219,7 @@ class CustomerController extends Controller
 
         $tenant = $tenantContext->getTenant();
         Mail::to($customer->email)->send(new ClientReminderMail(
-            garageName: $tenant?->name ?? config('app.name', 'GaragePro'),
+            garageName: $tenant?->name ?? config('app.name', 'MboaCar'),
             clientName: $customer->name,
             subjectLine: $data['subject'],
             bodyText: $data['message'],

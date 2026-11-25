@@ -191,7 +191,7 @@ class InvoiceController extends Controller
         $tenant = $tenantContext->getTenant();
 
         Mail::to($customer->email)->send(new ClientReminderMail(
-            garageName: $tenant?->name ?? config('app.name', 'GaragePro'),
+            garageName: $tenant?->name ?? config('app.name', 'MboaCar'),
             clientName: $customer->name,
             subjectLine: "Relance facture {$invoice->invoice_number}",
             bodyText: "Nous vous rappelons que la facture {$invoice->invoice_number} reste en attente de règlement pour un solde restant de {$formattedRemaining}.\n\nMerci de bien vouloir procéder au règlement ou de nous contacter.",

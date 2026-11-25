@@ -24,6 +24,9 @@ const props = defineProps({
 const { addToCart } = useMarketplaceCart();
 
 const quickProduct = ref(null);
+const currentYear = new Date().getFullYear();
+const yearOptions = Array.from({ length: Math.max(1, currentYear - 1960 + 1) }, (_, i) => currentYear - i);
+
 const vehicleFilter = reactive({
     vehicle_brand: props.filters?.vehicle_brand || '',
     vehicle_model: props.filters?.vehicle_model || '',
@@ -114,8 +117,11 @@ function fmt(n) {
                             <input v-model="vehicleFilter.vehicle_model" type="text" class="form-control form-control-sm" placeholder="Ex: Corolla, 308..." />
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label small fw-semibold mb-1">Année</label>
-                            <input v-model="vehicleFilter.vehicle_year" type="number" min="1950" max="2100" class="form-control form-control-sm" placeholder="2018" />
+                            <label class="form-label small fw-semibold mb-1">{{ t('layoutExtra.year') }}</label>
+                            <select v-model="vehicleFilter.vehicle_year" class="form-select form-select-sm">
+                                <option value="">{{ t('layoutExtra.allYears') }}</option>
+                                <option v-for="y in yearOptions" :key="y" :value="String(y)">{{ y }}</option>
+                            </select>
                         </div>
                         <div class="col-md-4 d-flex gap-2">
                             <button type="submit" class="btn btn-primary btn-sm px-3 fw-semibold">

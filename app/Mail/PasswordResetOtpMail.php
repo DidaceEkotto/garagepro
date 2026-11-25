@@ -28,7 +28,7 @@ class PasswordResetOtpMail extends Mailable
         public readonly string $maskedIp = '',
     ) {
         $site = PlatformSetting::siteSettings();
-        $this->siteName = ! empty($site['name']) && $site['name'] !== 'GaragePro' ? $site['name'] : 'MboaCar';
+        $this->siteName = ! empty($site['name']) && $site['name'] !== 'MboaCar' ? $site['name'] : 'MboaCar';
         $rawLogo = $site['logo_url'] ?? '/assets/images/logo.png';
         $this->logoUrl = str_starts_with($rawLogo, 'http://') || str_starts_with($rawLogo, 'https://')
             ? $rawLogo
