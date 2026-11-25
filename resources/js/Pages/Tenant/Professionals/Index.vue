@@ -3,9 +3,12 @@ import DatePickerInput from '@/Components/DatePickerInput.vue';
 import FileDropzone from '@/Components/FileDropzone.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import { useConfirm } from '@/composables/useConfirm';
+import { useLightbox } from '@/composables/useLightbox';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
+
+const { openLightbox } = useLightbox();
 
 const props = defineProps({
     professionals: Array,
@@ -180,9 +183,11 @@ function resetPassword(p) {
                                         <img
                                             v-if="p.photo_url"
                                             :src="p.photo_url"
-                                            alt=""
+                                            :alt="p.name"
                                             class="rounded-circle border"
-                                            style="width: 36px; height: 36px; object-fit: cover;"
+                                            style="width: 36px; height: 36px; object-fit: cover; cursor: zoom-in;"
+                                            title="Cliquer pour agrandir"
+                                            @click="openLightbox([p.photo_url], 0, p.name)"
                                         />
                                         <div v-else class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center fw-bold" style="width: 36px; height: 36px;">
                                             {{ p.name?.charAt(0)?.toUpperCase() }}

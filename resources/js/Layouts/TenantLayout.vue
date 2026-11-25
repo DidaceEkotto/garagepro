@@ -2,6 +2,7 @@
 import BackToTop from '@/Components/BackToTop.vue';
 import ConfirmStaticModal from '@/Components/ConfirmStaticModal.vue';
 import FileDropzone from '@/Components/FileDropzone.vue';
+import ImageLightbox from '@/Components/ImageLightbox.vue';
 import LanguageSwitcher from '@/Components/LanguageSwitcher.vue';
 import PageSkeleton from '@/Components/PageSkeleton.vue';
 import StaticModal from '@/Components/StaticModal.vue';
@@ -571,6 +572,7 @@ function resetDemo() {
         </StaticModal>
 
         <ConfirmStaticModal />
+        <ImageLightbox />
         <BackToTop />
     </div>
 </template>

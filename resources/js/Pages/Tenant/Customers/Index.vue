@@ -3,8 +3,11 @@ import DatePickerInput from '@/Components/DatePickerInput.vue';
 import FileDropzone from '@/Components/FileDropzone.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
+import { useLightbox } from '@/composables/useLightbox';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { nextTick, ref } from 'vue';
+
+const { openLightbox } = useLightbox();
 
 const props = defineProps({
     customers: Object,
@@ -128,6 +131,65 @@ function createCustomer() {
         },
     });
 }
+
+const editingCustomer = ref(null);
+const editForm = useForm({
+    _method: 'PUT',
+    name: '',
+    first_name: '',
+    gender: 'homme',
+    id_number: '',
+    phone_dial_code: props.defaultDialCode || '+237',
+    phone: '',
+    email: '',
+    type: 'particulier',
+    city: '',
+    address: '',
+    company_name: '',
+    profession: '',
+    date_of_birth: '',
+    emergency_contact: '',
+    description: '',
+    photo: null,
+    credit_limit: 0,
+});
+
+async function openEditCustomer(c) {
+    editingCustomer.value = c;
+    editForm.clearErrors();
+    editForm.name = c.name ?? '';
+    editForm.first_name = c.first_name ?? '';
+    editForm.gender = c.gender ?? 'homme';
+    editForm.id_number = c.id_number ?? '';
+    editForm.phone_dial_code = c.phone_dial_code || props.defaultDialCode || '+237';
+    editForm.phone = c.phone ?? '';
+    editForm.email = c.email ?? '';
+    editForm.type = c.type ?? 'particulier';
+    editForm.city = c.city ?? '';
+    editForm.address = c.address ?? '';
+    editForm.company_name = c.company_name ?? '';
+    editForm.profession = c.profession ?? '';
+    editForm.date_of_birth = c.date_of_birth ? String(c.date_of_birth).slice(0, 10) : '';
+    editForm.emergency_contact = c.emergency_contact ?? '';
+    editForm.description = c.description ?? '';
+    editForm.credit_limit = c.credit_limit ?? 0;
+    editForm.photo = null;
+    await nextTick();
+    window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalEditCustomer'))?.show();
+}
+
+function updateCustomer() {
+    if (!editingCustomer.value) return;
+    editForm.post(`/clients/${editingCustomer.value.id}`, {
+        forceFormData: true,
+        preserveScroll: true,
+        onSuccess: () => {
+            editingCustomer.value = null;
+            editForm.reset('photo');
+            window.bootstrap?.Modal.getInstance(document.getElementById('modalEditCustomer'))?.hide();
+        },
+    });
+}
 </script>
 
 <template>
@@ -169,11 +231,34 @@ function createCustomer() {
                     </thead>
                     <tbody>
                         <tr v-for="c in customers.data" :key="c.id">
-                            <td class="fw-semibold">{{ c.name }}</td>
+                            <td class="fw-semibold">
+                                <div class="d-flex align-items-center gap-2">
+                                    <img
+                                        v-if="c.photo_path"
+                                        :src="`/storage/${c.photo_path}`"
+                                        :alt="c.name"
+                                        class="rounded-circle border"
+                                        style="width: 34px; height: 34px; object-fit: cover; cursor: zoom-in;"
+                                        title="Cliquer pour agrandir"
+                                        @click="openLightbox([`/storage/${c.photo_path}`], 0, c.name)"
+                                    />
+                                    <div>
+                                        <div>{{ c.name }} <span v-if="c.first_name" class="fw-normal">{{ c.first_name }}</span></div>
+                                        <div v-if="c.id_number" class="text-muted fw-normal" style="font-size: 0.75rem;">CNI : {{ c.id_number }}</div>
+                                    </div>
+                                </div>
+                            </td>
                             <td>{{ c.phone }}</td>
                             <td><span class="badge bg-secondary">{{ c.type }}</span></td>
                             <td>{{ c.vehicles?.length ?? 0 }}</td>
                             <td class="text-end text-nowrap">
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-primary btn-sm me-1"
+                                    @click="openEditCustomer(c)"
+                                >
+                                    <i class="bi bi-pencil-square me-1"></i>Modifier
+                                </button>
                                 <button
                                     v-if="c.whatsapp_phone || c.phone"
                                     type="button"
@@ -304,6 +389,121 @@ function createCustomer() {
                 <div class="d-flex justify-content-end gap-2">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
                     <button type="submit" class="btn btn-primary px-4" :disabled="form.processing">Enregistrer</button>
+                </div>
+            </form>
+        </StaticModal>
+
+        <StaticModal id="modalEditCustomer" title="Modifier les informations du client" size="modal-lg">
+            <form v-if="editingCustomer" @submit.prevent="updateCustomer">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-5">
+                        <label class="form-label small">Nom <span class="text-danger">*</span></label>
+                        <input v-model="editForm.name" type="text" class="form-control" :class="{ 'is-invalid': editForm.errors.name }" required />
+                        <div v-if="editForm.errors.name" class="invalid-feedback">{{ editForm.errors.name }}</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Prénom (facultatif)</label>
+                        <input v-model="editForm.first_name" type="text" class="form-control" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">Sexe</label>
+                        <select v-model="editForm.gender" class="form-select">
+                            <option value="homme">Homme</option>
+                            <option value="femme">Femme</option>
+                            <option value="autre">Autre</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small">N° CNI ou Passeport</label>
+                        <input v-model="editForm.id_number" type="text" class="form-control" :class="{ 'is-invalid': editForm.errors.id_number }" />
+                        <div v-if="editForm.errors.id_number" class="invalid-feedback">{{ editForm.errors.id_number }}</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Téléphone WhatsApp <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <select v-model="editForm.phone_dial_code" class="form-select" style="max-width: 110px;">
+                                <option :value="defaultDialCode">{{ defaultDialCode }}</option>
+                                <option v-for="c in countries" :key="c.code" :value="c.dial_code">{{ c.code }} ({{ c.dial_code }})</option>
+                            </select>
+                            <input v-model="editForm.phone" type="tel" class="form-control" :class="{ 'is-invalid': editForm.errors.phone }" required />
+                            <div v-if="editForm.errors.phone" class="invalid-feedback">{{ editForm.errors.phone }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label small">Type</label>
+                        <select v-model="editForm.type" class="form-select">
+                            <option value="particulier">Particulier</option>
+                            <option value="entreprise">Entreprise</option>
+                            <option value="flotte">Flotte</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Ville (facultatif)</label>
+                        <input v-model="editForm.city" type="text" class="form-control" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">E-mail (facultatif)</label>
+                        <input v-model="editForm.email" type="email" class="form-control" :class="{ 'is-invalid': editForm.errors.email }" />
+                        <div v-if="editForm.errors.email" class="invalid-feedback">{{ editForm.errors.email }}</div>
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label small">Profession (facultatif)</label>
+                        <input v-model="editForm.profession" type="text" class="form-control" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Date de naissance (facultatif)</label>
+                        <DatePickerInput v-model="editForm.date_of_birth" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Contact d'urgence (facultatif)</label>
+                        <input v-model="editForm.emergency_contact" type="text" class="form-control" />
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small">Adresse / Quartier (facultatif)</label>
+                        <input v-model="editForm.address" type="text" class="form-control" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Entreprise (si pro / flotte)</label>
+                        <input v-model="editForm.company_name" type="text" class="form-control" />
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small">Description (facultatif)</label>
+                    <textarea v-model="editForm.description" rows="2" class="form-control"></textarea>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label small">Nouvelle photo de profil (facultatif)</label>
+                    <div v-if="editingCustomer.photo_path" class="mb-2 d-flex align-items-center gap-2">
+                        <img
+                            :src="`/storage/${editingCustomer.photo_path}`"
+                            :alt="editingCustomer.name"
+                            class="rounded border"
+                            style="width: 48px; height: 48px; object-fit: cover; cursor: zoom-in;"
+                            @click="openLightbox([`/storage/${editingCustomer.photo_path}`], 0, editingCustomer.name)"
+                        />
+                        <span class="small text-muted">Photo actuelle (cliquer pour agrandir)</span>
+                    </div>
+                    <FileDropzone v-model="editForm.photo" label="Glissez-déposez une nouvelle photo ou cliquez pour remplacer" />
+                    <div v-if="editForm.errors.photo" class="text-danger small mt-1">{{ editForm.errors.photo }}</div>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="submit" class="btn btn-primary px-4" :disabled="editForm.processing">Enregistrer les modifications</button>
                 </div>
             </form>
         </StaticModal>

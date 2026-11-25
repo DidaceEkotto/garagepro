@@ -2,7 +2,7 @@
 import StaticModal from '@/Components/StaticModal.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { nextTick, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 
 const props = defineProps({
     selectedDate: { type: String, required: true },
@@ -13,10 +13,31 @@ const props = defineProps({
     mechanics: { type: Array, default: () => [] },
 });
 
+const bayPalette = ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
+
+function bayColor(index) {
+    return bayPalette[index % bayPalette.length];
+}
+
 const editingAppointment = ref(null);
 const assignForm = useForm({
     bay_name: '',
     assigned_mechanic_id: '',
+});
+
+const unassignedList = computed(() =>
+    props.appointments.filter((a) => !props.bays.includes(a.bay_name))
+);
+
+const assignedCount = computed(() =>
+    props.appointments.length - unassignedList.value.length
+);
+
+const weekRangeLabel = computed(() => {
+    if (!props.weekDays.length) return '';
+    const first = props.weekDays[0]?.label ?? '';
+    const last = props.weekDays[props.weekDays.length - 1]?.label ?? '';
+    return `${first} — ${last}`;
 });
 
 function changeWeek(offsetDays) {
@@ -33,8 +54,12 @@ function slotAppointments(bay, date) {
     return props.appointments.filter((a) => a.bay_name === bay && a.date === date);
 }
 
-function unassignedAppointments() {
-    return props.appointments.filter((a) => !props.bays.includes(a.bay_name));
+function statusBadgeClass(status) {
+    const s = String(status || '').toLowerCase();
+    if (s.includes('cours') || s.includes('progress')) return 'bg-primary-subtle text-primary border border-primary-subtle';
+    if (s.includes('attente') || s.includes('wait')) return 'bg-warning-subtle text-warning-emphasis border border-warning-subtle';
+    if (s.includes('diagnostic') || s.includes('devis')) return 'bg-info-subtle text-info-emphasis border border-info-subtle';
+    return 'bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle';
 }
 
 async function openAssignModal(appt) {
@@ -63,45 +88,184 @@ function updateRoMechanic(roId, mechanicId) {
 <template>
     <Head title="Planning Atelier" />
     <TenantLayout>
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <!-- Header -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
             <div>
-                <h1 class="h4 fw-bold mb-0">Planning Visuel de l'Atelier</h1>
-                <p class="text-muted small mb-0">Vue hebdomadaire par pont / baie et répartition des mécaniciens</p>
+                <div class="d-flex align-items-center gap-2">
+                    <h1 class="h4 fw-bold mb-0">Planning Visuel de l'Atelier</h1>
+                    <span v-if="weekRangeLabel" class="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle fw-semibold">
+                        <i class="bi bi-calendar3 me-1"></i>{{ weekRangeLabel }}
+                    </span>
+                </div>
+                <p class="text-muted small mb-0 mt-1">Organisation hebdomadaire par pont / baie et affectation rapide des mécaniciens</p>
             </div>
-            <div class="btn-group btn-group-sm">
-                <button type="button" class="btn btn-outline-secondary" @click="changeWeek(-7)"><i class="bi bi-chevron-left"></i> Semaine préc.</button>
-                <button type="button" class="btn btn-outline-primary" @click="goToday">Aujourd'hui</button>
-                <button type="button" class="btn btn-outline-secondary" @click="changeWeek(7)">Semaine suiv. <i class="bi bi-chevron-right"></i></button>
+            <div class="btn-group shadow-sm">
+                <button type="button" class="btn btn-white border btn-sm px-3" @click="changeWeek(-7)">
+                    <i class="bi bi-chevron-left me-1"></i>Semaine préc.
+                </button>
+                <button type="button" class="btn btn-primary btn-sm px-3 fw-semibold" @click="goToday">
+                    <i class="bi bi-crosshair me-1"></i>Aujourd'hui
+                </button>
+                <button type="button" class="btn btn-white border btn-sm px-3" @click="changeWeek(7)">
+                    Semaine suiv.<i class="bi bi-chevron-right ms-1"></i>
+                </button>
             </div>
         </div>
 
-        <div v-if="unassignedAppointments().length" class="alert alert-warning py-2 small mb-3">
-            <strong>Rendez-vous sans pont attribué cette semaine :</strong>
-            <span v-for="a in unassignedAppointments()" :key="a.id" class="badge bg-white text-dark border ms-2" style="cursor: pointer;" @click="openAssignModal(a)">
-                {{ a.date }} {{ a.time }} — {{ a.customer?.name }} ({{ a.vehicle?.license_plate ?? a.reason }}) <i class="bi bi-pencil ms-1"></i>
-            </span>
+        <!-- KPI Summary Strip -->
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-xl-3">
+                <div class="card border-0 shadow-sm h-100 planning-kpi-card">
+                    <div class="card-body d-flex align-items-center gap-3 py-3">
+                        <div class="planning-kpi-icon bg-primary-subtle text-primary">
+                            <i class="bi bi-calendar-check-fill"></i>
+                        </div>
+                        <div>
+                            <div class="text-muted small">RDV cette semaine</div>
+                            <div class="h4 fw-bold mb-0">{{ appointments.length }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-xl-3">
+                <div class="card border-0 shadow-sm h-100 planning-kpi-card">
+                    <div class="card-body d-flex align-items-center gap-3 py-3">
+                        <div class="planning-kpi-icon bg-success-subtle text-success">
+                            <i class="bi bi-grid-3x3-gap-fill"></i>
+                        </div>
+                        <div>
+                            <div class="text-muted small">Affectés sur pont</div>
+                            <div class="h4 fw-bold mb-0">{{ assignedCount }} <span class="fs-6 fw-normal text-muted">/ {{ bays.length }} ponts</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-xl-3">
+                <div class="card border-0 shadow-sm h-100 planning-kpi-card">
+                    <div class="card-body d-flex align-items-center gap-3 py-3">
+                        <div class="planning-kpi-icon" :class="unassignedList.length ? 'bg-warning-subtle text-warning-emphasis' : 'bg-light text-muted'">
+                            <i class="bi bi-exclamation-circle-fill"></i>
+                        </div>
+                        <div>
+                            <div class="text-muted small">RDV sans pont</div>
+                            <div class="h4 fw-bold mb-0">{{ unassignedList.length }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-xl-3">
+                <div class="card border-0 shadow-sm h-100 planning-kpi-card">
+                    <div class="card-body d-flex align-items-center gap-3 py-3">
+                        <div class="planning-kpi-icon bg-info-subtle text-info-emphasis">
+                            <i class="bi bi-wrench-adjustable-circle-fill"></i>
+                        </div>
+                        <div>
+                            <div class="text-muted small">OR en cours</div>
+                            <div class="h4 fw-bold mb-0">{{ repairOrders.length }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="card border-0 shadow-sm mb-4">
+        <!-- Unassigned Appointments Banner -->
+        <div v-if="unassignedList.length" class="card border-0 shadow-sm mb-4 border-start border-4 border-warning bg-warning-subtle bg-opacity-25">
+            <div class="card-body py-3">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <i class="bi bi-exclamation-triangle-fill text-warning"></i>
+                    <strong class="small">Rendez-vous sans pont attribué cette semaine ({{ unassignedList.length }}) — cliquez pour affecter :</strong>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <button
+                        v-for="a in unassignedList"
+                        :key="a.id"
+                        type="button"
+                        class="btn btn-white btn-sm border shadow-sm d-inline-flex align-items-center gap-2 text-start planning-chip"
+                        @click="openAssignModal(a)"
+                    >
+                        <span class="badge bg-warning text-dark">{{ a.date }} • {{ a.time }}</span>
+                        <span class="fw-semibold">{{ a.customer?.name }}</span>
+                        <span class="text-muted small">{{ a.vehicle?.license_plate ?? a.reason }}</span>
+                        <i class="bi bi-sliders text-primary"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Weekly Bay Schedule Grid -->
+        <div class="card border-0 shadow-sm mb-4 overflow-hidden">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
+                <div class="fw-bold small d-flex align-items-center gap-2">
+                    <i class="bi bi-kanban text-primary"></i>
+                    <span>Grille hebdomadaire par pont / baie</span>
+                </div>
+                <span class="text-muted" style="font-size: 0.78rem;">
+                    <i class="bi bi-hand-index-thumb me-1"></i>Cliquez sur un créneau pour modifier le pont ou le mécanicien
+                </span>
+            </div>
             <div class="table-responsive">
-                <table class="table table-bordered mb-0 align-top small">
-                    <thead class="table-light">
+                <table class="table table-bordered mb-0 align-top planning-grid-table">
+                    <thead>
                         <tr>
-                            <th style="width: 140px;">Pont / Poste</th>
-                            <th v-for="day in weekDays" :key="day.date" :class="{ 'table-primary': day.isToday }">
-                                {{ day.label }}
+                            <th class="bg-light text-uppercase text-muted small fw-bold py-3 px-3" style="width: 155px;">
+                                Pont / Poste
+                            </th>
+                            <th
+                                v-for="day in weekDays"
+                                :key="day.date"
+                                class="py-3 px-2 text-center"
+                                :class="day.isToday ? 'planning-today-th' : 'bg-light'"
+                                style="min-width: 155px;"
+                            >
+                                <div class="d-flex align-items-center justify-content-center gap-1">
+                                    <span class="fw-bold small">{{ day.label }}</span>
+                                    <span v-if="day.isToday" class="badge rounded-pill bg-primary" style="font-size: 0.65rem;">Aujourd'hui</span>
+                                </div>
                             </th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="bay in bays" :key="bay">
-                            <td class="fw-bold bg-light">{{ bay }}</td>
-                            <td v-for="day in weekDays" :key="day.date" style="min-width: 135px;">
-                                <div v-for="a in slotAppointments(bay, day.date)" :key="a.id" class="p-2 mb-1 rounded border bg-primary-subtle" style="cursor: pointer;" @click="openAssignModal(a)">
-                                    <div class="fw-bold">{{ a.time }} • {{ a.customer?.name }}</div>
-                                    <div class="text-muted" style="font-size: 0.72rem;">{{ a.vehicle?.license_plate ?? a.reason }}</div>
-                                    <div v-if="a.mechanic" class="badge bg-white text-dark border mt-1">{{ a.mechanic.name }}</div>
+                        <tr v-for="(bay, bayIdx) in bays" :key="bay">
+                            <td class="bg-light bg-opacity-50 p-3 align-middle">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="planning-bay-dot" :style="{ backgroundColor: bayColor(bayIdx) }"></span>
+                                    <span class="fw-bold small text-dark">{{ bay }}</span>
                                 </div>
+                            </td>
+                            <td
+                                v-for="day in weekDays"
+                                :key="day.date"
+                                class="p-2"
+                                :class="{ 'planning-today-td': day.isToday }"
+                            >
+                                <div v-if="slotAppointments(bay, day.date).length" class="d-flex flex-column gap-2">
+                                    <div
+                                        v-for="a in slotAppointments(bay, day.date)"
+                                        :key="a.id"
+                                        class="planning-appt-card"
+                                        :style="{ borderLeftColor: bayColor(bayIdx) }"
+                                        @click="openAssignModal(a)"
+                                    >
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <span class="badge bg-dark bg-opacity-75 text-white" style="font-size: 0.68rem;">
+                                                <i class="bi bi-clock me-1"></i>{{ a.time }}
+                                            </span>
+                                            <i class="bi bi-pencil-square text-muted" style="font-size: 0.72rem;"></i>
+                                        </div>
+                                        <div class="fw-bold text-dark text-truncate" style="font-size: 0.82rem;">
+                                            {{ a.customer?.name }}
+                                        </div>
+                                        <div class="text-muted text-truncate mt-1" style="font-size: 0.73rem;">
+                                            <i class="bi bi-car-front me-1"></i>{{ a.vehicle?.license_plate ?? a.reason }}
+                                        </div>
+                                        <div v-if="a.mechanic" class="mt-2 pt-1 border-top d-flex align-items-center gap-1" style="font-size: 0.72rem;">
+                                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle fw-medium text-truncate">
+                                                <i class="bi bi-person-gear me-1"></i>{{ a.mechanic.name }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div v-else class="planning-empty-slot">—</div>
                             </td>
                         </tr>
                     </tbody>
@@ -109,30 +273,53 @@ function updateRoMechanic(roId, mechanicId) {
             </div>
         </div>
 
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white py-2 fw-bold small">
-                <i class="bi bi-wrench-adjustable me-1 text-primary"></i>Ordres de réparation en cours — Affectation rapide des mécaniciens
+        <!-- Active Repair Orders -->
+        <div class="card border-0 shadow-sm overflow-hidden">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
+                <div class="fw-bold small d-flex align-items-center gap-2">
+                    <i class="bi bi-wrench-adjustable text-primary"></i>
+                    <span>Ordres de réparation en cours — Affectation rapide des mécaniciens</span>
+                </div>
+                <span class="badge bg-light text-dark border">{{ repairOrders.length }} actif(s)</span>
             </div>
             <div class="table-responsive">
-                <table class="table table-sm table-hover mb-0 align-middle small">
+                <table class="table table-hover mb-0 align-middle small">
                     <thead class="table-light">
                         <tr>
-                            <th>N° OR</th>
-                            <th>Client / Véhicule</th>
+                            <th class="ps-3">N° OR</th>
+                            <th>Client &amp; Véhicule</th>
                             <th>Statut</th>
-                            <th>Mécanicien affecté</th>
+                            <th class="pe-3" style="width: 260px;">Mécanicien affecté</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-if="!repairOrders.length">
-                            <td colspan="4" class="text-center text-muted py-3">Aucun ordre de réparation actif.</td>
+                            <td colspan="4" class="text-center text-muted py-4">
+                                <i class="bi bi-check-circle text-success fs-5 d-block mb-1"></i>
+                                Aucun ordre de réparation actif pour le moment.
+                            </td>
                         </tr>
                         <tr v-for="ro in repairOrders" :key="ro.id">
-                            <td class="fw-bold">{{ ro.order_number }}</td>
-                            <td>{{ ro.customer?.name }} — {{ ro.vehicle?.license_plate }}</td>
-                            <td><span class="badge bg-info text-dark">{{ ro.status }}</span></td>
-                            <td style="max-width: 240px;">
-                                <select :value="ro.assigned_mechanic_id ?? ''" class="form-select form-select-sm" @change="updateRoMechanic(ro.id, $event.target.value)">
+                            <td class="ps-3 fw-bold text-primary">{{ ro.order_number }}</td>
+                            <td>
+                                <div class="fw-semibold text-dark">{{ ro.customer?.name }}</div>
+                                <div class="text-muted" style="font-size: 0.76rem;">
+                                    <i class="bi bi-car-front me-1"></i>
+                                    {{ ro.vehicle?.license_plate }}
+                                    <span v-if="ro.vehicle?.brand"> — {{ ro.vehicle.brand }} {{ ro.vehicle.model }}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge rounded-pill px-2 py-1" :class="statusBadgeClass(ro.status)">
+                                    {{ ro.status }}
+                                </span>
+                            </td>
+                            <td class="pe-3">
+                                <select
+                                    :value="ro.assigned_mechanic_id ?? ''"
+                                    class="form-select form-select-sm"
+                                    @change="updateRoMechanic(ro.id, $event.target.value)"
+                                >
                                     <option value="">-- Non affecté --</option>
                                     <option v-for="m in mechanics" :key="m.id" :value="m.id">{{ m.name }}</option>
                                 </select>
@@ -143,11 +330,16 @@ function updateRoMechanic(roId, mechanicId) {
             </div>
         </div>
 
+        <!-- Assign Slot Modal -->
         <StaticModal id="modalAssignSlot" title="Affecter un pont et un mécanicien">
             <form v-if="editingAppointment" @submit.prevent="submitAssign">
-                <p class="small text-muted mb-3">
-                    Client : <strong>{{ editingAppointment.customer?.name }}</strong> ({{ editingAppointment.date }} à {{ editingAppointment.time }})
-                </p>
+                <div class="p-3 rounded bg-light border mb-3 small">
+                    <div class="fw-bold text-dark">{{ editingAppointment.customer?.name }}</div>
+                    <div class="text-muted mt-1">
+                        <i class="bi bi-calendar-event me-1"></i>{{ editingAppointment.date }} à {{ editingAppointment.time }}
+                        <span v-if="editingAppointment.vehicle?.license_plate"> • <i class="bi bi-car-front me-1"></i>{{ editingAppointment.vehicle.license_plate }}</span>
+                    </div>
+                </div>
                 <div class="mb-3">
                     <label class="form-label small fw-semibold">Pont / Baie</label>
                     <select v-model="assignForm.bay_name" class="form-select">
@@ -164,9 +356,94 @@ function updateRoMechanic(roId, mechanicId) {
                 </div>
                 <div class="d-flex justify-content-end gap-2">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
-                    <button type="submit" class="btn btn-primary" :disabled="assignForm.processing">Enregistrer</button>
+                    <button type="submit" class="btn btn-primary px-4" :disabled="assignForm.processing">
+                        <i class="bi bi-check2 me-1"></i>Enregistrer
+                    </button>
                 </div>
             </form>
         </StaticModal>
     </TenantLayout>
 </template>
+
+<style scoped>
+.planning-kpi-card {
+    border-radius: 0.75rem;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.planning-kpi-card:hover {
+    transform: translateY(-2px);
+}
+
+.planning-kpi-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.planning-chip {
+    background-color: #fff;
+    border-radius: 0.5rem;
+    transition: transform 0.12s ease, border-color 0.12s ease;
+}
+
+.planning-chip:hover {
+    transform: translateY(-1px);
+    border-color: #2563eb !important;
+}
+
+.planning-grid-table th,
+.planning-grid-table td {
+    border-color: #e5e7eb;
+}
+
+.planning-today-th {
+    background-color: #eff6ff !important;
+    color: #1d4ed8;
+    border-bottom: 2px solid #2563eb !important;
+}
+
+.planning-today-td {
+    background-color: rgba(239, 246, 255, 0.45);
+}
+
+.planning-bay-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    flex-shrink: 0;
+}
+
+.planning-appt-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #2563eb;
+    border-radius: 0.5rem;
+    padding: 0.55rem 0.65rem;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+    transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
+}
+
+.planning-appt-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.09);
+    border-color: #cbd5e1;
+}
+
+.planning-empty-slot {
+    min-height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #cbd5e1;
+    font-size: 0.85rem;
+    border: 1px dashed #e2e8f0;
+    border-radius: 0.45rem;
+}
+</style>

@@ -1,8 +1,11 @@
 <script setup>
 import FileDropzone from '@/Components/FileDropzone.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
+import { useLightbox } from '@/composables/useLightbox';
 import { Head, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
+
+const { openLightbox } = useLightbox();
 
 const props = defineProps({
     profile: Object,
@@ -60,7 +63,9 @@ function savePassword() {
                                     :src="profile.photo_url"
                                     alt="Photo de profil"
                                     class="rounded-circle border"
-                                    style="width: 56px; height: 56px; object-fit: cover;"
+                                    style="width: 56px; height: 56px; object-fit: cover; cursor: zoom-in;"
+                                    title="Cliquer pour agrandir"
+                                    @click="openLightbox([profile.photo_url], 0, profile?.name || 'Photo de profil')"
                                 />
                                 <div class="small">
                                     <div class="d-flex flex-wrap gap-1 mb-1">

@@ -3,13 +3,16 @@
 namespace Tests\Feature\Workflow;
 
 use App\Models\Agency;
+use App\Models\Customer;
 use App\Models\Employee;
 use App\Models\EmployeeAttendance;
 use App\Models\Payslip;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\HrAttendanceAlertService;
 use App\Services\TenantRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -133,5 +136,129 @@ class HrPayrollTest extends TestCase
         $this->actingAs($user, 'web')->get("http://rhpro.mboacar.com/rh/bulletins/{$payslip->id}/pdf")->assertOk();
         $this->actingAs($user, 'web')->post("http://rhpro.mboacar.com/rh/bulletins/{$payslip->id}/whatsapp")->assertSessionHas('success');
         $this->assertNotNull($payslip->fresh()->whatsapp_sent_at);
+    }
+
+    public function test_missing_attendance_sends_automatic_whatsapp_alert_to_account_owner_once_per_workday(): void
+    {
+        config([
+            'services.green_api.url' => 'https://api.green-api.com',
+            'services.green_api.id_instance' => '123456',
+            'services.green_api.api_token_instance' => 'token-secret',
+        ]);
+
+        Http::fake(['*' => Http::response(['idMessage' => 'ok'], 200)]);
+        Cache::flush();
+
+        $todayKey = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][now()->dayOfWeek];
+
+        $tenant = Tenant::create([
+            'name' => 'Garage Alerte RH',
+            'slug' => 'alerterh',
+            'email' => 'owner@alerterh.cm',
+            'phone' => '+237690001122',
+            'status' => Tenant::STATUS_ACTIVE,
+            'settings' => [
+                'work_days' => [$todayKey],
+                'work_start_time' => '08:00',
+                'work_end_time' => '17:00',
+            ],
+        ]);
+
+        $agency = Agency::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Atelier Principal',
+            'is_main' => true,
+        ]);
+
+        User::create([
+            'tenant_id' => $tenant->id,
+            'default_agency_id' => $agency->id,
+            'name' => 'Fondateur Garage',
+            'email' => 'owner@alerterh.cm',
+            'phone' => '+237699112233',
+            'password' => 'Password123!',
+            'is_active' => true,
+        ]);
+
+        Employee::create([
+            'tenant_id' => $tenant->id,
+            'agency_id' => $agency->id,
+            'full_name' => 'Paul Mécanicien',
+            'role_title' => 'Mécanicien',
+            'base_salary' => 120000,
+            'is_active' => true,
+        ]);
+
+        $service = app(HrAttendanceAlertService::class);
+
+        // Premier appel : aucune fiche remplie -> 1 alerte envoyée au fondateur
+        $sentFirst = $service->sendMissingAttendanceAlerts(true);
+        $this->assertSame(1, $sentFirst);
+
+        // Deuxième appel le même jour : ne renvoie pas (cache journalier)
+        $sentSecond = $service->sendMissingAttendanceAlerts(true);
+        $this->assertSame(0, $sentSecond);
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_customer_can_be_updated_from_clients_route(): void
+    {
+        $tenant = Tenant::create([
+            'name' => 'Garage Client Edit',
+            'slug' => 'clientedit',
+            'email' => 'admin@clientedit.cm',
+            'status' => Tenant::STATUS_ACTIVE,
+        ]);
+
+        $agency = Agency::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Agence Principale',
+            'is_main' => true,
+        ]);
+
+        app(TenantRoleService::class)->provisionForTenant($tenant);
+        setPermissionsTeamId($tenant->id);
+
+        $user = User::create([
+            'tenant_id' => $tenant->id,
+            'default_agency_id' => $agency->id,
+            'name' => 'Gérant',
+            'email' => 'admin@clientedit.cm',
+            'password' => 'Password123!',
+            'is_active' => true,
+        ]);
+        $user->assignRole('gerant');
+
+        $customer = Customer::create([
+            'tenant_id' => $tenant->id,
+            'agency_id' => $agency->id,
+            'name' => 'Ancien Nom',
+            'phone' => '+237 690000001',
+            'type' => 'particulier',
+        ]);
+
+        $this->actingAs($user, 'web')
+            ->put("http://clientedit.mboacar.com/clients/{$customer->id}", [
+                'name' => 'Nouveau Nom',
+                'first_name' => 'Jean',
+                'gender' => 'homme',
+                'id_number' => 'CM99887766',
+                'phone_dial_code' => '+237',
+                'phone' => '699887766',
+                'email' => 'jean@example.com',
+                'type' => 'entreprise',
+                'city' => 'Douala',
+                'company_name' => 'Transport SARL',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $customer->refresh();
+        $this->assertSame('Nouveau Nom', $customer->name);
+        $this->assertSame('Jean', $customer->first_name);
+        $this->assertSame('entreprise', $customer->type);
+        $this->assertSame('Douala', $customer->city);
+        $this->assertSame('+237 699887766', $customer->phone);
     }
 }

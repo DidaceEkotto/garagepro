@@ -3,9 +3,12 @@ import FileDropzone from '@/Components/FileDropzone.vue';
 import RichTextEditor from '@/Components/RichTextEditor.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import { useConfirm } from '@/composables/useConfirm';
+import { useLightbox } from '@/composables/useLightbox';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+
+const { openLightbox } = useLightbox();
 
 const props = defineProps({
     products: Object,
@@ -113,9 +116,11 @@ function deleteProduct(id) {
                                     <img
                                         v-if="p.image_urls?.length"
                                         :src="p.image_urls[0]"
-                                        alt=""
+                                        :alt="p.title"
                                         class="rounded border"
-                                        style="width: 44px; height: 44px; object-fit: cover;"
+                                        style="width: 44px; height: 44px; object-fit: cover; cursor: zoom-in;"
+                                        title="Cliquer pour voir les photos"
+                                        @click="openLightbox(p.image_urls, 0, p.title)"
                                     />
                                     <div v-else class="bg-light border rounded d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
                                         <i class="bi bi-image text-muted"></i>

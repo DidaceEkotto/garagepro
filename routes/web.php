@@ -202,6 +202,7 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
         ->middleware('throttle:search')
         ->name('tenant.customers.lookup_global');
     Route::post('/clients', [CustomerController::class, 'store'])->name('tenant.customers.store');
+    Route::put('/clients/{customer}', [CustomerController::class, 'update'])->name('tenant.customers.update');
     Route::post('/clients/{customer}/relancer-whatsapp', [CustomerController::class, 'remindWhatsapp'])->name('tenant.customers.remind_whatsapp');
     Route::get('/clients/{customer}', [CustomerController::class, 'show'])->name('tenant.customers.show');
     Route::post('/clients/{customer}/relancer', [CustomerController::class, 'remind'])->name('tenant.customers.remind');

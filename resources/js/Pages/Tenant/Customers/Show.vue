@@ -1,7 +1,10 @@
 <script setup>
 import DatePickerInput from '@/Components/DatePickerInput.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
+import { useLightbox } from '@/composables/useLightbox';
 import { Head, Link, useForm } from '@inertiajs/vue3';
+
+const { openLightbox } = useLightbox();
 
 const props = defineProps({
     customer: Object,
@@ -42,7 +45,9 @@ function addVehicle() {
                     :src="`/storage/${customer.photo_path}`"
                     :alt="customer.name"
                     class="rounded-circle border shadow-sm"
-                    style="width: 56px; height: 56px; object-fit: cover;"
+                    style="width: 56px; height: 56px; object-fit: cover; cursor: zoom-in;"
+                    title="Cliquer pour agrandir"
+                    @click="openLightbox([`/storage/${customer.photo_path}`], 0, customer.name)"
                 />
                 <div>
                     <h1 class="h4 fw-bold mb-0">

@@ -2,7 +2,10 @@
 import FileDropzone from '@/Components/FileDropzone.vue';
 import TimePickerInput from '@/Components/TimePickerInput.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
+import { useLightbox } from '@/composables/useLightbox';
 import { Head, useForm } from '@inertiajs/vue3';
+
+const { openLightbox } = useLightbox();
 
 const props = defineProps({
     space: Object,
@@ -164,7 +167,9 @@ function saveSettings() {
                             :src="space.logo_url"
                             alt="Logo du garage"
                             class="img-fluid rounded border p-2 bg-white"
-                            style="max-height: 140px;"
+                            style="max-height: 140px; cursor: zoom-in;"
+                            title="Cliquer pour agrandir"
+                            @click="openLightbox([space.logo_url], 0, space?.name || 'Logo')"
                         />
                         <div v-else class="text-muted small py-4 border rounded bg-light">
                             Aucun logo téléversé pour le moment.

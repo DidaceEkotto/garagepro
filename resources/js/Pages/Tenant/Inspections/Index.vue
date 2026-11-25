@@ -3,6 +3,7 @@ import FileDropzone from '@/Components/FileDropzone.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { useConfirm } from '@/Composables/useConfirm';
+import { useLightbox } from '@/composables/useLightbox';
 import { Head, router, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -13,6 +14,7 @@ const props = defineProps({
 });
 
 const { confirm } = useConfirm();
+const { openLightbox } = useLightbox();
 
 const defaultChecklist = () => [
     { category: 'Freinage', item: 'Plaquettes & Disques avant/arrière', state: 'ok', note: '' },
@@ -116,9 +118,17 @@ function countState(checklist, state) {
                         <p v-if="insp.summary_notes" class="small text-muted mb-2">{{ insp.summary_notes }}</p>
 
                         <div v-if="insp.photo_urls?.length" class="d-flex flex-wrap gap-2 mb-3">
-                            <a v-for="(url, i) in insp.photo_urls" :key="i" :href="url" target="_blank" rel="noopener">
+                            <button
+                                v-for="(url, i) in insp.photo_urls"
+                                :key="i"
+                                type="button"
+                                class="p-0 border-0 bg-transparent"
+                                style="cursor: zoom-in;"
+                                title="Cliquer pour agrandir"
+                                @click="openLightbox(insp.photo_urls, i, `Inspection — ${insp.vehicle?.license_plate ?? ''}`)"
+                            >
                                 <img :src="url" alt="Photo inspection" class="rounded border" style="width: 64px; height: 64px; object-fit: cover;" />
-                            </a>
+                            </button>
                         </div>
                     </div>
                     <div class="card-footer bg-white d-flex justify-content-between align-items-center py-2">

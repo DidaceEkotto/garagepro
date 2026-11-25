@@ -16,6 +16,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -127,6 +128,69 @@ class CustomerController extends Controller
         AuditLog::record('customer.created', subject: $customer, actor: $request->user('web'), tenantId: $tenantContext->id(), request: $request);
 
         return back()->with('success', "Client « {$customer->name} » enregistré.");
+    }
+
+    public function update(Request $request, Customer $customer, TenantContext $tenantContext): RedirectResponse
+    {
+        $this->authorize('update', $customer);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'min:2', 'max:150'],
+            'first_name' => ['nullable', 'string', 'max:100'],
+            'gender' => ['nullable', Rule::in(['homme', 'femme', 'autre'])],
+            'id_number' => ['nullable', 'string', 'min:3', 'max:100'],
+            'phone_dial_code' => ['nullable', 'string', 'max:15'],
+            'phone' => ['required', 'string', 'min:6', 'max:50'],
+            'email' => ['nullable', 'email', 'max:150'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'city' => ['nullable', 'string', 'max:100'],
+            'type' => ['required', Rule::in(['particulier', 'entreprise', 'flotte'])],
+            'company_name' => ['nullable', 'string', 'max:150'],
+            'tax_id' => ['nullable', 'string', 'max:80'],
+            'credit_limit' => ['nullable', 'integer', 'min:0'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'description' => ['nullable', 'string', 'max:2000'],
+            'profession' => ['nullable', 'string', 'max:120'],
+            'date_of_birth' => ['nullable', 'date'],
+            'emergency_contact' => ['nullable', 'string', 'max:150'],
+            'photo' => ['nullable', 'image', 'max:4096'],
+        ]);
+
+        unset($data['photo']);
+
+        $tenant = $tenantContext->getTenant();
+        $dialCode = trim((string) ($data['phone_dial_code'] ?? ''));
+        if ($dialCode === '') {
+            $dialCode = Country::where('code', $tenant?->country ?: 'CM')->value('dial_code') ?? '+237';
+        }
+        $data['phone_dial_code'] = $dialCode;
+
+        $rawPhone = trim((string) $data['phone']);
+        $dialDigits = preg_replace('/\D+/', '', $dialCode);
+        $phoneDigits = preg_replace('/\D+/', '', $rawPhone);
+        if (str_starts_with($rawPhone, '+')) {
+            $formattedPhone = $rawPhone;
+        } elseif ($dialDigits !== '' && str_starts_with($phoneDigits, $dialDigits)) {
+            $formattedPhone = '+'.$phoneDigits;
+        } else {
+            $formattedPhone = $dialCode.' '.$phoneDigits;
+        }
+
+        $data['phone'] = $formattedPhone;
+        $data['whatsapp_phone'] = $formattedPhone;
+
+        if ($request->hasFile('photo')) {
+            if ($customer->photo_path && Storage::disk('public')->exists($customer->photo_path)) {
+                Storage::disk('public')->delete($customer->photo_path);
+            }
+            $data['photo_path'] = Storage::disk('public')->putFile('images/customers', $request->file('photo'));
+        }
+
+        $customer->update($data);
+
+        AuditLog::record('customer.updated', subject: $customer, actor: $request->user('web'), tenantId: $tenantContext->id(), request: $request);
+
+        return back()->with('success', "Client « {$customer->name} » mis à jour avec succès.");
     }
 
     public function show(Customer $customer): Response

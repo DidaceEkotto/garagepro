@@ -2,9 +2,12 @@
 import FileDropzone from '@/Components/FileDropzone.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import { useConfirm } from '@/composables/useConfirm';
+import { useLightbox } from '@/composables/useLightbox';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+
+const { openLightbox } = useLightbox();
 
 const props = defineProps({
     receptions: Object,
@@ -418,9 +421,17 @@ function returnCourtesy(id) {
                 <div v-if="viewingReception.photo_urls?.length" class="mb-3">
                     <strong class="d-block mb-2">Photos d'état des lieux ({{ viewingReception.photo_urls.length }}) :</strong>
                     <div class="d-flex flex-wrap gap-2">
-                        <a v-for="(url, idx) in viewingReception.photo_urls" :key="idx" :href="url" target="_blank" rel="noopener">
-                            <img :src="url" alt="Photo réception" class="rounded border" style="width: 96px; height: 96px; object-fit: cover;" />
-                        </a>
+                        <button
+                            v-for="(url, idx) in viewingReception.photo_urls"
+                            :key="idx"
+                            type="button"
+                            class="p-0 border-0 bg-transparent position-relative"
+                            style="cursor: zoom-in;"
+                            title="Cliquer pour ouvrir en plein écran"
+                            @click="openLightbox(viewingReception.photo_urls, idx, `Réception — ${viewingReception.vehicle?.license_plate ?? ''}`)"
+                        >
+                            <img :src="url" alt="Photo réception" class="rounded border shadow-sm" style="width: 96px; height: 96px; object-fit: cover;" />
+                        </button>
                     </div>
                 </div>
 

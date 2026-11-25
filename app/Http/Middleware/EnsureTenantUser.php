@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Services\AppointmentReminderService;
+use App\Services\HrAttendanceAlertService;
 use App\Services\MaintenanceReminderService;
 use App\Services\TenantContext;
 use Closure;
@@ -40,6 +41,7 @@ class EnsureTenantUser
         app()->terminating(function () {
             app(AppointmentReminderService::class)->triggerAutomaticCheck();
             app(MaintenanceReminderService::class)->triggerAutomaticCheck();
+            app(HrAttendanceAlertService::class)->triggerAutomaticCheck();
         });
 
         return $next($request);
