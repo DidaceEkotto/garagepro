@@ -37,6 +37,9 @@ body {
     border-radius: 0.5rem !important;
     box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.12) !important;
 }
+.select2-container--open {
+    z-index: 2050 !important;
+}
 
 /* Système global de Skeleton Loaders MboaCar */
 @keyframes mboacarShimmer {

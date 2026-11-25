@@ -33,7 +33,10 @@ import('select2/dist/js/select2.full.min.js')
 function initSelect2() {
     if (!window.$ || !window.$.fn || !window.$.fn.select2) return;
 
-    document.querySelectorAll('select:not(.no-select2)').forEach((el) => {
+    document.querySelectorAll('select:not(.no-select2):not(.ui-datepicker-month):not(.ui-datepicker-year)').forEach((el) => {
+        if (el.closest('.ui-datepicker')) {
+            return;
+        }
         const $el = window.$(el);
         if ($el.data('select2')) {
             return;

@@ -86,7 +86,7 @@ class CustomerPortalController extends Controller
                 'vehicle_plate' => $ro->vehicle?->license_plate,
                 'status' => $ro->status,
                 'public_token' => $ro->public_token,
-                'opened_at' => $ro->opened_at?->format('d/m/Y'),
+                'opened_at' => $ro->created_at?->format('d/m/Y'),
             ]);
         })->values();
 

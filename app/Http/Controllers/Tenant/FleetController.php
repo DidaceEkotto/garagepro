@@ -25,7 +25,7 @@ class FleetController extends Controller
         $fleets = Customer::with([
             'vehicles:id,customer_id,license_plate,brand,model,mileage',
             'invoices:id,customer_id,vehicle_id,total_ttc,paid_amount,status,is_deferred_monthly,issued_at',
-            'repairOrders:id,customer_id,vehicle_id,order_number,status,opened_at',
+            'repairOrders:id,customer_id,vehicle_id,order_number,status,created_at',
         ])
             ->where(function ($q) {
                 $q->where('type', 'entreprise')

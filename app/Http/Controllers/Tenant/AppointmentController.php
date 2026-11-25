@@ -31,8 +31,7 @@ class AppointmentController extends Controller
         $defaultDialCode = Country::where('code', $tenant?->country ?: 'CM')->value('dial_code') ?? '+237';
 
         $appointments = Appointment::with(['customer', 'vehicle', 'mechanic', 'agency'])
-            ->orderByRaw('scheduled_at IS NULL ASC')
-            ->orderBy('scheduled_at')
+            ->latest('id')
             ->paginate(30);
 
         // Expirer automatiquement les liens actifs dépassant 24h

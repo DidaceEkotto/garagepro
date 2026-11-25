@@ -1,9 +1,9 @@
 <script setup>
+import FileDropzone from '@/Components/FileDropzone.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { useConfirm } from '@/Composables/useConfirm';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
 
 const props = defineProps({
     inspections: { type: Array, default: () => [] },
@@ -34,22 +34,13 @@ const form = useForm({
     summary_notes: '',
 });
 
-const photoPreviewCount = ref(0);
-
-function onPhotosChange(e) {
-    const files = Array.from(e.target.files || []);
-    form.photos = files;
-    photoPreviewCount.value = files.length;
-}
-
 function submitInspection() {
     form.post('/inspections', {
         forceFormData: true,
         onSuccess: () => {
             form.reset('vehicle_id', 'repair_order_id', 'photos', 'summary_notes');
             form.checklist = defaultChecklist();
-            photoPreviewCount.value = 0;
-            window.bootstrap?.Modal.getInstance(document.getElementById('modalNewInspection'))?.hide();
+            window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalNewInspection'))?.hide();
         },
     });
 }
@@ -186,16 +177,14 @@ function countState(checklist, state) {
                     </div>
                 </div>
 
-                <div class="row g-2 mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Photos (max 6)</label>
-                        <input type="file" accept="image/*" multiple class="form-control form-control-sm" @change="onPhotosChange" />
-                        <small v-if="photoPreviewCount" class="text-success">{{ photoPreviewCount }} photo(s) sélectionnée(s)</small>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Conclusion générale</label>
-                        <input v-model="form.summary_notes" type="text" class="form-control form-control-sm" placeholder="Résumé pour le client..." />
-                    </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Photos (max 6)</label>
+                    <FileDropzone v-model="form.photos" :multiple="true" label="Glissez-déposez jusqu'à 6 photos ici ou cliquez" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Conclusion générale</label>
+                    <textarea v-model="form.summary_notes" rows="3" class="form-control form-control-sm" placeholder="Résumé détaillé des constats pour le client..."></textarea>
                 </div>
 
                 <div class="d-flex justify-content-end gap-2">

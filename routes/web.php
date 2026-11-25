@@ -210,6 +210,7 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
         ->middleware('throttle:search')
         ->name('tenant.vehicles.index');
     Route::post('/vehicules', [VehicleController::class, 'store'])->name('tenant.vehicles.store');
+    Route::put('/vehicules/{vehicle}', [VehicleController::class, 'update'])->name('tenant.vehicles.update');
     Route::get('/vehicules/{vehicle}', [VehicleController::class, 'show'])->name('tenant.vehicles.show');
 
     // Rendez-vous & File sans rendez-vous

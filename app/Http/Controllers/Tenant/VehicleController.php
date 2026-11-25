@@ -60,6 +60,38 @@ class VehicleController extends Controller
         return back()->with('success', "Véhicule {$vehicle->license_plate} ajouté.");
     }
 
+    public function update(Request $request, Vehicle $vehicle, TenantContext $tenantContext): RedirectResponse
+    {
+        $this->authorize('update', $vehicle);
+        $tenantId = $tenantContext->id();
+
+        $validated = $request->validate([
+            'customer_id' => ['required', 'integer', \Illuminate\Validation\Rule::exists('customers', 'id')->where('tenant_id', $tenantId)],
+            'license_plate' => ['required', 'string', 'max:30', \Illuminate\Validation\Rule::unique('vehicles', 'license_plate')->where('tenant_id', $tenantId)->ignore($vehicle->id)],
+            'brand' => ['required', 'string', 'max:80'],
+            'model' => ['required', 'string', 'max:80'],
+            'year' => ['nullable', 'integer', 'min:1950', 'max:2100'],
+            'vin' => ['nullable', 'string', 'max:60'],
+            'color' => ['nullable', 'string', 'max:50'],
+            'fuel_type' => ['nullable', 'string', 'max:40'],
+            'transmission' => ['nullable', 'string', 'max:40'],
+            'mileage' => ['nullable', 'integer', 'min:0'],
+            'first_registration_date' => ['nullable', 'date'],
+            'next_service_date' => ['nullable', 'date'],
+            'next_service_mileage' => ['nullable', 'integer', 'min:0'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $vehicle->update([
+            ...$validated,
+            'license_plate' => strtoupper(trim($validated['license_plate'])),
+        ]);
+
+        AuditLog::record('vehicle.updated', subject: $vehicle, actor: $request->user('web'), tenantId: $tenantId, request: $request);
+
+        return back()->with('success', "Véhicule {$vehicle->license_plate} mis à jour.");
+    }
+
     public function show(Vehicle $vehicle): Response
     {
         $this->authorize('view', $vehicle);

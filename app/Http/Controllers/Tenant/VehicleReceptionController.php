@@ -21,13 +21,23 @@ use Inertia\Response;
 
 class VehicleReceptionController extends Controller
 {
-    public function index(): Response
+    public function index(SecureUploadService $uploadService): Response
     {
         $this->authorize('viewAny', VehicleReception::class);
 
-        $receptions = VehicleReception::with(['customer', 'vehicle', 'agency', 'courtesyVehicle'])
+        $receptions = VehicleReception::with(['customer', 'vehicle', 'agency', 'courtesyVehicle', 'receiver:id,name', 'appointment:id,reason,scheduled_at'])
             ->latest('received_at')
             ->paginate(20);
+
+        $receptions->getCollection()->transform(function (VehicleReception $rec) use ($uploadService) {
+            $rec->setAttribute('photo_urls', collect($rec->photos ?? [])
+                ->map(fn ($path) => $uploadService->signedUrl($path, 60))
+                ->values()
+                ->all());
+            $rec->setAttribute('received_at_formatted', $rec->received_at?->format('d/m/Y à H:i'));
+
+            return $rec;
+        });
 
         return Inertia::render('Tenant/Receptions/Index', [
             'receptions' => $receptions,

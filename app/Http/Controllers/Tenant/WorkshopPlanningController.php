@@ -49,7 +49,7 @@ class WorkshopPlanningController extends Controller
             ->whereNotIn('status', ['livre', 'annule', 'termine'])
             ->orderByDesc('id')
             ->take(40)
-            ->get(['id', 'order_number', 'customer_id', 'vehicle_id', 'assigned_mechanic_id', 'status', 'priority', 'opened_at']);
+            ->get(['id', 'order_number', 'customer_id', 'vehicle_id', 'assigned_mechanic_id', 'status', 'priority', 'created_at']);
 
         $defaultBays = ['Pont 1', 'Pont 2', 'Pont 3', 'Pont 4', 'Zone Diagnostic'];
         $existingBays = $appointments->pluck('bay_name')->filter(fn ($b) => $b && $b !== 'Non affecté')->unique()->values()->all();

@@ -206,6 +206,13 @@ function submitReception() {
 }
 
 const { askConfirm } = useConfirm();
+const viewingReception = ref(null);
+
+async function openReceptionDetails(r) {
+    viewingReception.value = r;
+    await nextTick();
+    window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalReceptionDetails'))?.show();
+}
 
 function returnCourtesy(id) {
     askConfirm({
@@ -257,15 +264,22 @@ function returnCourtesy(id) {
                                 <th>Motif &amp; Km</th>
                                 <th>Carburant</th>
                                 <th>Courtoisie</th>
+                                <th class="text-end">Détails</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-if="!receptions.data?.length">
-                                <td colspan="5" class="text-center text-muted py-4 small">Aucune réception enregistrée.</td>
+                                <td colspan="6" class="text-center text-muted py-4 small">Aucune réception enregistrée.</td>
                             </tr>
                             <tr v-for="r in receptions.data" :key="r.id">
-                                <td class="fw-semibold">{{ r.vehicle?.license_plate }}</td>
-                                <td>{{ r.customer?.name }}</td>
+                                <td class="fw-semibold">
+                                    <div>{{ r.vehicle?.license_plate }}</div>
+                                    <div class="small text-muted fw-normal">{{ r.received_at_formatted ?? '' }}</div>
+                                </td>
+                                <td>
+                                    <div>{{ r.customer?.name }}</div>
+                                    <div class="small text-muted">{{ r.agency?.name ?? '' }}</div>
+                                </td>
                                 <td class="small">
                                     {{ r.visit_reason }} • {{ r.mileage_in }} km
                                     <span v-if="r.photos?.length" class="badge bg-primary-subtle text-primary ms-1">
@@ -279,6 +293,11 @@ function returnCourtesy(id) {
                                         <button type="button" class="btn btn-outline-primary btn-sm ms-1" @click="returnCourtesy(r.id)">Retourner</button>
                                     </span>
                                     <span v-else class="text-muted small">{{ r.courtesy_vehicle?.license_plate ?? '-' }}</span>
+                                </td>
+                                <td class="text-end">
+                                    <button type="button" class="btn btn-outline-primary btn-sm" @click="openReceptionDetails(r)">
+                                        <i class="bi bi-eye me-1"></i>Détails
+                                    </button>
                                 </td>
                             </tr>
                         </tbody>
@@ -362,6 +381,53 @@ function returnCourtesy(id) {
                     <button type="submit" class="btn btn-primary px-4" :disabled="form.processing">Valider la réception</button>
                 </div>
             </form>
+        </StaticModal>
+
+        <StaticModal id="modalReceptionDetails" title="Détails complets de la réception" size="modal-lg">
+            <div v-if="viewingReception" class="small">
+                <div class="row g-3 mb-3 pb-3 border-bottom">
+                    <div class="col-md-6"><strong>Date / Heure :</strong> {{ viewingReception.received_at_formatted ?? '-' }}</div>
+                    <div class="col-md-6"><strong>Agence :</strong> {{ viewingReception.agency?.name ?? '-' }}</div>
+                    <div class="col-md-6"><strong>Client :</strong> {{ viewingReception.customer?.name }} ({{ viewingReception.customer?.phone ?? '-' }})</div>
+                    <div class="col-md-6"><strong>Véhicule :</strong> {{ viewingReception.vehicle?.license_plate }} — {{ viewingReception.vehicle?.brand }} {{ viewingReception.vehicle?.model }}</div>
+                    <div class="col-md-6"><strong>Motif de visite :</strong> {{ viewingReception.visit_reason }}</div>
+                    <div class="col-md-6"><strong>Réceptionné par :</strong> {{ viewingReception.receiver?.name ?? '-' }}</div>
+                    <div class="col-md-6"><strong>Kilométrage entrée :</strong> {{ (viewingReception.mileage_in ?? 0).toLocaleString('fr-FR') }} km</div>
+                    <div class="col-md-6"><strong>Niveau carburant :</strong> {{ viewingReception.fuel_level ?? 0 }} %</div>
+                    <div v-if="viewingReception.courtesy_vehicle" class="col-md-6">
+                        <strong>Véhicule de courtoisie :</strong> {{ viewingReception.courtesy_vehicle.name }} ({{ viewingReception.courtesy_vehicle.license_plate }})
+                    </div>
+                    <div v-if="viewingReception.courtesy_vehicle" class="col-md-6">
+                        <strong>Caution :</strong> {{ (viewingReception.courtesy_deposit_amount ?? 0).toLocaleString('fr-FR') }} FCFA
+                        <span class="badge ms-1" :class="viewingReception.courtesy_returned_at ? 'bg-success' : 'bg-warning text-dark'">
+                            {{ viewingReception.courtesy_returned_at ? 'Restitué' : 'En prêt' }}
+                        </span>
+                    </div>
+                </div>
+
+                <div v-if="viewingReception.belongings_left" class="mb-3">
+                    <strong>Objets laissés dans le véhicule :</strong>
+                    <div class="text-muted mt-1">{{ viewingReception.belongings_left }}</div>
+                </div>
+
+                <div v-if="viewingReception.notes" class="mb-3">
+                    <strong>Notes &amp; Observations :</strong>
+                    <div class="text-muted mt-1">{{ viewingReception.notes }}</div>
+                </div>
+
+                <div v-if="viewingReception.photo_urls?.length" class="mb-3">
+                    <strong class="d-block mb-2">Photos d'état des lieux ({{ viewingReception.photo_urls.length }}) :</strong>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a v-for="(url, idx) in viewingReception.photo_urls" :key="idx" :href="url" target="_blank" rel="noopener">
+                            <img :src="url" alt="Photo réception" class="rounded border" style="width: 96px; height: 96px; object-fit: cover;" />
+                        </a>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Fermer</button>
+                </div>
+            </div>
         </StaticModal>
     </TenantLayout>
 </template>

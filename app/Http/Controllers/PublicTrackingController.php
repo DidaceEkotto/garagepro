@@ -16,7 +16,7 @@ class PublicTrackingController extends Controller
     public function vehiclePassport(string $token): Response
     {
         $vehicle = Vehicle::withoutTenantScope()
-            ->with(['tenant:id,name,city,phone,logo_path'])
+            ->with(['tenant:id,name,city,phone,settings'])
             ->where('public_token', $token)
             ->firstOrFail();
 

@@ -89,4 +89,14 @@ class Customer extends Model
     {
         return $this->hasMany(VehicleReception::class);
     }
+
+    public function repairOrders(): HasMany
+    {
+        return $this->hasMany(RepairOrder::class);
+    }
+
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class);
+    }
 }

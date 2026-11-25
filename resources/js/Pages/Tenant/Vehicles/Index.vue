@@ -3,7 +3,7 @@ import DatePickerInput from '@/Components/DatePickerInput.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { nextTick, ref } from 'vue';
 
 const props = defineProps({
     vehicles: Object,
@@ -12,6 +12,55 @@ const props = defineProps({
 });
 
 const query = ref(props.search ?? '');
+const editingVehicle = ref(null);
+
+const editForm = useForm({
+    customer_id: '',
+    license_plate: '',
+    brand: '',
+    model: '',
+    year: '',
+    vin: '',
+    color: '',
+    fuel_type: 'essence',
+    transmission: 'manuelle',
+    mileage: 0,
+    first_registration_date: '',
+    next_service_date: '',
+    next_service_mileage: '',
+    notes: '',
+});
+
+async function openEditVehicle(v) {
+    editingVehicle.value = v;
+    editForm.customer_id = v.customer_id ?? '';
+    editForm.license_plate = v.license_plate ?? '';
+    editForm.brand = v.brand ?? '';
+    editForm.model = v.model ?? '';
+    editForm.year = v.year ?? '';
+    editForm.vin = v.vin ?? '';
+    editForm.color = v.color ?? '';
+    editForm.fuel_type = v.fuel_type ?? 'essence';
+    editForm.transmission = v.transmission ?? 'manuelle';
+    editForm.mileage = v.mileage ?? 0;
+    editForm.first_registration_date = v.first_registration_date ? String(v.first_registration_date).slice(0, 10) : '';
+    editForm.next_service_date = v.next_service_date ? String(v.next_service_date).slice(0, 10) : '';
+    editForm.next_service_mileage = v.next_service_mileage ?? '';
+    editForm.notes = v.notes ?? '';
+    await nextTick();
+    window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalEditVehicle'))?.show();
+}
+
+function updateVehicle() {
+    if (!editingVehicle.value) return;
+    editForm.put(`/vehicules/${editingVehicle.value.id}`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalEditVehicle'))?.hide();
+            editingVehicle.value = null;
+        },
+    });
+}
 
 const form = useForm({
     customer_id: props.customers?.[0]?.id ?? '',
@@ -127,6 +176,14 @@ function createVehicle() {
                                     >
                                         <i class="bi bi-qr-code"></i>
                                     </a>
+                                    <button
+                                        type="button"
+                                        class="btn btn-outline-secondary btn-sm me-1"
+                                        title="Modifier le véhicule"
+                                        @click="openEditVehicle(v)"
+                                    >
+                                        <i class="bi bi-pencil me-1"></i>Modifier
+                                    </button>
                                     <Link :href="`/vehicules/${v.id}`" class="btn btn-outline-primary btn-sm">Historique</Link>
                                 </td>
                             </tr>
@@ -227,6 +284,92 @@ function createVehicle() {
                 <div class="d-flex justify-content-end gap-2">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
                     <button type="submit" class="btn btn-primary px-4" :disabled="form.processing">Enregistrer le véhicule</button>
+                </div>
+            </form>
+        </StaticModal>
+
+        <StaticModal id="modalEditVehicle" title="Modifier le véhicule" size="modal-lg">
+            <form v-if="editingVehicle" @submit.prevent="updateVehicle">
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Client affecté <span class="text-danger">*</span></label>
+                    <select v-model="editForm.customer_id" class="form-select" required>
+                        <option value="">-- Choisir un client --</option>
+                        <option v-for="c in customers" :key="c.id" :value="c.id">
+                            {{ c.name }} {{ c.first_name ?? '' }} ({{ c.phone }})
+                        </option>
+                    </select>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold">Immatriculation <span class="text-danger">*</span></label>
+                        <input v-model="editForm.license_plate" type="text" class="form-control" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold">Marque <span class="text-danger">*</span></label>
+                        <input v-model="editForm.brand" type="text" class="form-control" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold">Modèle <span class="text-danger">*</span></label>
+                        <input v-model="editForm.model" type="text" class="form-control" required />
+                    </div>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label small">Année</label>
+                        <input v-model="editForm.year" type="number" class="form-control" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">N° Châssis (VIN)</label>
+                        <input v-model="editForm.vin" type="text" class="form-control" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">Couleur</label>
+                        <input v-model="editForm.color" type="text" class="form-control" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">Kilométrage</label>
+                        <input v-model="editForm.mileage" type="number" min="0" class="form-control" />
+                    </div>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label small">Carburant</label>
+                        <select v-model="editForm.fuel_type" class="form-select">
+                            <option value="essence">Essence</option>
+                            <option value="diesel">Diesel</option>
+                            <option value="hybride">Hybride</option>
+                            <option value="electrique">Électrique</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Boîte</label>
+                        <select v-model="editForm.transmission" class="form-select">
+                            <option value="manuelle">Manuelle</option>
+                            <option value="automatique">Automatique</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">1ère mise en circulation</label>
+                        <DatePickerInput v-model="editForm.first_registration_date" />
+                    </div>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small">Prochaine vidange (date)</label>
+                        <DatePickerInput v-model="editForm.next_service_date" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Prochaine vidange (km)</label>
+                        <input v-model="editForm.next_service_mileage" type="number" min="0" class="form-control" />
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label small">Notes</label>
+                    <textarea v-model="editForm.notes" rows="2" class="form-control"></textarea>
+                </div>
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="submit" class="btn btn-primary px-4" :disabled="editForm.processing">Enregistrer les modifications</button>
                 </div>
             </form>
         </StaticModal>

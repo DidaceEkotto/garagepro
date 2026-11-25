@@ -107,6 +107,14 @@ watch(
     }
 );
 
+function formatDateTime(val) {
+    if (!val) return 'File sans RDV';
+    const d = new Date(val);
+    if (Number.isNaN(d.getTime())) return String(val);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} à ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function submitAppointment() {
     if (isNewCustomer.value) {
         form.customer_id = '';
@@ -115,10 +123,11 @@ function submitAppointment() {
         form.new_customer_phone = '';
     }
     form.scheduled_at = form.channel !== 'sans_rdv' && scheduleDate.value
-        ? `${scheduleDate.value} ${scheduleTime.value || '09:00'}`
+        ? `${scheduleDate.value} ${scheduleTime.value || '09:00'}:00`
         : '';
     form.post('/rendez-vous', {
         forceFormData: true,
+        preserveScroll: true,
         onSuccess: () => {
             form.reset(
                 'new_customer_name',
@@ -133,7 +142,16 @@ function submitAppointment() {
                 'notes',
                 'scheduled_at'
             );
-            window.bootstrap?.Modal.getInstance(document.getElementById('modalAddAppointment'))?.hide();
+            scheduleDate.value = '';
+            activeFilter.value = 'tous';
+            searchQuery.value = '';
+            const el = document.getElementById('modalAddAppointment');
+            if (el) {
+                window.bootstrap?.Modal.getOrCreateInstance(el)?.hide();
+            }
+            document.querySelectorAll('.modal-backdrop').forEach((b) => b.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('padding-right');
         },
     });
 }
@@ -452,7 +470,7 @@ function linkStatusBadge(status) {
                                 </td>
                                 <td>{{ a.reason }}</td>
                                 <td class="small">
-                                    <div>{{ a.scheduled_at ?? 'File sans RDV' }}</div>
+                                    <div>{{ formatDateTime(a.scheduled_at) }}</div>
                                     <div class="d-flex gap-1 mt-1" v-if="a.reminder_2h_sent_at || a.reminder_30m_sent_at">
                                         <span v-if="a.reminder_2h_sent_at" class="badge bg-success-subtle text-success border border-success-subtle">Rappel 2h ✓</span>
                                         <span v-if="a.reminder_30m_sent_at" class="badge bg-success-subtle text-success border border-success-subtle">Rappel 30m ✓</span>
@@ -482,6 +500,9 @@ function linkStatusBadge(status) {
 
         <StaticModal id="modalAddAppointment" title="Nouveau rendez-vous" size="modal-lg">
             <form @submit.prevent="submitAppointment">
+                <div v-if="Object.keys(form.errors).length" class="alert alert-danger py-2 small mb-3">
+                    <div v-for="(err, key) in form.errors" :key="key">{{ err }}</div>
+                </div>
                 <div class="form-check form-switch mb-3">
                     <input id="newCustModal" v-model="isNewCustomer" type="checkbox" class="form-check-input" />
                     <label for="newCustModal" class="form-check-label small fw-semibold">Nouveau client (création automatique)</label>
