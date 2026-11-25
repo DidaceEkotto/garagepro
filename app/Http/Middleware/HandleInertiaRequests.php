@@ -12,6 +12,7 @@ use App\Models\PlatformSetting;
 use App\Services\SecureUploadService;
 use App\Services\TenantContext;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Middleware;
 
 /**
@@ -35,7 +36,11 @@ class HandleInertiaRequests extends Middleware
 
         $userPhotoUrl = null;
         if ($user && $tenant) {
-            $photoPath = $user->avatar_path ?: Employee::where('user_id', $user->id)->value('photo_path');
+            $photoPath = $user->avatar_path ?: Cache::remember(
+                "mboacar_emp_photo_{$user->id}",
+                300,
+                fn () => Employee::where('user_id', $user->id)->value('photo_path')
+            );
             if ($photoPath) {
                 $userPhotoUrl = $uploadService->signedUrl($photoPath, 60);
             }
@@ -67,26 +72,38 @@ class HandleInertiaRequests extends Middleware
         $recentNotifications = [];
         $pendingMarketplaceOrdersCount = 0;
         $pendingAppointmentRequestsCount = 0;
+        $affiliateAlert = null;
+
         if ($user && $tenant) {
-            $unreadMessagesCount = PlatformMessage::where('tenant_id', $tenant->id)
-                ->where('recipient_type', PlatformMessage::TYPE_TENANT)
-                ->where('is_read', false)
-                ->count();
+            $navBundle = Cache::remember("mboacar_tenant_nav_{$tenant->id}", 20, function () use ($tenant): array {
+                $aff = AffiliateLink::where('tenant_id', $tenant->id)->where('is_blocked', true)->first(['code', 'blocked_reason']);
 
-            $pendingMarketplaceOrdersCount = MarketplaceOrderItem::where('tenant_id', $tenant->id)
-                ->where('is_seen_by_seller', false)
-                ->count();
+                return [
+                    'unreadMessagesCount' => PlatformMessage::where('tenant_id', $tenant->id)
+                        ->where('recipient_type', PlatformMessage::TYPE_TENANT)
+                        ->where('is_read', false)
+                        ->count(),
+                    'pendingMarketplaceOrdersCount' => MarketplaceOrderItem::where('tenant_id', $tenant->id)
+                        ->where('is_seen_by_seller', false)
+                        ->count(),
+                    'pendingAppointmentRequestsCount' => AppointmentLink::where('tenant_id', $tenant->id)
+                        ->where('status', AppointmentLink::STATUS_SUBMITTED)
+                        ->count(),
+                    'recentNotifications' => PlatformMessage::where('tenant_id', $tenant->id)
+                        ->where('recipient_type', PlatformMessage::TYPE_TENANT)
+                        ->latest('id')
+                        ->take(6)
+                        ->get(['id', 'sender_type', 'sender_name', 'subject', 'body', 'is_read', 'created_at'])
+                        ->toArray(),
+                    'affiliateAlert' => $aff ? ['code' => $aff->code, 'reason' => $aff->blocked_reason] : null,
+                ];
+            });
 
-            $pendingAppointmentRequestsCount = AppointmentLink::where('tenant_id', $tenant->id)
-                ->where('status', AppointmentLink::STATUS_SUBMITTED)
-                ->count();
-
-            $recentNotifications = PlatformMessage::where('tenant_id', $tenant->id)
-                ->where('recipient_type', PlatformMessage::TYPE_TENANT)
-                ->latest('id')
-                ->take(6)
-                ->get(['id', 'sender_type', 'sender_name', 'subject', 'body', 'is_read', 'created_at'])
-                ->toArray();
+            $unreadMessagesCount = $navBundle['unreadMessagesCount'];
+            $pendingMarketplaceOrdersCount = $navBundle['pendingMarketplaceOrdersCount'];
+            $pendingAppointmentRequestsCount = $navBundle['pendingAppointmentRequestsCount'];
+            $recentNotifications = $navBundle['recentNotifications'];
+            $affiliateAlert = $navBundle['affiliateAlert'];
         }
 
         $cart = $request->hasSession() ? $request->session()->get('marketplace_cart', []) : [];
@@ -97,13 +114,17 @@ class HandleInertiaRequests extends Middleware
 
         $marketplaceCategories = [];
         if ($request->is('marketplace*') || $request->is('panier') || $request->is('commander')) {
-            $marketplaceCategories = Category::with(['subCategories' => fn ($q) => $q->where('is_active', true)->orderBy('name')->select('id', 'category_id', 'name', 'slug')])
-                ->whereNull('tenant_id')
-                ->where('is_active', true)
-                ->orderBy('name')
-                ->get(['id', 'name', 'slug', 'icon'])
-                ->toArray();
+            $marketplaceCategories = Cache::remember('mboacar_mp_categories_nav', 600, function (): array {
+                return Category::with(['subCategories' => fn ($q) => $q->where('is_active', true)->orderBy('name')->select('id', 'category_id', 'name', 'slug')])
+                    ->whereNull('tenant_id')
+                    ->where('is_active', true)
+                    ->orderBy('name')
+                    ->get(['id', 'name', 'slug', 'icon'])
+                    ->toArray();
+            });
         }
+
+        $siteSettings = PlatformSetting::siteSettings();
 
         return [
             ...parent::share($request),
@@ -115,10 +136,10 @@ class HandleInertiaRequests extends Middleware
             'marketplaceCategories' => $marketplaceCategories,
             'recentNotifications' => $recentNotifications,
             'app' => [
-                'name' => PlatformSetting::siteSettings()['name'] ?? 'MboaCar',
+                'name' => $siteSettings['name'] ?? 'MboaCar',
                 'currency' => config('garagepro.currency_label', 'FCFA'),
                 'baseDomain' => config('garagepro.tenant_base_domain', 'mboacar.com'),
-                'site' => PlatformSetting::siteSettings(),
+                'site' => $siteSettings,
             ],
             'locale' => app()->getLocale(),
             'supportedLocales' => array_values(config('garagepro.supported_locales', [])),
@@ -137,11 +158,7 @@ class HandleInertiaRequests extends Middleware
                 'logoUrl' => $logoPath ? $uploadService->signedUrl($logoPath, 60) : null,
             ] : null,
             'payrollAlert' => $payrollAlert,
-            'affiliateAlert' => ($user && $tenant)
-                ? (($aff = AffiliateLink::where('tenant_id', $tenant->id)->where('is_blocked', true)->first())
-                    ? ['code' => $aff->code, 'reason' => $aff->blocked_reason]
-                    : null)
-                : null,
+            'affiliateAlert' => $affiliateAlert,
             'auth' => [
                 'user' => $user ? [
                     'id' => $user->id,

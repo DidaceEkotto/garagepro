@@ -10,25 +10,45 @@ import { initPageLoadingListener } from './composables/usePageLoading';
 
 initPageLoadingListener();
 
-// Charge jQuery UI et Select2 après exposition de window.jQuery (évite le hoisting ESM)
-import('jquery-ui-dist/jquery-ui.min.js').catch(() => {});
-import('select2/dist/js/select2.full.min.js')
-    .then(() => {
-        initSelect2();
-        router.on('navigate', () => setTimeout(initSelect2, 60));
+// Chargement à la demande : jQuery UI uniquement si un .admin-datepicker existe
+// (DatePickerInput.vue le charge déjà paresseusement quand il est monté)
+if (document.querySelector('.admin-datepicker')) {
+    import('jquery-ui-dist/jquery-ui.min.js').catch(() => {});
+}
 
-        let scheduled = false;
-        const observer = new MutationObserver(() => {
-            if (scheduled) return;
-            scheduled = true;
-            requestAnimationFrame(() => {
-                scheduled = false;
-                initSelect2();
+// Chargement à la demande de Select2 uniquement quand la page contient au moins un <select>
+let select2Promise = null;
+let select2DebounceTimer = null;
+
+function hasEligibleSelect() {
+    return document.querySelector('select:not(.no-select2):not(.ui-datepicker-month):not(.ui-datepicker-year)') !== null;
+}
+
+function scheduleSelect2Init() {
+    if (select2DebounceTimer) clearTimeout(select2DebounceTimer);
+    select2DebounceTimer = setTimeout(() => {
+        if (!hasEligibleSelect()) return;
+        if (!select2Promise) {
+            select2Promise = import('select2/dist/js/select2.full.min.js').catch(() => {
+                select2Promise = null;
             });
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-    })
-    .catch(() => {});
+        }
+        select2Promise.then(() => initSelect2());
+    }, 100);
+}
+
+scheduleSelect2Init();
+router.on('navigate', scheduleSelect2Init);
+
+const observer = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+        if (m.addedNodes.length > 0) {
+            scheduleSelect2Init();
+            break;
+        }
+    }
+});
+observer.observe(document.body, { childList: true, subtree: true });
 
 function initSelect2() {
     if (!window.$ || !window.$.fn || !window.$.fn.select2) return;

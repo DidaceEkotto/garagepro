@@ -3,30 +3,85 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Paramètres globaux de la plateforme configurables par le Super-Admin.
  */
 class PlatformSetting extends Model
 {
+    private const CACHE_KEY = 'mboacar_platform_settings_all';
+
+    /** @var array<string, mixed>|null */
+    private static ?array $memoryCache = null;
+
+    private static ?int $memoryAppId = null;
+
     protected $fillable = [
         'key',
         'value',
     ];
 
+    protected static function booted(): void
+    {
+        static::saved(fn () => static::clearSettingsCache());
+        static::deleted(fn () => static::clearSettingsCache());
+    }
+
+    public static function clearSettingsCache(): void
+    {
+        static::$memoryCache = null;
+        static::$memoryAppId = null;
+        try {
+            Cache::forget(self::CACHE_KEY);
+        } catch (\Throwable) {
+            // ignore cache driver issues
+        }
+    }
+
+    /**
+     * Charge tous les paramètres en 1 seule requête (mise en cache mémoire par requête + Cache Laravel).
+     *
+     * @return array<string, mixed>
+     */
+    public static function allCached(): array
+    {
+        $appId = spl_object_id(app());
+        if (static::$memoryAppId === $appId && static::$memoryCache !== null) {
+            return static::$memoryCache;
+        }
+
+        try {
+            $all = Cache::remember(self::CACHE_KEY, 3600, function (): array {
+                return static::query()->pluck('value', 'key')->all();
+            });
+        } catch (\Throwable) {
+            $all = static::query()->pluck('value', 'key')->all();
+        }
+
+        static::$memoryCache = is_array($all) ? $all : [];
+        static::$memoryAppId = $appId;
+
+        return static::$memoryCache;
+    }
+
     public static function getValue(string $key, mixed $default = null): mixed
     {
-        $setting = static::where('key', $key)->first();
+        $all = static::allCached();
 
-        return $setting !== null ? $setting->value : $default;
+        return array_key_exists($key, $all) ? $all[$key] : $default;
     }
 
     public static function setValue(string $key, mixed $value): self
     {
-        return static::updateOrCreate(
+        $setting = static::updateOrCreate(
             ['key' => $key],
             ['value' => $value !== null ? (string) $value : null]
         );
+
+        static::clearSettingsCache();
+
+        return $setting;
     }
 
     public static function subscriptionPrice(): int
