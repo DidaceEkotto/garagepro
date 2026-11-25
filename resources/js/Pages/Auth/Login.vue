@@ -130,6 +130,10 @@ function submit() {
                         </div>
                     </div>
 
+                    <div v-if="page.props.flash?.success" class="alert alert-success small py-2 mb-3 border-0">
+                        <i class="bi bi-check-circle-fill me-1"></i>{{ page.props.flash.success }}
+                    </div>
+
                     <div v-if="clientValidationError" class="alert alert-warning small py-2 mb-3">
                         {{ clientValidationError }}
                     </div>
@@ -178,9 +182,14 @@ function submit() {
                             </div>
                         </div>
 
-                        <div class="mb-4 form-check">
-                            <input id="remember" v-model="form.remember" type="checkbox" class="form-check-input" :disabled="isBlocked" />
-                            <label for="remember" class="form-check-label small">{{ t('auth.rememberMe') }}</label>
+                        <div class="mb-4 d-flex justify-content-between align-items-center">
+                            <div class="form-check mb-0">
+                                <input id="remember" v-model="form.remember" type="checkbox" class="form-check-input" :disabled="isBlocked" />
+                                <label for="remember" class="form-check-label small">{{ t('auth.rememberMe') }}</label>
+                            </div>
+                            <Link href="/mot-de-passe-oublie" class="small text-decoration-none fw-semibold text-primary">
+                                Mot de passe oublié ?
+                            </Link>
                         </div>
 
                         <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold mb-3" :disabled="form.processing || isBlocked">

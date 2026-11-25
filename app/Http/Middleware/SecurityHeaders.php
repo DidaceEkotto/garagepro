@@ -19,8 +19,10 @@ class SecurityHeaders
         $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
         $response->headers->set('X-Content-Type-Options', 'nosniff');
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
-        $response->headers->set('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(self)');
+        $response->headers->set('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=(self)');
         $response->headers->set('X-XSS-Protection', '0');
+        $response->headers->set('Cross-Origin-Opener-Policy', 'same-origin');
+        $response->headers->set('X-Permitted-Cross-Domain-Policies', 'none');
 
         if ($request->isSecure() || app()->isProduction()) {
             $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
@@ -45,6 +47,7 @@ class SecurityHeaders
             "object-src 'none'",
             "base-uri 'self'",
             "form-action 'self'",
+            "frame-ancestors 'self'",
         ]);
 
         $response->headers->set('Content-Security-Policy', $csp);

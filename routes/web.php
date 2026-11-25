@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminAuthController;
+use App\Http\Controllers\Auth\PasswordResetOtpController;
 use App\Http\Controllers\Auth\TenantAuthController;
 use App\Http\Controllers\Auth\TenantRegistrationController;
 use App\Http\Controllers\ContactController;
@@ -161,6 +162,23 @@ Route::middleware('guest:web')->group(function () {
     Route::post('/connexion', [TenantAuthController::class, 'login'])
         ->middleware('throttle:login')
         ->name('tenant.login.post');
+
+    // Mot de passe oublié (réservé au propriétaire du compte — OTP E-mail ou WhatsApp)
+    Route::get('/mot-de-passe-oublie', [PasswordResetOtpController::class, 'showRequest'])->name('password.request');
+    Route::post('/mot-de-passe-oublie', [PasswordResetOtpController::class, 'sendOtp'])
+        ->middleware('throttle:5,1')
+        ->name('password.otp.send');
+    Route::get('/mot-de-passe-oublie/verification-otp', [PasswordResetOtpController::class, 'showOtp'])->name('password.otp');
+    Route::post('/mot-de-passe-oublie/verification-otp', [PasswordResetOtpController::class, 'verifyOtp'])
+        ->middleware('throttle:10,1')
+        ->name('password.otp.verify');
+    Route::post('/mot-de-passe-oublie/verification-otp/renvoyer', [PasswordResetOtpController::class, 'resendOtp'])
+        ->middleware('throttle:3,2')
+        ->name('password.otp.resend');
+    Route::get('/mot-de-passe-oublie/nouveau-mot-de-passe', [PasswordResetOtpController::class, 'showResetForm'])->name('password.reset.form');
+    Route::post('/mot-de-passe-oublie/nouveau-mot-de-passe', [PasswordResetOtpController::class, 'updatePassword'])
+        ->middleware('throttle:5,1')
+        ->name('password.reset.update');
 });
 
 Route::post('/deconnexion', [TenantAuthController::class, 'logout'])
