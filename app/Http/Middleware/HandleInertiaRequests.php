@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\MarketplaceOrderItem;
 use App\Models\PlatformMessage;
 use App\Models\PlatformSetting;
+use App\Models\Tenant;
 use App\Services\SecureUploadService;
 use App\Services\TenantContext;
 use Illuminate\Http\Request;
@@ -125,6 +126,27 @@ class HandleInertiaRequests extends Middleware
         }
 
         $siteSettings = PlatformSetting::siteSettings();
+        $baseDomain = config('garagepro.tenant_base_domain', 'mboacar.com');
+
+        // Résout le tenant de l'utilisateur authentifié même sur le domaine racine (landing / marketplace)
+        $authTenant = $tenant;
+        if (! $authTenant && $user && $user->tenant_id) {
+            $authTenant = Tenant::find($user->tenant_id);
+        }
+
+        $isDemo = (bool) ($authTenant && $authTenant->slug === 'demo-douala');
+        $dashboardUrl = null;
+        if ($user && $authTenant && ! $isDemo) {
+            $host = strtolower($request->getHost());
+            $isLocalOrIp = $host === 'localhost'
+                || filter_var($host, FILTER_VALIDATE_IP) !== false
+                || str_ends_with($host, '.local')
+                || str_ends_with($host, '.test');
+
+            $dashboardUrl = $isLocalOrIp
+                ? url('/tableau-de-bord')
+                : "https://{$authTenant->slug}.{$baseDomain}/tableau-de-bord";
+        }
 
         return [
             ...parent::share($request),
@@ -138,7 +160,7 @@ class HandleInertiaRequests extends Middleware
             'app' => [
                 'name' => $siteSettings['name'] ?? 'MboaCar',
                 'currency' => config('garagepro.currency_label', 'FCFA'),
-                'baseDomain' => config('garagepro.tenant_base_domain', 'mboacar.com'),
+                'baseDomain' => $baseDomain,
                 'site' => $siteSettings,
             ],
             'locale' => app()->getLocale(),
@@ -167,6 +189,14 @@ class HandleInertiaRequests extends Middleware
                     'photoUrl' => $userPhotoUrl,
                     'roles' => $user->getRoleNames()->values(),
                     'permissions' => $user->getAllPermissions()->pluck('name')->values(),
+                ] : null,
+                'isDemo' => $isDemo,
+                'dashboardUrl' => $dashboardUrl,
+                'tenant' => $authTenant ? [
+                    'id' => $authTenant->id,
+                    'name' => $authTenant->name,
+                    'slug' => $authTenant->slug,
+                    'type' => $authTenant->type ?? 'garage',
                 ] : null,
             ],
             'flash' => [

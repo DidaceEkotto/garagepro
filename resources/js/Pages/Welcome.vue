@@ -13,10 +13,26 @@ const props = defineProps({
     monthlyPrice: { type: Number, default: 10000 },
     baseDomain: { type: String, default: 'mboacar.com' },
     testimonials: { type: Array, default: () => [] },
+    partners: { type: Array, default: () => [] },
 });
 
 const page = usePage();
 const siteLogoUrl = computed(() => page.props.app?.site?.logo_url || '/assets/images/logo.png');
+const isAuthenticatedPro = computed(() => Boolean(page.props.auth?.dashboardUrl && !page.props.auth?.isDemo));
+const isDemoSession = computed(() => Boolean(page.props.auth?.isDemo));
+const dashboardUrl = computed(() => page.props.auth?.dashboardUrl || '/tableau-de-bord');
+const authTenantName = computed(() => page.props.auth?.tenant?.name || '');
+
+const marqueePartners = computed(() => {
+    const list = props.partners || [];
+    if (!list.length) return [];
+    const repeat = Math.max(2, Math.ceil(10 / list.length));
+    const items = [];
+    for (let i = 0; i < repeat; i++) {
+        list.forEach((p, idx) => items.push({ ...p, _key: `${i}-${p.id}-${idx}` }));
+    }
+    return items;
+});
 
 const { t } = useI18n();
 const isScrolled = ref(false);
@@ -150,10 +166,30 @@ onUnmounted(() => {
                     </ul>
                     <div class="d-flex flex-wrap align-items-center gap-2">
                         <LanguageSwitcher variant="light" />
-                        <Link href="/connexion" class="btn btn-outline-light btn-sm rounded-pill px-3">{{ t('nav.login') }}</Link>
-                        <Link href="/inscription" class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold shadow-sm">
-                            {{ t('nav.register') }}
-                        </Link>
+                        <template v-if="isAuthenticatedPro">
+                            <a
+                                :href="dashboardUrl"
+                                class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold shadow-sm d-inline-flex align-items-center gap-2"
+                            >
+                                <i class="bi bi-speedometer2"></i>
+                                <span>Dashboard</span>
+                                <span v-if="authTenantName" class="badge bg-white text-primary rounded-pill d-none d-xl-inline" style="font-size: 0.7rem;">
+                                    {{ authTenantName }}
+                                </span>
+                            </a>
+                        </template>
+                        <template v-else-if="isDemoSession">
+                            <a href="/demo/quitter?to=login" class="btn btn-outline-light btn-sm rounded-pill px-3">{{ t('nav.login') }}</a>
+                            <a href="/demo/quitter?to=register" class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold shadow-sm">
+                                {{ t('nav.register') }}
+                            </a>
+                        </template>
+                        <template v-else>
+                            <Link href="/connexion" class="btn btn-outline-light btn-sm rounded-pill px-3">{{ t('nav.login') }}</Link>
+                            <Link href="/inscription" class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold shadow-sm">
+                                {{ t('nav.register') }}
+                            </Link>
+                        </template>
                     </div>
                 </div>
             </div>
@@ -594,7 +630,124 @@ onUnmounted(() => {
     </section>
 
     <!-- Pied de page pro (Landing) -->
+    <!-- Nos Partenaires (défilement fluide, pause au survol, masqué si aucun partenaire) -->
+    <section v-if="partners && partners.length > 0" class="py-4 bg-light border-top overflow-hidden partners-section">
+        <div class="container mb-3 text-center">
+            <span class="text-uppercase text-muted fw-bold small" style="letter-spacing: 0.08em;">
+                Ils nous font confiance — Nos partenaires
+            </span>
+        </div>
+        <div class="partners-marquee" aria-label="Logos de nos partenaires">
+            <div class="partners-marquee-track">
+                <div class="partners-marquee-group">
+                    <template v-for="partner in marqueePartners" :key="'a-' + partner._key">
+                        <a
+                            v-if="partner.website_url"
+                            :href="partner.website_url"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="partner-logo-card"
+                            :title="partner.name"
+                        >
+                            <img :src="partner.logo_url" :alt="partner.name" loading="lazy" />
+                        </a>
+                        <div v-else class="partner-logo-card" :title="partner.name">
+                            <img :src="partner.logo_url" :alt="partner.name" loading="lazy" />
+                        </div>
+                    </template>
+                </div>
+                <div class="partners-marquee-group" aria-hidden="true">
+                    <template v-for="partner in marqueePartners" :key="'b-' + partner._key">
+                        <a
+                            v-if="partner.website_url"
+                            :href="partner.website_url"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="partner-logo-card"
+                            :title="partner.name"
+                        >
+                            <img :src="partner.logo_url" :alt="partner.name" loading="lazy" />
+                        </a>
+                        <div v-else class="partner-logo-card" :title="partner.name">
+                            <img :src="partner.logo_url" :alt="partner.name" loading="lazy" />
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <LandingFooter :app-name="appName" :trial-days="trialDays" />
 
     <BackToTop />
 </template>
+
+<style scoped>
+.partners-marquee {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+}
+
+.partners-marquee-track {
+    display: flex;
+    width: max-content;
+    animation: partners-scroll 28s linear infinite;
+}
+
+.partners-section:hover .partners-marquee-track,
+.partners-marquee:hover .partners-marquee-track {
+    animation-play-state: paused;
+}
+
+.partners-marquee-group {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding-right: 1.5rem;
+}
+
+.partner-logo-card {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 0.65rem 1.25rem;
+    min-width: 140px;
+    height: 68px;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.partner-logo-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.12);
+    border-color: #93c5fd;
+}
+
+.partner-logo-card img {
+    max-height: 42px;
+    max-width: 120px;
+    width: auto;
+    object-fit: contain;
+    filter: grayscale(15%);
+    transition: filter 0.2s ease;
+}
+
+.partner-logo-card:hover img {
+    filter: grayscale(0%);
+}
+
+@keyframes partners-scroll {
+    0% {
+        transform: translateX(0);
+    }
+    100% {
+        transform: translateX(-50%);
+    }
+}
+</style>

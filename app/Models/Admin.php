@@ -85,11 +85,11 @@ class Admin extends Authenticatable
     {
         return match ($this->role ?? self::ROLE_SUPER_ADMIN) {
             self::ROLE_SUPPORT => ['overview', 'tenants', 'ai_diagnostics', 'messages', 'affiliation', 'profile'],
-            self::ROLE_MARKETING => ['overview', 'categories', 'banners', 'testimonials', 'countries', 'terms', 'privacy', 'profile'],
+            self::ROLE_MARKETING => ['overview', 'categories', 'banners', 'testimonials', 'partners', 'countries', 'terms', 'privacy', 'profile'],
             self::ROLE_MODERATOR => ['overview', 'tenants', 'ai_diagnostics', 'affiliation', 'security', 'profile'],
             default => [
                 'overview', 'tenants', 'ai_diagnostics', 'messages', 'affiliation',
-                'categories', 'banners', 'testimonials', 'countries',
+                'categories', 'banners', 'testimonials', 'partners', 'countries',
                 'terms', 'privacy',
                 'security', 'admins', 'settings', 'profile',
             ],

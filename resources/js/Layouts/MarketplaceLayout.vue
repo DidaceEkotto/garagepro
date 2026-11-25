@@ -106,7 +106,19 @@ function fmt(n) {
                         </button>
 
                         <LanguageSwitcher variant="light" />
-                        <Link href="/connexion" class="btn btn-outline-light btn-sm rounded-pill px-3">{{ t('mp.login') }}</Link>
+                        <a
+                            v-if="page.props.auth?.dashboardUrl && !page.props.auth?.isDemo"
+                            :href="page.props.auth.dashboardUrl"
+                            class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold d-inline-flex align-items-center gap-1"
+                        >
+                            <i class="bi bi-speedometer2"></i><span>Dashboard</span>
+                        </a>
+                        <a
+                            v-else-if="page.props.auth?.isDemo"
+                            href="/demo/quitter?to=login"
+                            class="btn btn-outline-light btn-sm rounded-pill px-3"
+                        >{{ t('mp.login') }}</a>
+                        <Link v-else href="/connexion" class="btn btn-outline-light btn-sm rounded-pill px-3">{{ t('mp.login') }}</Link>
 
                         <!-- Icône Panier (après le bouton Connexion) -> ouvre le menu latéral -->
                         <button

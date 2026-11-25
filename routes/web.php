@@ -46,6 +46,8 @@ use App\Http\Controllers\Tenant\VehicleReceptionController;
 use App\Http\Controllers\Tenant\WorkshopController;
 use App\Http\Controllers\Tenant\WorkshopPlanningController;
 use App\Http\Controllers\Webhooks\SaspayWebhookController;
+use App\Http\Middleware\LogoutDemoOnGuestAuth;
+use App\Models\Partner;
 use App\Models\PlatformSetting;
 use App\Models\Testimonial;
 use Illuminate\Support\Facades\Route;
@@ -54,11 +56,12 @@ use Inertia\Inertia;
 // Page d'accueil marketing
 Route::get('/', function () {
     return Inertia::render('Welcome', [
-        'appName' => config('app.name', 'GaragePro'),
+        'appName' => config('app.name', 'MboaCar'),
         'trialDays' => PlatformSetting::trialDays(),
         'monthlyPrice' => PlatformSetting::subscriptionPrice(),
         'baseDomain' => config('garagepro.tenant_base_domain', 'mboacar.com'),
         'testimonials' => Testimonial::published()->latest()->take(10)->get(),
+        'partners' => Partner::active()->get(['id', 'name', 'logo_path', 'website_url']),
     ]);
 })->name('home');
 
@@ -105,6 +108,7 @@ Route::get('/politique-confidentialite', function () {
 // Mode Sandbox Démo sans inscription
 Route::get('/demo', [DemoController::class, 'enter'])->name('demo.enter');
 Route::post('/demo/reinitialiser', [DemoController::class, 'reset'])->name('demo.reset');
+Route::get('/demo/quitter', [DemoController::class, 'exitAndRedirect'])->name('demo.exit');
 
 // Carnet d'entretien numérique & Suivi client en direct
 Route::get('/carnet/{token}', [PublicTrackingController::class, 'vehiclePassport'])->name('public.vehicle.passport');
@@ -142,7 +146,7 @@ Route::post('/langue/{locale}', function (string $locale) {
 })->name('locale.switch');
 
 // Inscription nouveau garage + redirection SSO vers sous-domaine
-Route::middleware('guest:web')->group(function () {
+Route::middleware([LogoutDemoOnGuestAuth::class, 'guest:web'])->group(function () {
     Route::get('/inscription', [TenantRegistrationController::class, 'show'])->name('register');
     Route::post('/inscription', [TenantRegistrationController::class, 'store'])
         ->middleware('throttle:register')
@@ -157,7 +161,7 @@ Route::middleware('guest:web')->group(function () {
 Route::get('/sso/{token}', [TenantRegistrationController::class, 'consumeSso'])->name('tenant.sso');
 
 // Authentification Tenant (utilisateurs de garage)
-Route::middleware('guest:web')->group(function () {
+Route::middleware([LogoutDemoOnGuestAuth::class, 'guest:web'])->group(function () {
     Route::get('/connexion', [TenantAuthController::class, 'showLogin'])->name('tenant.login');
     Route::post('/connexion', [TenantAuthController::class, 'login'])
         ->middleware('throttle:login')
@@ -484,6 +488,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/categories', fn () => view('admin.dashboard', ['section' => 'categories']))->name('categories');
         Route::get('/bannieres', fn () => view('admin.dashboard', ['section' => 'banners']))->name('banners');
         Route::get('/temoignages', fn () => view('admin.dashboard', ['section' => 'testimonials']))->name('testimonials');
+        Route::get('/partenaires', fn () => view('admin.dashboard', ['section' => 'partners']))->name('partners');
         Route::get('/pays', fn () => view('admin.dashboard', ['section' => 'countries']))->name('countries');
         Route::get('/conditions-utilisation', fn () => view('admin.dashboard', ['section' => 'terms']))->name('terms');
         Route::get('/politique-confidentialite', fn () => view('admin.dashboard', ['section' => 'privacy']))->name('privacy');

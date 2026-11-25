@@ -13,6 +13,7 @@ use App\Models\Category;
 use App\Models\Country;
 use App\Models\MarketplaceBanner;
 use App\Models\OneTimeLoginToken;
+use App\Models\Partner;
 use App\Models\Payment;
 use App\Models\PlatformMessage;
 use App\Models\PlatformSetting;
@@ -135,6 +136,11 @@ class PlatformDashboard extends Component
     public string $testiQuote = '';
     public int $testiRating = 5;
 
+    public string $partnerName = '';
+    public string $partnerWebsiteUrl = '';
+    public int $partnerSortOrder = 0;
+    public $partnerLogoFile = null;
+
     public function setSection(string $section): void
     {
         $admin = Auth::guard('admin')->user();
@@ -144,7 +150,7 @@ class PlatformDashboard extends Component
 
         $allowed = [
             'overview', 'tenants', 'ai_diagnostics', 'messages', 'affiliation',
-            'categories', 'banners', 'testimonials', 'countries',
+            'categories', 'banners', 'testimonials', 'partners', 'countries',
             'terms', 'privacy',
             'security', 'admins', 'settings', 'profile',
         ];
@@ -1232,6 +1238,55 @@ class PlatformDashboard extends Component
         $this->feedbackMessage = 'Réponse IA mise à jour par modération.';
     }
 
+    public function addPartner(): void
+    {
+        $this->feedbackMessage = '';
+        $this->feedbackError = '';
+
+        $this->validate([
+            'partnerName' => ['required', 'string', 'min:2', 'max:150'],
+            'partnerWebsiteUrl' => ['nullable', 'url', 'max:255'],
+            'partnerSortOrder' => ['nullable', 'integer', 'min:0', 'max:9999'],
+            'partnerLogoFile' => ['required', 'image', 'max:3072'],
+        ]);
+
+        $logoPath = $this->partnerLogoFile->store('partners', 'public');
+
+        $partner = Partner::create([
+            'name' => trim($this->partnerName),
+            'logo_path' => $logoPath,
+            'website_url' => trim($this->partnerWebsiteUrl) ?: null,
+            'sort_order' => max(0, (int) $this->partnerSortOrder),
+            'is_active' => true,
+        ]);
+
+        AuditLog::record('admin.partner_created', subject: $partner, actor: Auth::guard('admin')->user(), metadata: ['name' => $partner->name]);
+        $this->reset('partnerName', 'partnerWebsiteUrl', 'partnerSortOrder', 'partnerLogoFile');
+        $this->feedbackMessage = "Partenaire « {$partner->name} » ajouté avec succès.";
+    }
+
+    public function togglePartner(int $id): void
+    {
+        $partner = Partner::findOrFail($id);
+        $partner->update(['is_active' => ! $partner->is_active]);
+        AuditLog::record('admin.partner_toggled', subject: $partner, actor: Auth::guard('admin')->user());
+        $this->feedbackMessage = $partner->is_active
+            ? "Partenaire « {$partner->name} » activé sur la landing page."
+            : "Partenaire « {$partner->name} » masqué de la landing page.";
+    }
+
+    public function deletePartner(int $id): void
+    {
+        $partner = Partner::findOrFail($id);
+        if ($partner->logo_path && Storage::disk('public')->exists($partner->logo_path)) {
+            Storage::disk('public')->delete($partner->logo_path);
+        }
+        $name = $partner->name;
+        $partner->delete();
+        AuditLog::record('admin.partner_deleted', actor: Auth::guard('admin')->user(), metadata: ['name' => $name]);
+        $this->feedbackMessage = "Partenaire « {$name} » supprimé.";
+    }
+
     public function render()
     {
         // Charge TOUS les établissements (garages, centres techniques, assurances auto) sans limite arbitraire
@@ -1519,6 +1574,7 @@ class PlatformDashboard extends Component
             'recentPayments' => Payment::withoutTenantScope()->with('tenant:id,name,slug,type')->latest()->take(15)->get(),
             'auditLogs' => AuditLog::latest('id')->take(20)->get(),
             'testimonials' => Testimonial::latest()->get(),
+            'partners' => Partner::orderBy('sort_order')->orderByDesc('id')->get(),
             'countries' => Country::orderBy('name')->get(),
             'mpCategories' => Category::whereNull('tenant_id')->with('subCategories')->orderBy('name')->get(),
             'mpBanners' => MarketplaceBanner::latest('id')->get(),

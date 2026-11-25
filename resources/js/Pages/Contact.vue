@@ -59,8 +59,19 @@ function submit() {
                     </ul>
                     <div class="d-flex flex-wrap align-items-center gap-2">
                         <LanguageSwitcher variant="light" />
-                        <Link href="/connexion" class="btn btn-outline-light btn-sm rounded-pill px-3">{{ t('nav.login') }}</Link>
-                        <Link href="/inscription" class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold">{{ t('nav.register') }}</Link>
+                        <template v-if="page.props.auth?.dashboardUrl && !page.props.auth?.isDemo">
+                            <a :href="page.props.auth.dashboardUrl" class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold d-inline-flex align-items-center gap-1">
+                                <i class="bi bi-speedometer2"></i><span>Dashboard</span>
+                            </a>
+                        </template>
+                        <template v-else-if="page.props.auth?.isDemo">
+                            <a href="/demo/quitter?to=login" class="btn btn-outline-light btn-sm rounded-pill px-3">{{ t('nav.login') }}</a>
+                            <a href="/demo/quitter?to=register" class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold">{{ t('nav.register') }}</a>
+                        </template>
+                        <template v-else>
+                            <Link href="/connexion" class="btn btn-outline-light btn-sm rounded-pill px-3">{{ t('nav.login') }}</Link>
+                            <Link href="/inscription" class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold">{{ t('nav.register') }}</Link>
+                        </template>
                     </div>
                 </div>
             </div>

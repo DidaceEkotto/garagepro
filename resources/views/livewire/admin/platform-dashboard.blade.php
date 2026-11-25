@@ -18,6 +18,7 @@
                     ['key' => 'categories', 'route' => 'admin.categories', 'label' => 'Catégories', 'icon' => 'bi-tags'],
                     ['key' => 'banners', 'route' => 'admin.banners', 'label' => 'Bannières Publicitaires', 'icon' => 'bi-megaphone'],
                     ['key' => 'testimonials', 'route' => 'admin.testimonials', 'label' => 'Témoignages', 'icon' => 'bi-star'],
+                    ['key' => 'partners', 'route' => 'admin.partners', 'label' => 'Partenaires', 'icon' => 'bi-award'],
                     ['key' => 'countries', 'route' => 'admin.countries', 'label' => 'Pays & Indicatifs', 'icon' => 'bi-globe-europe-africa'],
                     ['key' => 'terms', 'route' => 'admin.terms', 'label' => "Conditions d'utilisation", 'icon' => 'bi-file-earmark-text'],
                     ['key' => 'privacy', 'route' => 'admin.privacy', 'label' => 'Politique de confidentialité', 'icon' => 'bi-shield-check'],
@@ -935,6 +936,97 @@
                     </li>
                     @endforeach
                 </ul>
+            </div>
+        @endif
+
+        {{-- 7b. PARTENAIRES (BANDEAU DÉFILANT LANDING PAGE) --}}
+        @if($activeSection === 'partners')
+            <div class="mb-4">
+                <h1 class="h4 fw-bold mb-0">Gestion des Partenaires ({{ $partners->count() }})</h1>
+                <p class="text-muted small mb-0">Ajoutez les logos de vos partenaires. Ils défileront automatiquement sur la page d'accueil (la section reste masquée s'il n'y a aucun partenaire actif).</p>
+            </div>
+
+            <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                <h2 class="h6 fw-bold mb-3">Ajouter un partenaire</h2>
+                <form wire:submit="addPartner" class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold mb-1">Nom du partenaire *</label>
+                        <input wire:model="partnerName" type="text" class="form-control form-control-sm" placeholder="Ex: TotalEnergies, Activa Assurances..." required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold mb-1">Logo (PNG, JPG, WEBP, SVG) *</label>
+                        <input wire:model="partnerLogoFile" type="file" accept="image/*" class="form-control form-control-sm" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold mb-1">Site web (optionnel)</label>
+                        <input wire:model="partnerWebsiteUrl" type="url" class="form-control form-control-sm" placeholder="https://...">
+                    </div>
+                    <div class="col-md-1">
+                        <label class="form-label small fw-semibold mb-1">Ordre</label>
+                        <input wire:model="partnerSortOrder" type="number" min="0" class="form-control form-control-sm" placeholder="0">
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" wire:loading.attr="disabled" class="btn btn-primary btn-sm fw-semibold">
+                            <i class="bi bi-plus-circle me-1"></i>Ajouter ce partenaire
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Logo</th>
+                                <th>Nom</th>
+                                <th>Site web</th>
+                                <th>Ordre</th>
+                                <th>Statut</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($partners as $partner)
+                                <tr>
+                                    <td>
+                                        <div class="bg-light border rounded-3 d-inline-flex align-items-center justify-content-center p-2" style="width: 110px; height: 52px;">
+                                            <img src="{{ $partner->logo_url }}" alt="{{ $partner->name }}" style="max-height: 38px; max-width: 94px; object-fit: contain;">
+                                        </div>
+                                    </td>
+                                    <td class="fw-semibold">{{ $partner->name }}</td>
+                                    <td class="small">
+                                        @if($partner->website_url)
+                                            <a href="{{ $partner->website_url }}" target="_blank" rel="noopener noreferrer">{{ $partner->website_url }}</a>
+                                        @else
+                                            <span class="text-muted">—</span>
+                                        @endif
+                                    </td>
+                                    <td class="small text-muted">{{ $partner->sort_order }}</td>
+                                    <td>
+                                        <span class="badge {{ $partner->is_active ? 'bg-success' : 'bg-secondary' }}">
+                                            {{ $partner->is_active ? 'Actif' : 'Masqué' }}
+                                        </span>
+                                    </td>
+                                    <td class="text-end text-nowrap">
+                                        <button type="button" wire:click="togglePartner({{ $partner->id }})" class="btn btn-outline-secondary btn-sm">
+                                            {{ $partner->is_active ? 'Masquer' : 'Afficher' }}
+                                        </button>
+                                        <button type="button" wire:click="deletePartner({{ $partner->id }})" wire:confirm="Supprimer ce partenaire ?" class="btn btn-outline-danger btn-sm">
+                                            Suppr.
+                                        </button>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted py-4">
+                                        Aucun partenaire enregistré. La section « Nos partenaires » est automatiquement masquée sur la page d'accueil tant qu'aucun partenaire actif n'est ajouté.
+                                    </td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
             </div>
         @endif
 

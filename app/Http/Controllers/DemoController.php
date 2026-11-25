@@ -42,4 +42,20 @@ class DemoController extends Controller
 
         return $this->enter($request);
     }
+
+    public function exitAndRedirect(Request $request): RedirectResponse
+    {
+        Auth::guard('web')->logout();
+        $request->session()->forget(['demo_tenant_id', 'active_tenant_id', 'active_agency_id']);
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        $target = $request->query('to', 'register');
+
+        return match ($target) {
+            'login', '/connexion' => redirect()->route('tenant.login'),
+            'home', '/' => redirect()->route('home'),
+            default => redirect()->route('register'),
+        };
+    }
 }

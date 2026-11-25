@@ -6,12 +6,16 @@ use App\Livewire\Admin\PlatformDashboard;
 use App\Mail\SubscriptionReminderMail;
 use App\Models\Admin;
 use App\Models\BlockedIp;
+use App\Models\Partner;
 use App\Models\Payment;
 use App\Models\PlatformSetting;
 use App\Models\Tenant;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -174,5 +178,105 @@ class AdminBackofficeTest extends TestCase
         Mail::assertSent(SubscriptionReminderMail::class, fn ($mail) => $mail->hasTo('garage@douala.test'));
         Mail::assertNotSent(SubscriptionReminderMail::class, fn ($mail) => $mail->hasTo('assur@cm.test'));
         Http::assertSent(fn ($req) => str_contains($req->url(), 'sendMessage') && str_contains($req['chatId'], '237699000111'));
+    }
+
+    public function test_partners_admin_crud_landing_dashboard_link_and_demo_auto_logout(): void
+    {
+        Storage::fake('public');
+
+        $admin = Admin::create([
+            'name' => 'Super Admin',
+            'email' => 'admin-partners@mboacar.com',
+            'password' => 'AdminPass123!',
+        ]);
+
+        // 1. Sans partenaire actif, la prop partners est vide sur la landing page
+        $this->get('/')
+            ->assertStatus(200)
+            ->assertInertia(fn ($page) => $page
+                ->component('Welcome')
+                ->has('partners', 0)
+            );
+
+        // 2. Ajout d'un partenaire depuis l'admin
+        $this->actingAs($admin, 'admin');
+        Livewire::test(PlatformDashboard::class, ['section' => 'partners'])
+            ->set('partnerName', 'TotalEnergies Cameroun')
+            ->set('partnerWebsiteUrl', 'https://totalenergies.cm')
+            ->set('partnerSortOrder', 1)
+            ->set('partnerLogoFile', UploadedFile::fake()->image('total.png', 200, 80))
+            ->call('addPartner')
+            ->assertHasNoErrors();
+
+        $partner = Partner::first();
+        $this->assertNotNull($partner);
+        $this->assertSame('TotalEnergies Cameroun', $partner->name);
+
+        // La landing page reçoit désormais le partenaire actif
+        $this->get('/')
+            ->assertStatus(200)
+            ->assertInertia(fn ($page) => $page
+                ->component('Welcome')
+                ->has('partners', 1)
+                ->where('partners.0.name', 'TotalEnergies Cameroun')
+            );
+
+        // 3. Connecté à un espace pro réel => auth.dashboardUrl pointe vers le bon tenant et isDemo = false
+        $proTenant = Tenant::create([
+            'name' => 'Atelier Bonapriso',
+            'slug' => 'atelier-bonapriso',
+            'email' => 'pro@bonapriso.test',
+            'status' => Tenant::STATUS_ACTIVE,
+            'subscription_ends_at' => now()->addDays(20),
+        ]);
+        $proUser = User::create([
+            'tenant_id' => $proTenant->id,
+            'name' => 'Chef Atelier',
+            'email' => 'chef@bonapriso.test',
+            'password' => 'Secret123!',
+        ]);
+
+        $this->actingAs($proUser, 'web')
+            ->get('/')
+            ->assertStatus(200)
+            ->assertInertia(fn ($page) => $page
+                ->where('auth.isDemo', false)
+                ->where('auth.tenant.slug', 'atelier-bonapriso')
+                ->where('auth.dashboardUrl', fn ($url) => is_string($url) && str_contains($url, '/tableau-de-bord'))
+            );
+
+        // 4. En mode démo, aller sur /connexion ou /inscription déconnecte automatiquement la démo et ouvre la page voulue
+        $demoTenant = Tenant::create([
+            'name' => 'Garage Démo Douala',
+            'slug' => 'demo-douala',
+            'email' => 'demo@mboacar.test',
+            'status' => Tenant::STATUS_ACTIVE,
+        ]);
+        $demoUser = User::create([
+            'tenant_id' => $demoTenant->id,
+            'name' => 'Gérant Démo',
+            'email' => 'gerant-demo@garagepro.app',
+            'password' => 'Demo123!',
+        ]);
+
+        $this->actingAs($demoUser, 'web')
+            ->withSession(['demo_tenant_id' => $demoTenant->id])
+            ->get('/connexion')
+            ->assertStatus(200)
+            ->assertInertia(fn ($page) => $page->component('Auth/Login'));
+        $this->assertGuest('web');
+
+        $this->actingAs($demoUser, 'web')
+            ->withSession(['demo_tenant_id' => $demoTenant->id])
+            ->get('/inscription')
+            ->assertStatus(200)
+            ->assertInertia(fn ($page) => $page->component('Auth/Register'));
+        $this->assertGuest('web');
+
+        $this->actingAs($demoUser, 'web')
+            ->withSession(['demo_tenant_id' => $demoTenant->id])
+            ->get('/demo/quitter?to=login')
+            ->assertRedirect(route('tenant.login'));
+        $this->assertGuest('web');
     }
 }

@@ -553,11 +553,14 @@ function resetDemo() {
                     <Link href="/rh" class="btn btn-primary btn-sm ms-2 text-nowrap">{{ t('layout.hr') }}</Link>
                 </div>
 
-                <div v-if="tenant?.slug === 'demo-douala'" class="alert alert-warning d-flex justify-content-between align-items-center mb-3 py-2">
+                <div v-if="tenant?.slug === 'demo-douala'" class="alert alert-warning d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 py-2">
                     <div class="small">
                         <i class="bi bi-play-circle me-1"></i>{{ t('layout.demoBanner') }}
                     </div>
-                    <Link href="/inscription" class="btn btn-primary btn-sm ms-2 text-nowrap">{{ t('nav.register') }}</Link>
+                    <div class="d-flex align-items-center gap-2">
+                        <a href="/demo/quitter?to=login" class="btn btn-outline-dark btn-sm text-nowrap">{{ t('nav.login') }}</a>
+                        <a href="/demo/quitter?to=register" class="btn btn-primary btn-sm text-nowrap">{{ t('nav.register') }}</a>
+                    </div>
                 </div>
 
                 <div v-if="flash?.success" class="alert alert-success alert-dismissible fade show py-2 small">
