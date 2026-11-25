@@ -207,38 +207,37 @@ function updateRoMechanic(roId, mechanicId) {
                 <table class="table table-bordered mb-0 align-top planning-grid-table">
                     <thead>
                         <tr>
-                            <th class="bg-light text-uppercase text-muted small fw-bold py-3 px-3" style="width: 155px;">
-                                Pont / Poste
+                            <th class="bg-light text-uppercase text-muted small fw-bold py-2 px-2" style="width: 108px;">
+                                Pont
                             </th>
                             <th
                                 v-for="day in weekDays"
                                 :key="day.date"
-                                class="py-3 px-2 text-center"
+                                class="py-2 px-1 text-center"
                                 :class="day.isToday ? 'planning-today-th' : 'bg-light'"
-                                style="min-width: 155px;"
                             >
-                                <div class="d-flex align-items-center justify-content-center gap-1">
-                                    <span class="fw-bold small">{{ day.label }}</span>
-                                    <span v-if="day.isToday" class="badge rounded-pill bg-primary" style="font-size: 0.65rem;">Aujourd'hui</span>
+                                <div class="d-flex flex-column align-items-center justify-content-center gap-1">
+                                    <span class="fw-bold" style="font-size: 0.78rem;">{{ day.label }}</span>
+                                    <span v-if="day.isToday" class="badge rounded-pill bg-primary" style="font-size: 0.62rem;">Aujourd'hui</span>
                                 </div>
                             </th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-for="(bay, bayIdx) in bays" :key="bay">
-                            <td class="bg-light bg-opacity-50 p-3 align-middle">
-                                <div class="d-flex align-items-center gap-2">
+                            <td class="bg-light bg-opacity-50 p-2 align-middle">
+                                <div class="d-flex align-items-center gap-1">
                                     <span class="planning-bay-dot" :style="{ backgroundColor: bayColor(bayIdx) }"></span>
-                                    <span class="fw-bold small text-dark">{{ bay }}</span>
+                                    <span class="fw-bold text-dark text-truncate" style="font-size: 0.78rem;" :title="bay">{{ bay }}</span>
                                 </div>
                             </td>
                             <td
                                 v-for="day in weekDays"
                                 :key="day.date"
-                                class="p-2"
+                                class="p-1"
                                 :class="{ 'planning-today-td': day.isToday }"
                             >
-                                <div v-if="slotAppointments(bay, day.date).length" class="d-flex flex-column gap-2">
+                                <div v-if="slotAppointments(bay, day.date).length" class="d-flex flex-column gap-1">
                                     <div
                                         v-for="a in slotAppointments(bay, day.date)"
                                         :key="a.id"
@@ -247,20 +246,20 @@ function updateRoMechanic(roId, mechanicId) {
                                         @click="openAssignModal(a)"
                                     >
                                         <div class="d-flex justify-content-between align-items-center mb-1">
-                                            <span class="badge bg-dark bg-opacity-75 text-white" style="font-size: 0.68rem;">
-                                                <i class="bi bi-clock me-1"></i>{{ a.time }}
+                                            <span class="badge bg-dark bg-opacity-75 text-white" style="font-size: 0.64rem;">
+                                                {{ a.time }}
                                             </span>
-                                            <i class="bi bi-pencil-square text-muted" style="font-size: 0.72rem;"></i>
+                                            <i class="bi bi-pencil-square text-muted" style="font-size: 0.68rem;"></i>
                                         </div>
-                                        <div class="fw-bold text-dark text-truncate" style="font-size: 0.82rem;">
+                                        <div class="fw-bold text-dark text-truncate" style="font-size: 0.76rem;" :title="a.customer?.name">
                                             {{ a.customer?.name }}
                                         </div>
-                                        <div class="text-muted text-truncate mt-1" style="font-size: 0.73rem;">
-                                            <i class="bi bi-car-front me-1"></i>{{ a.vehicle?.license_plate ?? a.reason }}
+                                        <div class="text-muted text-truncate" style="font-size: 0.69rem;" :title="a.vehicle?.license_plate ?? a.reason">
+                                            {{ a.vehicle?.license_plate ?? a.reason }}
                                         </div>
-                                        <div v-if="a.mechanic" class="mt-2 pt-1 border-top d-flex align-items-center gap-1" style="font-size: 0.72rem;">
-                                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle fw-medium text-truncate">
-                                                <i class="bi bi-person-gear me-1"></i>{{ a.mechanic.name }}
+                                        <div v-if="a.mechanic" class="mt-1 pt-1 border-top" style="font-size: 0.67rem;">
+                                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle fw-medium d-block text-truncate" :title="a.mechanic.name">
+                                                {{ a.mechanic.name }}
                                             </span>
                                         </div>
                                     </div>
@@ -397,9 +396,16 @@ function updateRoMechanic(roId, mechanicId) {
     border-color: #2563eb !important;
 }
 
+.planning-grid-table {
+    table-layout: fixed;
+    width: 100%;
+    min-width: 720px;
+}
+
 .planning-grid-table th,
 .planning-grid-table td {
     border-color: #e5e7eb;
+    overflow: hidden;
 }
 
 .planning-today-th {

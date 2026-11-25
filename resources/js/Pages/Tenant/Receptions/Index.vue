@@ -210,11 +210,52 @@ function submitReception() {
 
 const { askConfirm } = useConfirm();
 const viewingReception = ref(null);
+const editingReception = ref(null);
+
+const editForm = useForm({
+    _method: 'PUT',
+    agency_id: '',
+    visit_reason: 'entretien',
+    mileage_in: 0,
+    fuel_level: 50,
+    belongings_left: '',
+    courtesy_deposit_amount: 0,
+    notes: '',
+    photos: [],
+});
 
 async function openReceptionDetails(r) {
     viewingReception.value = r;
     await nextTick();
     window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalReceptionDetails'))?.show();
+}
+
+async function openEditReception(r) {
+    editingReception.value = r;
+    editForm.clearErrors();
+    editForm.agency_id = r.agency_id ?? props.agencies?.[0]?.id ?? '';
+    editForm.visit_reason = r.visit_reason ?? 'entretien';
+    editForm.mileage_in = r.mileage_in ?? 0;
+    editForm.fuel_level = r.fuel_level ?? 50;
+    editForm.belongings_left = r.belongings_left ?? '';
+    editForm.courtesy_deposit_amount = r.courtesy_deposit_amount ?? 0;
+    editForm.notes = r.notes ?? '';
+    editForm.photos = [];
+    await nextTick();
+    window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalEditReception'))?.show();
+}
+
+function submitEditReception() {
+    if (!editingReception.value) return;
+    editForm.post(`/receptions/${editingReception.value.id}`, {
+        forceFormData: true,
+        preserveScroll: true,
+        onSuccess: () => {
+            editingReception.value = null;
+            editForm.reset('photos');
+            window.bootstrap?.Modal.getInstance(document.getElementById('modalEditReception'))?.hide();
+        },
+    });
 }
 
 function returnCourtesy(id) {
@@ -297,7 +338,10 @@ function returnCourtesy(id) {
                                     </span>
                                     <span v-else class="text-muted small">{{ r.courtesy_vehicle?.license_plate ?? '-' }}</span>
                                 </td>
-                                <td class="text-end">
+                                <td class="text-end text-nowrap">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm me-1" @click="openEditReception(r)">
+                                        <i class="bi bi-pencil-square me-1"></i>Modifier
+                                    </button>
                                     <button type="button" class="btn btn-outline-primary btn-sm" @click="openReceptionDetails(r)">
                                         <i class="bi bi-eye me-1"></i>Détails
                                     </button>
@@ -439,6 +483,74 @@ function returnCourtesy(id) {
                     <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Fermer</button>
                 </div>
             </div>
+        </StaticModal>
+
+        <StaticModal id="modalEditReception" title="Modifier la fiche de réception" size="modal-lg">
+            <form v-if="editingReception" @submit.prevent="submitEditReception">
+                <div class="p-2 px-3 rounded bg-light border mb-3 small">
+                    <strong>{{ editingReception.vehicle?.license_plate }}</strong>
+                    <span v-if="editingReception.vehicle?.brand"> — {{ editingReception.vehicle.brand }} {{ editingReception.vehicle.model }}</span>
+                    • Client : <strong>{{ editingReception.customer?.name }}</strong>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label small">Agence</label>
+                        <select v-model="editForm.agency_id" class="form-select" required>
+                            <option v-for="ag in agencies" :key="ag.id" :value="ag.id">{{ ag.name }}</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Motif visite</label>
+                        <select v-model="editForm.visit_reason" class="form-select" required>
+                            <option value="entretien">Entretien</option>
+                            <option value="panne">Panne</option>
+                            <option value="controle">Contrôle</option>
+                            <option value="accident">Accident</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Kilométrage entrée</label>
+                        <input v-model.number="editForm.mileage_in" type="number" min="0" class="form-control" required />
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small">Carburant ({{ editForm.fuel_level }}%)</label>
+                        <input v-model.number="editForm.fuel_level" type="range" min="0" max="100" class="form-range mt-2" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Caution véhicule de courtoisie (FCFA)</label>
+                        <input v-model.number="editForm.courtesy_deposit_amount" type="number" min="0" class="form-control" />
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small">Objets laissés dans le véhicule</label>
+                    <input v-model="editForm.belongings_left" type="text" class="form-control" placeholder="Cric, roue de secours, documents..." />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small">Notes &amp; Observations</label>
+                    <textarea v-model="editForm.notes" rows="2" class="form-control"></textarea>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label small">Ajouter des photos supplémentaires (facultatif)</label>
+                    <FileDropzone
+                        v-model="editForm.photos"
+                        :multiple="true"
+                        accept="image/*"
+                        label="Glissez-déposez des photos à ajouter à la réception"
+                    />
+                </div>
+
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="submit" class="btn btn-primary px-4" :disabled="editForm.processing">Enregistrer les modifications</button>
+                </div>
+            </form>
         </StaticModal>
     </TenantLayout>
 </template>

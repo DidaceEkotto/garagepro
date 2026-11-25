@@ -228,6 +228,7 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
         // Réception & Véhicules de courtoisie
         Route::get('/receptions', [VehicleReceptionController::class, 'index'])->name('tenant.receptions.index');
         Route::post('/receptions', [VehicleReceptionController::class, 'store'])->name('tenant.receptions.store');
+        Route::put('/receptions/{reception}', [VehicleReceptionController::class, 'update'])->name('tenant.receptions.update');
         Route::post('/receptions/{reception}/retour-courtoisie', [VehicleReceptionController::class, 'returnCourtesy'])->name('tenant.receptions.return_courtesy');
 
         // Ordres de réparation, diagnostic & planification
@@ -241,6 +242,7 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
         Route::post('/devis', [QuoteController::class, 'store'])->name('tenant.quotes.store');
         Route::post('/devis/{quote}/valider', [QuoteController::class, 'accept'])->name('tenant.quotes.accept');
         Route::post('/devis/{quote}/nouvelle-version', [QuoteController::class, 'newVersion'])->name('tenant.quotes.new_version');
+        Route::post('/devis/{quote}/rappeler', [QuoteController::class, 'remind'])->name('tenant.quotes.remind');
         Route::get('/devis/{quote}/pdf', [QuoteController::class, 'pdf'])
             ->middleware('throttle:pdf')
             ->name('tenant.quotes.pdf');

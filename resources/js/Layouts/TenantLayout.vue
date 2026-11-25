@@ -453,7 +453,7 @@ function resetDemo() {
             </div>
 
             <!-- Main Content -->
-            <main class="flex-grow-1 min-w-0 p-3 p-md-4" style="overflow-x: clip;">
+            <main class="flex-grow-1 p-3 p-md-4" style="min-width: 0; max-width: 100%; overflow-x: clip;">
                 <div v-if="tenant?.isReadOnly" class="alert alert-danger border-0 shadow-sm d-flex justify-content-between align-items-center mb-3 py-2 small">
                     <div>
                         <i class="bi bi-lock-fill me-2"></i>

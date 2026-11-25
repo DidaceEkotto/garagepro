@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Tenant\StoreQuoteRequest;
+use App\Mail\ClientReminderMail;
 use App\Models\Agency;
 use App\Models\AuditLog;
 use App\Models\Customer;
@@ -13,6 +14,7 @@ use App\Models\QuoteItem;
 use App\Models\RepairOrder;
 use App\Models\RepairTask;
 use App\Models\Vehicle;
+use App\Services\GreenApiService;
 use App\Services\NumberSequenceService;
 use App\Services\TenantContext;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -20,6 +22,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -214,6 +217,94 @@ class QuoteController extends Controller
         });
 
         return back()->with('success', "Version {$newQuote->version} du devis {$newQuote->quote_number} créée.");
+    }
+
+    public function remind(
+        Request $request,
+        Quote $quote,
+        TenantContext $tenantContext,
+        GreenApiService $greenApi
+    ): RedirectResponse {
+        $this->authorize('view', $quote);
+
+        $data = $request->validate([
+            'channel' => ['nullable', 'in:auto,email,whatsapp'],
+            'message' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $quote->load(['customer', 'vehicle']);
+        $customer = $quote->customer;
+        $tenant = $tenantContext->getTenant();
+        $garageName = $tenant?->name ?? config('app.name', 'MboaCar');
+
+        $email = trim((string) ($customer?->email ?? ''));
+        $phone = trim((string) ($customer?->whatsapp_phone ?: ($customer?->phone ?? '')));
+        $hasEmail = $email !== '';
+        $hasWhatsapp = $phone !== '';
+
+        // Si le client n'a ni e-mail ni WhatsApp, on n'envoie rien
+        if (! $hasEmail && ! $hasWhatsapp) {
+            return back()->with('error', "Le client « {$customer?->name} » n'a ni adresse e-mail ni numéro WhatsApp : aucun rappel envoyé.");
+        }
+
+        $requested = $data['channel'] ?? 'auto';
+        $chosenChannel = match ($requested) {
+            'email' => $hasEmail ? 'email' : 'whatsapp',
+            'whatsapp' => $hasWhatsapp ? 'whatsapp' : 'email',
+            default => $hasEmail ? 'email' : 'whatsapp',
+        };
+
+        $totalFormatted = number_format((int) $quote->total_ttc, 0, ',', ' ');
+        $plate = $quote->vehicle?->license_plate ? " ({$quote->vehicle->license_plate})" : '';
+        $defaultMessage = "Bonjour {$customer->name}, nous vous rappelons que votre devis {$quote->quote_number} (v{$quote->version}) d'un montant de {$totalFormatted} FCFA pour votre véhicule{$plate} est disponible chez {$garageName}. Merci de nous confirmer votre accord.";
+        $messageBody = trim((string) ($data['message'] ?? '')) !== '' ? trim((string) $data['message']) : $defaultMessage;
+
+        if ($chosenChannel === 'email') {
+            try {
+                Mail::to($email)->send(new ClientReminderMail(
+                    garageName: $garageName,
+                    clientName: $customer->name,
+                    subjectLine: "Rappel devis {$quote->quote_number} — {$garageName}",
+                    bodyText: $messageBody,
+                ));
+            } catch (\Throwable $e) {
+                return back()->with('error', "Échec de l'envoi du rappel par e-mail : {$e->getMessage()}");
+            }
+
+            AuditLog::record('quote.reminded_email', subject: $quote, actor: $request->user('web'), tenantId: $tenantContext->id(), request: $request);
+
+            return back()->with('success', "Rappel du devis {$quote->quote_number} envoyé par e-mail à {$email}.");
+        }
+
+        if (! $greenApi->isConfigured()) {
+            if ($hasEmail) {
+                try {
+                    Mail::to($email)->send(new ClientReminderMail(
+                        garageName: $garageName,
+                        clientName: $customer->name,
+                        subjectLine: "Rappel devis {$quote->quote_number} — {$garageName}",
+                        bodyText: $messageBody,
+                    ));
+
+                    AuditLog::record('quote.reminded_email', subject: $quote, actor: $request->user('web'), tenantId: $tenantContext->id(), request: $request);
+
+                    return back()->with('success', "WhatsApp non configuré : rappel du devis {$quote->quote_number} envoyé par e-mail à {$email}.");
+                } catch (\Throwable $e) {
+                    return back()->with('error', "Échec de l'envoi du rappel : {$e->getMessage()}");
+                }
+            }
+
+            return back()->with('error', 'Green-API WhatsApp n\'est pas configuré dans l\'administration.');
+        }
+
+        $res = $greenApi->sendMessage($phone, $messageBody);
+        if (! ($res['ok'] ?? false)) {
+            return back()->with('error', $res['error'] ?? "Impossible d'envoyer le rappel WhatsApp.");
+        }
+
+        AuditLog::record('quote.reminded_whatsapp', subject: $quote, actor: $request->user('web'), tenantId: $tenantContext->id(), request: $request);
+
+        return back()->with('success', "Rappel du devis {$quote->quote_number} envoyé par WhatsApp à {$phone}.");
     }
 
     public function pdf(Quote $quote, TenantContext $tenantContext): HttpResponse

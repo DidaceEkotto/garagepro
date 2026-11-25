@@ -20,22 +20,72 @@ class PublicTrackingController extends Controller
             ->where('public_token', $token)
             ->firstOrFail();
 
+        // Historique multi-garages : retrouve tous les dossiers du même véhicule
+        // (même plaque normalisée ou même VIN) dans tous les garages du réseau MboaCar.
+        $normalizedPlate = strtoupper((string) preg_replace('/[^A-Z0-9]/i', '', (string) $vehicle->license_plate));
+        $normalizedVin = strtoupper(trim((string) ($vehicle->vin ?? '')));
+
+        $matchingVehicles = Vehicle::withoutTenantScope()
+            ->where(function ($q) use ($vehicle, $normalizedPlate, $normalizedVin) {
+                $q->where('id', $vehicle->id);
+
+                if ($normalizedPlate !== '') {
+                    $q->orWhereRaw("UPPER(REPLACE(REPLACE(license_plate, ' ', ''), '-', '')) = ?", [$normalizedPlate]);
+                }
+
+                if ($normalizedVin !== '' && strlen($normalizedVin) >= 6) {
+                    $q->orWhereRaw('UPPER(TRIM(vin)) = ?', [$normalizedVin]);
+                }
+            })
+            ->get(['id', 'tenant_id', 'mileage']);
+
+        $vehicleIds = $matchingVehicles->pluck('id')->unique()->values()->all();
+        $maxMileage = max((int) ($vehicle->mileage ?? 0), (int) $matchingVehicles->max('mileage'));
+
         $orders = RepairOrder::withoutTenantScope()
-            ->with(['tasks:id,repair_order_id,title,status,estimated_minutes'])
-            ->where('vehicle_id', $vehicle->id)
+            ->with([
+                'tenant:id,name,city,phone',
+                'tasks:id,repair_order_id,title,status,estimated_minutes',
+            ])
+            ->whereIn('vehicle_id', $vehicleIds)
             ->latest()
-            ->take(20)
-            ->get(['id', 'order_number', 'status', 'priority', 'diagnostic_notes', 'fault_codes', 'created_at']);
+            ->take(50)
+            ->get(['id', 'tenant_id', 'vehicle_id', 'order_number', 'status', 'priority', 'diagnostic_notes', 'fault_codes', 'created_at'])
+            ->map(function (RepairOrder $order) {
+                return [
+                    'id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'status' => $order->status,
+                    'priority' => $order->priority,
+                    'diagnostic_notes' => $order->diagnostic_notes,
+                    'fault_codes' => $order->fault_codes,
+                    'created_at' => $order->created_at?->toIso8601String(),
+                    'tasks' => $order->tasks,
+                    'garage' => $order->tenant ? [
+                        'id' => $order->tenant->id,
+                        'name' => $order->tenant->name,
+                        'city' => $order->tenant->city,
+                        'phone' => $order->tenant->phone,
+                    ] : null,
+                ];
+            })
+            ->values();
+
+        $garagesCount = $orders->pluck('garage.id')->filter()->unique()->count();
+        if ($garagesCount === 0 && $vehicle->tenant_id) {
+            $garagesCount = 1;
+        }
 
         return Inertia::render('Public/VehiclePassport', [
             'vehicle' => [
                 'id' => $vehicle->id,
                 'license_plate' => $vehicle->license_plate,
+                'vin' => $vehicle->vin,
                 'brand' => $vehicle->brand,
                 'model' => $vehicle->model,
                 'year' => $vehicle->year,
                 'fuel_type' => $vehicle->fuel_type,
-                'mileage' => $vehicle->mileage,
+                'mileage' => $maxMileage,
                 'next_service_date' => $vehicle->next_service_date?->toDateString(),
                 'next_service_mileage' => $vehicle->next_service_mileage,
                 'public_token' => $vehicle->public_token,
@@ -45,8 +95,9 @@ class PublicTrackingController extends Controller
                 'city' => $vehicle->tenant->city,
                 'phone' => $vehicle->tenant->phone,
             ] : null,
+            'garagesCount' => $garagesCount,
             'orders' => $orders,
-            'passportUrl' => url()->current(),
+            'passportUrl' => route('public.vehicle.passport', ['token' => $vehicle->public_token]),
         ]);
     }
 

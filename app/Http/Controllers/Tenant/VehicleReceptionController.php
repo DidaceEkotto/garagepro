@@ -108,6 +108,54 @@ class VehicleReceptionController extends Controller
         return back()->with('success', 'Réception du véhicule enregistrée avec succès.');
     }
 
+    public function update(
+        Request $request,
+        VehicleReception $reception,
+        TenantContext $tenantContext,
+        SecureUploadService $uploadService
+    ): RedirectResponse {
+        $this->authorize('update', $reception);
+
+        $data = $request->validate([
+            'agency_id' => ['required', 'integer', 'exists:agencies,id'],
+            'visit_reason' => ['required', 'in:entretien,panne,controle,accident'],
+            'mileage_in' => ['required', 'integer', 'min:0'],
+            'fuel_level' => ['required', 'integer', 'min:0', 'max:100'],
+            'belongings_left' => ['nullable', 'string', 'max:1000'],
+            'courtesy_deposit_amount' => ['nullable', 'integer', 'min:0'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'photos' => ['nullable', 'array'],
+            'photos.*' => ['image', 'max:8192'],
+        ]);
+
+        $tenantId = $tenantContext->id();
+        $photoPaths = is_array($reception->photos) ? $reception->photos : [];
+        if ($request->hasFile('photos')) {
+            foreach ($request->file('photos') as $photo) {
+                $photoPaths[] = $uploadService->storeImage($photo, $tenantId, 'receptions/photos');
+            }
+        }
+
+        $reception->update([
+            'agency_id' => $data['agency_id'],
+            'visit_reason' => $data['visit_reason'],
+            'mileage_in' => $data['mileage_in'],
+            'fuel_level' => $data['fuel_level'],
+            'belongings_left' => $data['belongings_left'] ?? null,
+            'courtesy_deposit_amount' => $data['courtesy_deposit_amount'] ?? $reception->courtesy_deposit_amount,
+            'notes' => $data['notes'] ?? null,
+            'photos' => $photoPaths,
+        ]);
+
+        Vehicle::where('id', $reception->vehicle_id)
+            ->where('mileage', '<', $data['mileage_in'])
+            ->update(['mileage' => $data['mileage_in']]);
+
+        AuditLog::record('reception.updated', subject: $reception, actor: $request->user('web'), tenantId: $tenantId, request: $request);
+
+        return back()->with('success', 'Fiche de réception mise à jour avec succès.');
+    }
+
     public function returnCourtesy(Request $request, VehicleReception $reception): RedirectResponse
     {
         $this->authorize('update', $reception);

@@ -110,6 +110,47 @@ function newVersion(id) {
         onConfirm: () => router.post(`/devis/${id}/nouvelle-version`),
     });
 }
+
+const remindingQuote = ref(null);
+const remindForm = useForm({
+    channel: 'auto',
+    message: '',
+});
+
+const remindHasEmail = computed(() => Boolean(remindingQuote.value?.customer?.email?.trim()));
+const remindPhone = computed(() => (remindingQuote.value?.customer?.whatsapp_phone || remindingQuote.value?.customer?.phone || '').trim());
+const remindHasWhatsapp = computed(() => Boolean(remindPhone.value));
+const remindHasAnyChannel = computed(() => remindHasEmail.value || remindHasWhatsapp.value);
+
+async function openRemindModal(q) {
+    remindingQuote.value = q;
+    remindForm.clearErrors();
+    const hasEmail = Boolean(q.customer?.email?.trim());
+    const hasWhatsapp = Boolean((q.customer?.whatsapp_phone || q.customer?.phone || '').trim());
+    if (hasEmail && !hasWhatsapp) {
+        remindForm.channel = 'email';
+    } else if (!hasEmail && hasWhatsapp) {
+        remindForm.channel = 'whatsapp';
+    } else {
+        remindForm.channel = 'whatsapp';
+    }
+    const total = new Intl.NumberFormat('fr-FR').format(q.total_ttc ?? 0);
+    const plate = q.vehicle?.license_plate ? ` (${q.vehicle.license_plate})` : '';
+    remindForm.message = `Bonjour ${q.customer?.name ?? ''}, nous vous rappelons que votre devis ${q.quote_number} (v${q.version}) d'un montant de ${total} FCFA pour votre véhicule${plate} est en attente de validation. Merci de nous faire un retour !`;
+    await nextTick();
+    window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalRemindQuote'))?.show();
+}
+
+function submitQuoteRemind() {
+    if (!remindingQuote.value || !remindHasAnyChannel.value) return;
+    remindForm.post(`/devis/${remindingQuote.value.id}/rappeler`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            remindingQuote.value = null;
+            window.bootstrap?.Modal.getInstance(document.getElementById('modalRemindQuote'))?.hide();
+        },
+    });
+}
 </script>
 
 <template>
@@ -148,6 +189,9 @@ function newVersion(id) {
                                 <td><span class="badge bg-info text-dark">{{ q.status }}</span></td>
                                 <td class="text-end">{{ new Intl.NumberFormat('fr-FR').format(q.total_ttc) }} FCFA</td>
                                 <td class="text-end text-nowrap">
+                                    <button type="button" class="btn btn-outline-warning btn-sm me-1 text-dark" title="Envoyer un rappel par E-mail ou WhatsApp" @click="openRemindModal(q)">
+                                        <i class="bi bi-bell me-1"></i>Rappel
+                                    </button>
                                     <button v-if="q.status === 'brouillon' || q.status === 'envoye'" type="button" class="btn btn-outline-success btn-sm me-1" @click="acceptQuote(q.id)">Valider → OR</button>
                                     <button type="button" class="btn btn-outline-primary btn-sm me-1" @click="newVersion(q.id)">+Version</button>
                                     <a :href="`/devis/${q.id}/pdf`" class="btn btn-outline-dark btn-sm">PDF</a>
@@ -248,6 +292,68 @@ function newVersion(id) {
                 <div class="d-flex justify-content-end gap-2">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
                     <button type="submit" class="btn btn-primary px-4" :disabled="form.processing">Enregistrer le devis</button>
+                </div>
+            </form>
+        </StaticModal>
+
+        <StaticModal id="modalRemindQuote" title="Envoyer un rappel de devis">
+            <form v-if="remindingQuote" @submit.prevent="submitQuoteRemind">
+                <div class="p-3 rounded bg-light border mb-3 small">
+                    <div class="fw-bold text-dark">{{ remindingQuote.quote_number }} (v{{ remindingQuote.version }}) — {{ remindingQuote.customer?.name }}</div>
+                    <div class="d-flex flex-wrap gap-2 mt-2">
+                        <span class="badge" :class="remindHasEmail ? 'bg-info-subtle text-info-emphasis border border-info-subtle' : 'bg-secondary-subtle text-muted'">
+                            <i class="bi bi-envelope me-1"></i>{{ remindHasEmail ? remindingQuote.customer.email : 'Aucun e-mail' }}
+                        </span>
+                        <span class="badge" :class="remindHasWhatsapp ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-secondary-subtle text-muted'">
+                            <i class="bi bi-whatsapp me-1"></i>{{ remindHasWhatsapp ? remindPhone : 'Aucun WhatsApp' }}
+                        </span>
+                    </div>
+                </div>
+
+                <div v-if="!remindHasAnyChannel" class="alert alert-warning small mb-3">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Ce client n'a ni adresse e-mail ni numéro WhatsApp enregistré. Aucun rappel ne peut être envoyé.
+                </div>
+
+                <template v-else>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Canal d'envoi</label>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                class="btn btn-sm"
+                                :class="remindForm.channel === 'whatsapp' ? 'btn-success' : 'btn-outline-success'"
+                                :disabled="!remindHasWhatsapp"
+                                @click="remindForm.channel = 'whatsapp'"
+                            >
+                                <i class="bi bi-whatsapp me-1"></i>WhatsApp
+                            </button>
+                            <button
+                                type="button"
+                                class="btn btn-sm"
+                                :class="remindForm.channel === 'email' ? 'btn-primary' : 'btn-outline-primary'"
+                                :disabled="!remindHasEmail"
+                                @click="remindForm.channel = 'email'"
+                            >
+                                <i class="bi bi-envelope me-1"></i>E-mail
+                            </button>
+                        </div>
+                        <div class="form-text small">
+                            Si le canal choisi n'est pas renseigné, le système bascule automatiquement vers l'autre canal disponible.
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label small fw-semibold">Message de rappel</label>
+                        <textarea v-model="remindForm.message" rows="4" class="form-control" required></textarea>
+                    </div>
+                </template>
+
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="submit" class="btn btn-primary px-4" :disabled="remindForm.processing || !remindHasAnyChannel">
+                        <i class="bi bi-send me-1"></i>Envoyer le rappel
+                    </button>
                 </div>
             </form>
         </StaticModal>
