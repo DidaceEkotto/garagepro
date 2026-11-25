@@ -106,6 +106,7 @@ const menuGroups = computed(() => {
             title: t('layout.dashboard'),
             items: [
                 { label: t('layout.dashboard'), href: '/tableau-de-bord', icon: 'bi-speedometer2', permissions: [] },
+                { label: 'Assistant IA Auto', href: '/assistant-ia', icon: 'bi-stars', permissions: [] },
             ],
         },
         {

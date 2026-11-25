@@ -41,4 +41,9 @@ return [
         'api_token_instance' => env('API_TOKEN_INSTANCE'),
     ],
 
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
+    ],
+
 ];

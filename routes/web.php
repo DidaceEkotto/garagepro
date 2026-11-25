@@ -13,6 +13,7 @@ use App\Http\Controllers\Tenant\AccountingController;
 use App\Http\Controllers\Tenant\AffiliationController;
 use App\Http\Controllers\Tenant\AfterSalesController;
 use App\Http\Controllers\Tenant\AgencyController;
+use App\Http\Controllers\Tenant\AiDiagnosticController;
 use App\Http\Controllers\Tenant\AppointmentController;
 use App\Http\Controllers\Tenant\CustomerController;
 use App\Http\Controllers\Tenant\DashboardController;
@@ -193,6 +194,13 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
         Route::get('/parametres-espace', [SpaceSettingsController::class, 'index'])->name('tenant.settings.index');
         Route::post('/parametres-espace', [SpaceSettingsController::class, 'update'])->name('tenant.settings.update');
     });
+
+    // Assistant IA Diagnostic Automobile (Gemini — isolé par tenant)
+    Route::get('/assistant-ia', [AiDiagnosticController::class, 'index'])->name('tenant.ai_diagnostic.index');
+    Route::post('/assistant-ia/messages', [AiDiagnosticController::class, 'send'])
+        ->middleware('throttle:30,1')
+        ->name('tenant.ai_diagnostic.send');
+    Route::delete('/assistant-ia/{conversationId}', [AiDiagnosticController::class, 'destroy'])->name('tenant.ai_diagnostic.destroy');
 
     // Clients & Véhicules
     Route::get('/clients', [CustomerController::class, 'index'])
