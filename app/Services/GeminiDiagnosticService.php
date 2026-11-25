@@ -3,15 +3,25 @@
 namespace App\Services;
 
 use App\Models\Vehicle;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
  * Assistant IA spécialisé exclusivement dans le diagnostic et la mécanique automobile via Gemini API.
+ * Intègre une bascule automatique entre modèles Gemini en cas de surcharge (503 / timeout / 429)
+ * avec mise en pause temporaire (5 min) des modèles surchargés pour garantir des réponses rapides.
  */
 class GeminiDiagnosticService
 {
     private const OFF_TOPIC_TAG = '[HORS_SUJET]';
+
+    private const FALLBACK_MODELS = [
+        'gemini-flash-lite-latest',
+        'gemini-3.1-flash-lite',
+        'gemini-3.5-flash',
+        'gemini-3.8-flash',
+    ];
 
     public function isConfigured(): bool
     {
@@ -20,18 +30,19 @@ class GeminiDiagnosticService
 
     public function model(): string
     {
-        return trim((string) config('services.gemini.model', 'gemini-3.8-flash')) ?: 'gemini-3.8-flash';
+        return trim((string) config('services.gemini.model', 'gemini-3.1-flash-lite')) ?: 'gemini-3.1-flash-lite';
     }
 
     /**
-     * Envoie le prompt et l'historique récent à Gemini avec garde-fou strict 100 % automobile.
+     * Envoie le prompt et l'historique récent à Gemini avec garde-fou strict 100 % automobile
+     * et fallback automatique si le modèle principal est saturé.
      *
      * @param  array<int, array{role: string, content: string}>  $history
      * @return array{ok: bool, reply: string, is_off_topic: bool, model: string, tokens_used: ?int, error: ?string}
      */
     public function diagnose(string $prompt, array $history = [], ?Vehicle $vehicle = null): array
     {
-        $model = $this->model();
+        $primaryModel = $this->model();
         $apiKey = trim((string) config('services.gemini.api_key', ''));
 
         if ($apiKey === '') {
@@ -39,7 +50,7 @@ class GeminiDiagnosticService
                 'ok' => false,
                 'reply' => "La clé API Gemini (GEMINI_API_KEY) n'est pas configurée sur le serveur.",
                 'is_off_topic' => false,
-                'model' => $model,
+                'model' => $primaryModel,
                 'tokens_used' => null,
                 'error' => 'missing_api_key',
             ];
@@ -65,87 +76,131 @@ class GeminiDiagnosticService
             'parts' => [['text' => $prompt]],
         ];
 
-        $endpoint = sprintf(
-            'https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent',
-            rawurlencode($model)
-        );
+        $allModels = array_values(array_unique(array_merge([$primaryModel], self::FALLBACK_MODELS)));
+        $healthyModels = array_values(array_filter($allModels, fn (string $m) => ! Cache::has("mboacar_gemini_cooldown_{$m}")));
+        $modelsToTry = $healthyModels !== [] ? $healthyModels : $allModels;
 
-        try {
-            $response = Http::timeout(35)
-                ->withHeaders([
-                    'Content-Type' => 'application/json',
-                    'x-goog-api-key' => $apiKey,
-                ])
-                ->post($endpoint, [
-                    'systemInstruction' => [
-                        'parts' => [
-                            ['text' => $systemPrompt],
+        $lastError = 'unknown_error';
+        $lastModel = $primaryModel;
+
+        foreach ($modelsToTry as $idx => $candidateModel) {
+            $lastModel = $candidateModel;
+            $hasMoreFallbacks = $idx < count($modelsToTry) - 1;
+            $endpoint = sprintf(
+                'https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent',
+                rawurlencode($candidateModel)
+            );
+
+            try {
+                $response = Http::connectTimeout(6)
+                    ->timeout($hasMoreFallbacks ? 10 : 20)
+                    ->withHeaders([
+                        'Content-Type' => 'application/json',
+                        'x-goog-api-key' => $apiKey,
+                    ])
+                    ->post($endpoint, [
+                        'systemInstruction' => [
+                            'parts' => [
+                                ['text' => $systemPrompt],
+                            ],
                         ],
-                    ],
-                    'contents' => $contents,
-                    'generationConfig' => [
-                        'temperature' => 0.3,
-                        'maxOutputTokens' => 1400,
-                    ],
-                ]);
+                        'contents' => $contents,
+                        'generationConfig' => [
+                            'temperature' => 0.3,
+                            'maxOutputTokens' => 1400,
+                        ],
+                    ]);
 
-            if (! $response->successful()) {
-                $errorMsg = $response->json('error.message') ?? ('HTTP '.$response->status());
-                Log::warning('Gemini API error', [
-                    'status' => $response->status(),
-                    'error' => $errorMsg,
-                ]);
+                if (! $response->successful()) {
+                    $status = $response->status();
+                    $errorMsg = $response->json('error.message') ?? ("HTTP {$status}");
+                    $lastError = $errorMsg;
+
+                    Log::warning('Gemini API attempt failed, trying fallback', [
+                        'model' => $candidateModel,
+                        'status' => $status,
+                        'error' => $errorMsg,
+                    ]);
+
+                    // En cas d'erreur d'authentification (401/403), inutile d'essayer d'autres modèles
+                    if (in_array($status, [401, 403], true)) {
+                        break;
+                    }
+
+                    // Mettre ce modèle en pause 5 min s'il est surchargé ou retiré
+                    if (in_array($status, [404, 429, 500, 502, 503, 504], true)) {
+                        Cache::put("mboacar_gemini_cooldown_{$candidateModel}", 1, 300);
+                    }
+
+                    continue;
+                }
+
+                $rawText = $this->extractResponseText($response->json());
+                if ($rawText === '') {
+                    $lastError = 'empty_response';
+                    Log::warning('Gemini API returned empty text, trying fallback', ['model' => $candidateModel]);
+
+                    continue;
+                }
+
+                $isOffTopic = str_starts_with($rawText, self::OFF_TOPIC_TAG)
+                    || str_contains($rawText, self::OFF_TOPIC_TAG);
+
+                $cleanReply = trim(str_replace(self::OFF_TOPIC_TAG, '', $rawText));
+                if ($cleanReply === '') {
+                    $cleanReply = 'Je suis MboaCar IA, un assistant strictement spécialisé dans le diagnostic et la mécanique automobile. Veuillez me poser uniquement des questions liées à l\'automobile.';
+                }
 
                 return [
-                    'ok' => false,
-                    'reply' => "Impossible d'obtenir une réponse de l'assistant IA pour le moment ({$errorMsg}). Veuillez réessayer.",
-                    'is_off_topic' => false,
-                    'model' => $model,
-                    'tokens_used' => null,
-                    'error' => $errorMsg,
-                ];
-            }
-
-            $rawText = trim((string) data_get($response->json(), 'candidates.0.content.parts.0.text', ''));
-            if ($rawText === '') {
-                return [
-                    'ok' => false,
-                    'reply' => "L'assistant IA n'a pas pu formuler de réponse pour cette demande. Essayez de préciser le symptôme ou le code défaut OBD.",
-                    'is_off_topic' => false,
-                    'model' => $model,
+                    'ok' => true,
+                    'reply' => $cleanReply,
+                    'is_off_topic' => $isOffTopic,
+                    'model' => $candidateModel,
                     'tokens_used' => data_get($response->json(), 'usageMetadata.totalTokenCount'),
-                    'error' => 'empty_response',
+                    'error' => null,
                 ];
+            } catch (\Throwable $e) {
+                $lastError = $e->getMessage();
+                Cache::put("mboacar_gemini_cooldown_{$candidateModel}", 1, 300);
+                Log::warning('Gemini API exception, trying fallback', [
+                    'model' => $candidateModel,
+                    'error' => $lastError,
+                ]);
             }
-
-            $isOffTopic = str_starts_with($rawText, self::OFF_TOPIC_TAG)
-                || str_contains($rawText, self::OFF_TOPIC_TAG);
-
-            $cleanReply = trim(str_replace(self::OFF_TOPIC_TAG, '', $rawText));
-            if ($cleanReply === '') {
-                $cleanReply = 'Je suis MboaCar IA, un assistant strictement spécialisé dans le diagnostic et la mécanique automobile. Veuillez me poser uniquement des questions liées à l\'automobile.';
-            }
-
-            return [
-                'ok' => true,
-                'reply' => $cleanReply,
-                'is_off_topic' => $isOffTopic,
-                'model' => $model,
-                'tokens_used' => data_get($response->json(), 'usageMetadata.totalTokenCount'),
-                'error' => null,
-            ];
-        } catch (\Throwable $e) {
-            Log::warning('Gemini API exception', ['error' => $e->getMessage()]);
-
-            return [
-                'ok' => false,
-                'reply' => "Erreur de connexion avec le service Gemini IA. Veuillez réessayer dans quelques instants.",
-                'is_off_topic' => false,
-                'model' => $model,
-                'tokens_used' => null,
-                'error' => $e->getMessage(),
-            ];
         }
+
+        return [
+            'ok' => false,
+            'reply' => "Impossible d'obtenir une réponse de l'assistant IA pour le moment ({$lastError}). Veuillez réessayer.",
+            'is_off_topic' => false,
+            'model' => $lastModel,
+            'tokens_used' => null,
+            'error' => $lastError,
+        ];
+    }
+
+    /**
+     * Extrait le texte final en ignorant les éventuels blocs internes de raisonnement (thought).
+     */
+    private function extractResponseText(?array $payload): string
+    {
+        $parts = data_get($payload, 'candidates.0.content.parts', []);
+        if (! is_array($parts)) {
+            return '';
+        }
+
+        $chunks = [];
+        foreach ($parts as $part) {
+            if (! is_array($part) || ! empty($part['thought'])) {
+                continue;
+            }
+            $text = trim((string) ($part['text'] ?? ''));
+            if ($text !== '') {
+                $chunks[] = $text;
+            }
+        }
+
+        return trim(implode("\n", $chunks));
     }
 
     private function buildSystemInstruction(?Vehicle $vehicle): string
