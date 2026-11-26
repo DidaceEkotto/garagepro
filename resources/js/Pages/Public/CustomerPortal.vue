@@ -60,7 +60,8 @@ function extractLocalPhone(fullPhone, dialCode) {
 
 const selectedDialCode = ref(props.otpPendingDialCode || '+237');
 const localPhone = ref(extractLocalPhone(props.otpPendingPhone, selectedDialCode.value));
-const otpRequested = ref(Boolean(props.otpPendingPhone));
+const showOtpStep = ref(Boolean(props.otpPendingPhone));
+const phoneInputRef = ref(null);
 
 const fullPhonePreview = computed(() => {
     const digits = localPhone.value.replace(/\D/g, '');
@@ -83,6 +84,15 @@ watch(selectedDialCode, (val) => {
     otpForm.phone_dial_code = val;
     verifyForm.phone_dial_code = val;
 });
+
+watch(
+    () => props.otpPendingPhone,
+    (val) => {
+        if (val) {
+            showOtpStep.value = true;
+        }
+    }
+);
 
 function onLocalPhoneInput(event) {
     let val = event.target.value;
@@ -113,7 +123,7 @@ function requestOtp() {
     otpForm.post('/mon-espace-client/otp', {
         preserveScroll: true,
         onSuccess: () => {
-            otpRequested.value = true;
+            showOtpStep.value = true;
             verifyForm.phone_dial_code = selectedDialCode.value;
             verifyForm.phone = `${selectedDialCode.value}${cleanLocal}`;
             verifyForm.code = '';
@@ -131,9 +141,16 @@ function verifyOtp() {
 }
 
 function resetPhoneStep() {
-    otpRequested.value = false;
+    showOtpStep.value = false;
+    localPhone.value = '';
+    otpForm.phone = '';
+    otpForm.clearErrors();
+    verifyForm.phone = '';
     verifyForm.code = '';
     verifyForm.clearErrors();
+    setTimeout(() => {
+        phoneInputRef.value?.focus();
+    }, 30);
 }
 
 const profileForm = useForm({
@@ -321,7 +338,7 @@ const tabs = computed(() => [
                                     <i class="bi bi-phone"></i> 1. Numéro
                                 </span>
                                 <span class="cp-step-sep"></span>
-                                <span class="cp-step-badge" :class="{ active: otpRequested || otpPendingPhone }">
+                                <span class="cp-step-badge" :class="{ active: showOtpStep }">
                                     <i class="bi bi-key"></i> 2. Code WhatsApp
                                 </span>
                             </div>
@@ -351,6 +368,7 @@ const tabs = computed(() => [
                                         </select>
                                     </div>
                                     <input
+                                        ref="phoneInputRef"
                                         :value="localPhone"
                                         type="tel"
                                         inputmode="tel"
@@ -378,12 +396,12 @@ const tabs = computed(() => [
                                 >
                                     <span v-if="otpForm.processing" class="spinner-border spinner-border-sm me-2"></span>
                                     <i v-else class="bi bi-whatsapp me-2"></i>
-                                    {{ otpRequested || otpPendingPhone ? 'Renvoyer un nouveau code' : 'Recevoir mon code sur WhatsApp' }}
+                                    {{ showOtpStep ? 'Renvoyer un nouveau code' : 'Recevoir mon code sur WhatsApp' }}
                                 </button>
                             </form>
 
                             <!-- Step 2: 5-Digit Verification Code -->
-                            <div v-if="otpRequested || otpPendingPhone" class="cp-otp-box">
+                            <div v-if="showOtpStep" class="cp-otp-box">
                                 <div class="d-flex align-items-center justify-content-between mb-2">
                                     <label class="cp-label mb-0">Code de vérification (5 chiffres)</label>
                                     <button type="button" class="cp-link-muted" @click="resetPhoneStep">
