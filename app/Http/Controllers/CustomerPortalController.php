@@ -49,7 +49,7 @@ class CustomerPortalController extends Controller
 
         $linkedCustomers = Customer::withoutTenantScope()
             ->with([
-                'tenant:id,name,slug,phone,city,tenant_type',
+                'tenant:id,name,slug,phone,city,type',
                 'vehicles:id,tenant_id,customer_id,license_plate,brand,model,year,mileage,public_token,next_service_date,technical_inspection_expires_at,insurance_expires_at',
                 'appointments' => fn ($q) => $q->with('vehicle:id,license_plate')->latest('scheduled_at')->take(15),
                 'repairOrders' => fn ($q) => $q->with('vehicle:id,license_plate')->latest('id')->take(20),
@@ -63,7 +63,7 @@ class CustomerPortalController extends Controller
             'name' => $c->tenant?->name ?? 'Établissement',
             'city' => $c->tenant?->city,
             'phone' => $c->tenant?->phone,
-            'tenant_type' => $c->tenant?->tenant_type ?? 'garage',
+            'tenant_type' => $c->tenant?->type ?? 'garage',
         ])->filter(fn ($g) => $g['id'] !== null)->unique('id')->values();
 
         $vehicles = $linkedCustomers->flatMap(function (Customer $c) {

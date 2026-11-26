@@ -225,10 +225,10 @@ function statusMeta(status) {
 
 function tenantTypeMeta(type) {
     const t = String(type || 'garage').toLowerCase();
-    if (t === 'insurance') {
+    if (t === 'assurance' || t === 'insurance') {
         return { label: 'Assureur', icon: 'bi-shield-check', cls: 'cp-badge-blue' };
     }
-    if (t === 'technical_inspection') {
+    if (t === 'centre_technique' || t === 'technical_inspection') {
         return { label: 'Visite Technique', icon: 'bi-clipboard2-check', cls: 'cp-badge-green' };
     }
     return { label: 'Garage Auto', icon: 'bi-wrench-adjustable', cls: 'cp-badge-slate' };
