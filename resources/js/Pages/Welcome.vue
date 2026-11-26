@@ -432,33 +432,162 @@ onUnmounted(() => {
     <LandingAiShowcase />
 
     <!-- Tarifs -->
-    <section id="tarifs" class="py-5 bg-white border-top">
-        <div class="container py-3">
-            <div class="text-center mb-5 reveal-on-scroll">
-                <span class="text-primary fw-semibold small text-uppercase">{{ t('nav.pricing') }}</span>
-                <h2 class="h2 fw-bold mt-1">{{ t('pricing.title') }}</h2>
-                <p class="text-muted">{{ t('pricing.subtitle', { days: trialDays }) }}</p>
+    <section id="tarifs" class="pricing-section py-5 border-top position-relative overflow-hidden">
+        <div class="pricing-glow pricing-glow-1" aria-hidden="true"></div>
+        <div class="pricing-glow pricing-glow-2" aria-hidden="true"></div>
+
+        <div class="container py-4 position-relative" style="z-index: 1;">
+            <div class="text-center mx-auto mb-5 reveal-on-scroll" style="max-width: 640px;">
+                <span class="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle px-3 py-2 fw-semibold small text-uppercase mb-2">
+                    <i class="bi bi-tag-fill me-1"></i>{{ t('nav.pricing') }}
+                </span>
+                <h2 class="display-6 fw-bold text-dark mt-1 mb-2">{{ t('pricing.title') }}</h2>
+                <p class="text-muted mb-0">{{ t('pricing.subtitle', { days: trialDays }) }}</p>
             </div>
-            <div class="row justify-content-center g-4 reveal-on-scroll">
-                <div class="col-md-6 col-lg-5">
-                    <div class="card h-100 border-primary shadow-lg p-2 hover-lift">
-                        <div class="card-body p-4 d-flex flex-column">
-                            <span class="badge bg-primary align-self-start mb-2">{{ t('pricing.planName') }}</span>
-                            <div class="display-5 fw-bold my-3 text-primary">
-                                {{ formatFcfa(monthlyPrice) }} <span class="fs-6 text-muted fw-normal">{{ t('pricing.perMonth') }}</span>
+
+            <div class="pricing-card-shell mx-auto reveal-on-scroll">
+                <div class="row g-0">
+                    <!-- Panneau gauche : Tarif & CTA -->
+                    <div class="col-lg-5 pricing-left-panel text-white p-4 p-md-5 d-flex flex-column justify-content-between">
+                        <div>
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+                                <span class="badge rounded-pill bg-primary px-3 py-2 fw-semibold">
+                                    <i class="bi bi-stars me-1"></i>{{ t('pricing.planName') }}
+                                </span>
+                                <span class="badge rounded-pill bg-white bg-opacity-10 text-white border border-white border-opacity-25 px-2 py-1" style="font-size: 0.72rem;">
+                                    Tout inclus
+                                </span>
                             </div>
-                            <p class="text-muted small">{{ t('pricing.trialNote', { days: trialDays }) }}</p>
-                            <ul class="list-unstyled small vstack gap-2 mb-4">
-                                <li><i class="bi bi-check-lg text-success me-2"></i>{{ t('pricing.p1') }}</li>
-                                <li><i class="bi bi-check-lg text-success me-2"></i>{{ t('pricing.p2') }}</li>
-                                <li><i class="bi bi-check-lg text-success me-2"></i>{{ t('pricing.p3') }}</li>
-                                <li><i class="bi bi-check-lg text-success me-2"></i>{{ t('pricing.p4') }}</li>
-                                <li><i class="bi bi-check-lg text-success me-2"></i>{{ t('pricing.p5') }}</li>
-                                <li><i class="bi bi-check-lg text-success me-2"></i>{{ t('pricing.p6') }}</li>
-                            </ul>
-                            <Link href="/inscription" class="btn btn-primary btn-lg py-2 mt-auto fw-semibold shadow-sm">
-                                {{ t('pricing.cta') }}
+
+                            <div class="d-flex align-items-baseline flex-wrap gap-2 mb-2">
+                                <span class="pricing-amount fw-bold lh-1">{{ formatFcfa(monthlyPrice) }}</span>
+                                <span class="text-white-50 fs-6">{{ t('pricing.perMonth') }}</span>
+                            </div>
+
+                            <div class="d-inline-flex align-items-center gap-2 rounded-3 px-3 py-2 mt-2 mb-4 pricing-trial-pill small">
+                                <i class="bi bi-gift-fill text-warning"></i>
+                                <span>{{ t('pricing.trialNote', { days: trialDays }) }}</span>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mb-4">
+                                <span class="pricing-space-chip"><i class="bi bi-wrench-adjustable me-1"></i>Garages</span>
+                                <span class="pricing-space-chip"><i class="bi bi-clipboard2-check me-1"></i>Visite Technique</span>
+                                <span class="pricing-space-chip"><i class="bi bi-shield-check me-1"></i>Assurances</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <a
+                                v-if="isAuthenticatedPro"
+                                :href="dashboardUrl"
+                                class="btn btn-light btn-lg w-100 py-3 fw-bold text-primary rounded-4 shadow pricing-cta-btn d-flex align-items-center justify-content-center gap-2"
+                            >
+                                <i class="bi bi-speedometer2"></i>
+                                <span>Accéder à mon Dashboard</span>
+                            </a>
+                            <a
+                                v-else-if="isDemoSession"
+                                href="/demo/quitter?to=register"
+                                class="btn btn-primary btn-lg w-100 py-3 fw-bold rounded-4 shadow pricing-cta-btn d-flex align-items-center justify-content-center gap-2"
+                            >
+                                <span>{{ t('pricing.cta') }}</span>
+                                <i class="bi bi-arrow-right"></i>
+                            </a>
+                            <Link
+                                v-else
+                                href="/inscription"
+                                class="btn btn-primary btn-lg w-100 py-3 fw-bold rounded-4 shadow pricing-cta-btn d-flex align-items-center justify-content-center gap-2"
+                            >
+                                <span>{{ t('pricing.cta') }}</span>
+                                <i class="bi bi-arrow-right"></i>
                             </Link>
+
+                            <div class="text-center mt-3">
+                                <a href="/demo" class="text-white-50 small text-decoration-none pricing-demo-link">
+                                    <i class="bi bi-play-circle me-1"></i>Ou tester la démo interactive gratuitement
+                                </a>
+                            </div>
+
+                            <div class="d-flex justify-content-center gap-3 mt-3 pt-3 border-top border-white border-opacity-10 text-white-50" style="font-size: 0.75rem;">
+                                <span><i class="bi bi-shield-lock-fill text-success me-1"></i>Sans carte bancaire</span>
+                                <span><i class="bi bi-x-circle text-info me-1"></i>Sans engagement</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Panneau droit : Tout ce qui est inclus -->
+                    <div class="col-lg-7 bg-white p-4 p-md-5 d-flex flex-column justify-content-between">
+                        <div>
+                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                                <h3 class="h5 fw-bold text-dark mb-0">Tout est inclus dès le 1er jour</h3>
+                                <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3 py-1 small">
+                                    <i class="bi bi-check-circle-fill me-1"></i>0 frais cachés
+                                </span>
+                            </div>
+                            <p class="text-muted small mb-4">
+                                Aucune option payante supplémentaire : profitez de l'intégralité de la plateforme pour digitaliser votre activité.
+                            </p>
+
+                            <div class="row g-3 mb-4">
+                                <div class="col-sm-6">
+                                    <div class="pricing-feature-item">
+                                        <span class="pricing-check-icon"><i class="bi bi-check-lg"></i></span>
+                                        <span>{{ t('pricing.p1') }}</span>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="pricing-feature-item">
+                                        <span class="pricing-check-icon"><i class="bi bi-check-lg"></i></span>
+                                        <span>{{ t('pricing.p2') }}</span>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="pricing-feature-item">
+                                        <span class="pricing-check-icon"><i class="bi bi-check-lg"></i></span>
+                                        <span>{{ t('pricing.p3') }}</span>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="pricing-feature-item">
+                                        <span class="pricing-check-icon"><i class="bi bi-check-lg"></i></span>
+                                        <span>{{ t('pricing.p4') }}</span>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="pricing-feature-item">
+                                        <span class="pricing-check-icon"><i class="bi bi-check-lg"></i></span>
+                                        <span>{{ t('pricing.p5') }}</span>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="pricing-feature-item">
+                                        <span class="pricing-check-icon"><i class="bi bi-check-lg"></i></span>
+                                        <span>{{ t('pricing.p6') }}</span>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="pricing-feature-item">
+                                        <span class="pricing-check-icon pricing-check-ai"><i class="bi bi-stars"></i></span>
+                                        <span><strong>MboaCar IA Auto</strong> (Diagnostic &amp; Devis)</span>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="pricing-feature-item">
+                                        <span class="pricing-check-icon"><i class="bi bi-check-lg"></i></span>
+                                        <span>Marketplace Pièces &amp; Portail Client</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="pricing-trust-bar rounded-4 p-3 d-flex flex-wrap align-items-center justify-content-between gap-2 small">
+                            <div class="d-flex align-items-center gap-2 text-dark fw-semibold">
+                                <i class="bi bi-phone-fill text-primary"></i>
+                                <span>Paiement Mobile Money (OM / MTN) &amp; Carte</span>
+                            </div>
+                            <div class="text-muted">
+                                <i class="bi bi-headset text-success me-1"></i>Support dédié 7j/7
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -683,6 +812,125 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.pricing-section {
+    background: linear-gradient(180deg, #f8fafc 0%, #ffffff 55%, #f1f5f9 100%);
+}
+
+.pricing-glow {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.pricing-glow-1 {
+    width: 340px;
+    height: 340px;
+    top: -90px;
+    left: 10%;
+    background: rgba(37, 99, 235, 0.14);
+}
+
+.pricing-glow-2 {
+    width: 300px;
+    height: 300px;
+    bottom: -90px;
+    right: 10%;
+    background: rgba(14, 165, 233, 0.12);
+}
+
+.pricing-card-shell {
+    max-width: 980px;
+    border-radius: 26px;
+    overflow: hidden;
+    border: 1px solid rgba(37, 99, 235, 0.18);
+    box-shadow: 0 24px 60px -15px rgba(15, 23, 42, 0.16);
+    background: #ffffff;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.pricing-card-shell:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 30px 70px -15px rgba(37, 99, 235, 0.22);
+}
+
+.pricing-left-panel {
+    background: linear-gradient(155deg, #0f172a 0%, #172554 55%, #1d4ed8 100%);
+    position: relative;
+}
+
+.pricing-amount {
+    font-size: clamp(2.1rem, 3.6vw, 2.85rem);
+    letter-spacing: -0.02em;
+    color: #ffffff;
+}
+
+.pricing-trial-pill {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #f8fafc;
+}
+
+.pricing-space-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #e2e8f0;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.pricing-cta-btn {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pricing-cta-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px rgba(37, 99, 235, 0.35) !important;
+}
+
+.pricing-demo-link:hover {
+    color: #ffffff !important;
+    text-decoration: underline !important;
+}
+
+.pricing-feature-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    font-size: 0.875rem;
+    color: #334155;
+    line-height: 1.4;
+}
+
+.pricing-check-icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #dcfce7;
+    color: #16a34a;
+    font-size: 0.8rem;
+    margin-top: 1px;
+}
+
+.pricing-check-ai {
+    background: #dbeafe;
+    color: #2563eb;
+}
+
+.pricing-trust-bar {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+
 .partners-marquee {
     position: relative;
     width: 100%;
