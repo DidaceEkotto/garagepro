@@ -5,6 +5,7 @@ import StaticModal from '@/Components/StaticModal.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { useConfirm } from '@/Composables/useConfirm';
 import { useLightbox } from '@/composables/useLightbox';
+import { useOfflineSync } from '@/composables/useOfflineSync';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, ref, watch } from 'vue';
 
@@ -22,6 +23,9 @@ const props = defineProps({
 
 const { confirm } = useConfirm();
 const { openLightbox } = useLightbox();
+const { isOnline, enqueueOperation, pendingItemsForEntity } = useOfflineSync();
+const offlinePolicies = pendingItemsForEntity('insurance_policy');
+const offlineClaims = pendingItemsForEntity('insurance_claim');
 const isInsuranceSpace = computed(() => props.tenantType === 'assurance');
 
 const activeTab = ref('claims');
@@ -128,7 +132,30 @@ function onClaimPhotosChange(event) {
     claimForm.photos = Array.from(event.target.files || []).slice(0, 6);
 }
 
-function submitPolicy() {
+async function submitPolicy() {
+    if (!isOnline.value) {
+        await enqueueOperation({
+            entity: 'insurance_policy',
+            action: 'create',
+            label: `Police ${policyForm.policy_number} (${policyForm.insurer_name})`,
+            payload: {
+                customer_id: policyForm.customer_id,
+                vehicle_id: policyForm.vehicle_id,
+                policy_number: policyForm.policy_number,
+                insurer_name: policyForm.insurer_name,
+                coverage_type: policyForm.coverage_type,
+                premium_amount: Number(policyForm.premium_amount || 0),
+                deductible_amount: Number(policyForm.deductible_amount || 0),
+                starts_at: policyForm.starts_at,
+                expires_at: policyForm.expires_at,
+                notes: policyForm.notes || null,
+            },
+        });
+        policyForm.reset('customer_id', 'vehicle_id', 'policy_number', 'insurer_name', 'premium_amount', 'deductible_amount', 'expires_at', 'notes');
+        window.bootstrap?.Modal.getInstance(document.getElementById('modalNewPolicy'))?.hide();
+        return;
+    }
+
     policyForm.post('/assurances/polices', {
         onSuccess: () => {
             policyForm.reset('customer_id', 'vehicle_id', 'policy_number', 'insurer_name', 'premium_amount', 'deductible_amount', 'expires_at', 'notes');
@@ -153,8 +180,33 @@ async function openEditPolicyModal(policy) {
     window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalEditPolicy'))?.show();
 }
 
-function submitEditPolicy() {
+async function submitEditPolicy() {
     if (!editingPolicy.value) return;
+    if (!isOnline.value) {
+        await enqueueOperation({
+            entity: 'insurance_policy',
+            action: 'update',
+            recordId: editingPolicy.value.id,
+            baseUpdatedAt: editingPolicy.value.updated_at || null,
+            label: `Modif. police ${editPolicyForm.policy_number}`,
+            payload: {
+                customer_id: editingPolicy.value.customer_id,
+                vehicle_id: editingPolicy.value.vehicle_id,
+                policy_number: editPolicyForm.policy_number,
+                insurer_name: editPolicyForm.insurer_name,
+                coverage_type: editPolicyForm.coverage_type,
+                premium_amount: Number(editPolicyForm.premium_amount || 0),
+                deductible_amount: Number(editPolicyForm.deductible_amount || 0),
+                starts_at: editPolicyForm.starts_at,
+                expires_at: editPolicyForm.expires_at,
+                status: editPolicyForm.status,
+                notes: editPolicyForm.notes || null,
+            },
+        });
+        window.bootstrap?.Modal.getInstance(document.getElementById('modalEditPolicy'))?.hide();
+        return;
+    }
+
     editPolicyForm.put(`/assurances/polices/${editingPolicy.value.id}`, {
         preserveScroll: true,
         onSuccess: () => window.bootstrap?.Modal.getInstance(document.getElementById('modalEditPolicy'))?.hide(),
@@ -172,7 +224,30 @@ async function deletePolicy(policy) {
     router.delete(`/assurances/polices/${policy.id}`, { preserveScroll: true });
 }
 
-function submitClaim() {
+async function submitClaim() {
+    if (!isOnline.value) {
+        await enqueueOperation({
+            entity: 'insurance_claim',
+            action: 'create',
+            label: `Sinistre du ${claimForm.incident_date || 'jour'} (${(claimForm.photos || []).length} photo(s))`,
+            payload: {
+                insurance_policy_id: claimForm.insurance_policy_id || null,
+                customer_id: claimForm.customer_id,
+                vehicle_id: claimForm.vehicle_id,
+                insurance_tenant_id: claimForm.insurance_tenant_id || null,
+                garage_tenant_id: claimForm.garage_tenant_id || null,
+                incident_date: claimForm.incident_date,
+                description: claimForm.description,
+                expert_name: claimForm.expert_name || null,
+                estimated_amount: Number(claimForm.estimated_amount || 0),
+            },
+            files: Array.isArray(claimForm.photos) ? claimForm.photos : [],
+        });
+        claimForm.reset('insurance_policy_id', 'repair_order_id', 'customer_id', 'vehicle_id', 'description', 'expert_name', 'estimated_amount', 'photos');
+        window.bootstrap?.Modal.getInstance(document.getElementById('modalNewClaim'))?.hide();
+        return;
+    }
+
     claimForm.post('/assurances/sinistres', {
         forceFormData: true,
         onSuccess: () => {
@@ -226,6 +301,21 @@ function policyStatusBadge(p) {
 <template>
     <Head title="Assurances &amp; Sinistres" />
     <TenantLayout>
+        <!-- Polices / Sinistres saisis hors ligne -->
+        <div v-if="offlinePolicies.length || offlineClaims.length" class="alert alert-warning border-0 shadow-sm mb-3">
+            <div class="fw-bold small mb-2">
+                <i class="bi bi-wifi-off me-1"></i>Saisies hors ligne en attente de synchronisation
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <span v-for="item in offlinePolicies" :key="item.client_uuid" class="badge bg-white text-dark border px-2 py-1">
+                    <i class="bi bi-shield-check text-primary me-1"></i>{{ item.label }}
+                </span>
+                <span v-for="item in offlineClaims" :key="item.client_uuid" class="badge bg-white text-dark border px-2 py-1">
+                    <i class="bi bi-exclamation-octagon text-danger me-1"></i>{{ item.label }}
+                </span>
+            </div>
+        </div>
+
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
             <div>
                 <h1 class="h4 fw-bold mb-0">Assurances Automobile &amp; Sinistres</h1>

@@ -113,3 +113,18 @@ createInertiaApp({
             .mount(el);
     },
 });
+
+if ('serviceWorker' in navigator) {
+    const isSecure = window.location.protocol === 'https:' ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.endsWith('.localhost');
+
+    if (isSecure) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {
+                // Non bloquant si le navigateur refuse l'enregistrement SW
+            });
+        });
+    }
+}

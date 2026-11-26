@@ -19,6 +19,7 @@ class Vehicle extends Model
 
     protected $fillable = [
         'tenant_id',
+        'client_uuid',
         'customer_id',
         'license_plate',
         'brand',

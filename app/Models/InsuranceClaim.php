@@ -13,6 +13,7 @@ class InsuranceClaim extends Model
 
     protected $fillable = [
         'tenant_id',
+        'client_uuid',
         'insurance_tenant_id',
         'garage_tenant_id',
         'insurance_policy_id',

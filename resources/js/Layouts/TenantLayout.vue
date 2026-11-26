@@ -4,17 +4,28 @@ import ConfirmStaticModal from '@/Components/ConfirmStaticModal.vue';
 import FileDropzone from '@/Components/FileDropzone.vue';
 import ImageLightbox from '@/Components/ImageLightbox.vue';
 import LanguageSwitcher from '@/Components/LanguageSwitcher.vue';
+import OfflineStatusBar from '@/Components/OfflineStatusBar.vue';
 import PageSkeleton from '@/Components/PageSkeleton.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import { useI18n } from '@/composables/useI18n';
+import { useOfflineSync } from '@/composables/useOfflineSync';
 import { usePageLoading } from '@/composables/usePageLoading';
 import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 const { t } = useI18n();
 const { isNavigating } = usePageLoading();
+const { initOfflineSync, offlineNotice, isOnline: offlineIsOnline, pendingCount: offlinePendingCount } = useOfflineSync();
 const page = usePage();
 const tenant = computed(() => page.props.tenant);
+
+watch(
+    () => tenant.value?.id,
+    (id) => {
+        if (id) initOfflineSync(id);
+    },
+    { immediate: true }
+);
 const auth = computed(() => page.props.auth);
 const flash = computed(() => page.props.flash);
 const payrollAlert = computed(() => page.props.payrollAlert);
@@ -373,6 +384,9 @@ function resetDemo() {
                         </div>
                     </div>
 
+                    <!-- Statut Réseau & Mode Hors Ligne -->
+                    <OfflineStatusBar />
+
                     <!-- Menu déroulant Profil Utilisateur -->
                     <div class="dropdown">
                         <button
@@ -424,6 +438,46 @@ function resetDemo() {
                 </div>
             </div>
         </nav>
+
+        <!-- Bannière d'alerte Mode Hors Ligne / Synchro -->
+        <div
+            v-if="!offlineIsOnline || offlineNotice"
+            class="px-3 py-2 small fw-semibold d-flex flex-wrap align-items-center justify-content-between gap-2"
+            :class="
+                offlineNotice?.type === 'success'
+                    ? 'bg-success text-white'
+                    : offlineNotice?.type === 'danger'
+                        ? 'bg-danger text-white'
+                        : 'bg-warning text-dark'
+            "
+        >
+            <div>
+                <i
+                    class="bi me-2"
+                    :class="
+                        offlineNotice?.type === 'success'
+                            ? 'bi-cloud-check-fill'
+                            : offlineNotice?.type === 'danger'
+                                ? 'bi-exclamation-triangle-fill'
+                                : 'bi-wifi-off'
+                    "
+                ></i>
+                <span v-if="offlineNotice">{{ offlineNotice.message }}</span>
+                <span v-else>
+                    Mode Hors Ligne actif — Vos saisies (Clients, Véhicules, Visite Technique, Assurances) sont sauvegardées localement
+                    <template v-if="offlinePendingCount > 0"> ({{ offlinePendingCount }} en attente)</template>.
+                </span>
+            </div>
+            <button
+                type="button"
+                class="btn btn-sm py-0 px-2 fw-semibold"
+                :class="offlineNotice?.type === 'success' || offlineNotice?.type === 'danger' ? 'btn-light' : 'btn-dark'"
+                data-bs-toggle="modal"
+                data-bs-target="#modalOfflineSyncCenter"
+            >
+                Voir la file
+            </button>
+        </div>
 
         <div class="d-flex flex-grow-1">
             <!-- Desktop Vertical Sidebar -->

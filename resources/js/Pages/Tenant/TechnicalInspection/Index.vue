@@ -3,6 +3,7 @@ import DatePickerInput from '@/Components/DatePickerInput.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { useConfirm } from '@/Composables/useConfirm';
+import { useOfflineSync } from '@/composables/useOfflineSync';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import QRCode from 'qrcode';
 import { computed, nextTick, ref, watch } from 'vue';
@@ -16,6 +17,20 @@ const props = defineProps({
 });
 
 const { confirm } = useConfirm();
+const { isOnline, enqueueOperation, pendingItemsForEntity } = useOfflineSync();
+const offlinePvs = pendingItemsForEntity('technical_inspection');
+const offlineVehicles = pendingItemsForEntity('vehicle');
+
+const selectableVehicles = computed(() => [
+    ...offlineVehicles.value.map((item) => ({
+        id: item.temp_id,
+        license_plate: `${String(item.payload?.license_plate || '').toUpperCase()} (Hors ligne)`,
+        brand: item.payload?.brand || '',
+        model: item.payload?.model || '',
+        mileage: item.payload?.mileage || 0,
+    })),
+    ...(props.vehicles || []),
+]);
 
 const pvList = computed(() => (Array.isArray(props.pvs) ? props.pvs : (props.pvs?.data ?? [])));
 const pvLinks = computed(() => (!Array.isArray(props.pvs) && props.pvs?.links ? props.pvs.links : []));
@@ -128,7 +143,36 @@ async function openEditPvModal(pv) {
     window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalNewPv'))?.show();
 }
 
-function submitPv() {
+async function submitPv() {
+    if (!isOnline.value) {
+        const vehicleObj = selectableVehicles.value.find((v) => String(v.id) === String(form.vehicle_id));
+        const plateLabel = vehicleObj?.license_plate || `Véhicule #${form.vehicle_id}`;
+        await enqueueOperation({
+            entity: 'technical_inspection',
+            action: editingPv.value ? 'update' : 'create',
+            recordId: editingPv.value?.id || null,
+            baseUpdatedAt: editingPv.value?.updated_at || null,
+            label: editingPv.value ? `Modif. PV ${editingPv.value.pv_number}` : `PV Visite Technique — ${plateLabel}`,
+            payload: {
+                vehicle_id: form.vehicle_id,
+                parent_inspection_id: form.parent_inspection_id || null,
+                inspection_line: form.inspection_line || 'Ligne 1',
+                mileage: form.mileage !== '' ? Number(form.mileage) : null,
+                verdict: form.verdict,
+                defects: form.defects,
+                expires_at: form.expires_at || null,
+                counter_visit_deadline: form.counter_visit_deadline || null,
+                notes: form.notes || null,
+            },
+        });
+        editingPv.value = null;
+        form.reset('vehicle_id', 'parent_inspection_id', 'mileage', 'expires_at', 'counter_visit_deadline', 'notes');
+        form.verdict = 'favorable';
+        form.defects = defaultDefects();
+        window.bootstrap?.Modal.getInstance(document.getElementById('modalNewPv'))?.hide();
+        return;
+    }
+
     if (editingPv.value) {
         form.put(`/visite-technique/${editingPv.value.id}`, {
             preserveScroll: true,
@@ -195,6 +239,18 @@ function verdictBadge(verdict) {
             <button type="button" class="btn btn-primary" @click="openNewPvModal">
                 <i class="bi bi-clipboard2-check me-1"></i>Nouveau PV Visite Technique
             </button>
+        </div>
+
+        <!-- PV saisis hors ligne en attente de synchronisation -->
+        <div v-if="offlinePvs.length" class="alert alert-warning border-0 shadow-sm mb-3">
+            <div class="fw-bold small mb-2">
+                <i class="bi bi-wifi-off me-1"></i>{{ offlinePvs.length }} PV de visite technique enregistré(s) hors ligne (en attente de synchronisation)
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <span v-for="item in offlinePvs" :key="item.client_uuid" class="badge bg-white text-dark border px-2 py-1">
+                    OFF-VT • {{ item.label }} ({{ item.payload?.verdict }})
+                </span>
+            </div>
         </div>
 
         <!-- Recherche & filtre par verdict -->
@@ -322,7 +378,7 @@ function verdictBadge(verdict) {
                         <label class="form-label small fw-semibold">Véhicule <span class="text-danger">*</span></label>
                         <select v-model="form.vehicle_id" class="form-select" required>
                             <option value="">-- Choisir un véhicule --</option>
-                            <option v-for="v in vehicles" :key="v.id" :value="v.id">{{ v.license_plate }} — {{ v.brand }} {{ v.model }}</option>
+                            <option v-for="v in selectableVehicles" :key="v.id" :value="v.id">{{ v.license_plate }} — {{ v.brand }} {{ v.model }}</option>
                         </select>
                     </div>
                     <div :class="editingPv ? 'col-md-6' : 'col-md-4'">

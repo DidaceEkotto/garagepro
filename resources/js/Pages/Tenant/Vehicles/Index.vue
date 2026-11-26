@@ -2,14 +2,27 @@
 import DatePickerInput from '@/Components/DatePickerInput.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
+import { useOfflineSync } from '@/composables/useOfflineSync';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { nextTick, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
+
+const { isOnline, enqueueOperation, pendingItemsForEntity } = useOfflineSync();
+const offlineVehicles = pendingItemsForEntity('vehicle');
+const offlineCustomers = pendingItemsForEntity('customer');
 
 const props = defineProps({
     vehicles: Object,
     search: { type: String, default: '' },
     customers: { type: Array, default: () => [] },
 });
+
+const selectableCustomers = computed(() => [
+    ...offlineCustomers.value.map((item) => ({
+        id: item.temp_id,
+        name: `${item.label} (Hors ligne)`,
+    })),
+    ...(props.customers || []),
+]);
 
 const query = ref(props.search ?? '');
 const editingVehicle = ref(null);
@@ -51,8 +64,35 @@ async function openEditVehicle(v) {
     window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalEditVehicle'))?.show();
 }
 
-function updateVehicle() {
+async function updateVehicle() {
     if (!editingVehicle.value) return;
+    if (!isOnline.value) {
+        await enqueueOperation({
+            entity: 'vehicle',
+            action: 'update',
+            recordId: editingVehicle.value.id,
+            baseUpdatedAt: editingVehicle.value.updated_at || null,
+            label: `Modif. véhicule ${editForm.license_plate}`,
+            payload: {
+                customer_id: editForm.customer_id,
+                license_plate: editForm.license_plate,
+                brand: editForm.brand,
+                model: editForm.model,
+                year: editForm.year || null,
+                vin: editForm.vin || null,
+                color: editForm.color || null,
+                fuel_type: editForm.fuel_type || null,
+                transmission: editForm.transmission || null,
+                mileage: editForm.mileage || 0,
+                next_service_date: editForm.next_service_date || null,
+                notes: editForm.notes || null,
+            },
+        });
+        window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalEditVehicle'))?.hide();
+        editingVehicle.value = null;
+        return;
+    }
+
     editForm.put(`/vehicules/${editingVehicle.value.id}`, {
         preserveScroll: true,
         onSuccess: () => {
@@ -83,7 +123,44 @@ function doSearch() {
     router.get('/vehicules', { q: query.value }, { preserveState: true });
 }
 
-function createVehicle() {
+async function createVehicle() {
+    if (!isOnline.value) {
+        await enqueueOperation({
+            entity: 'vehicle',
+            action: 'create',
+            label: `${String(form.license_plate || '').toUpperCase()} — ${form.brand} ${form.model}`.trim(),
+            payload: {
+                customer_id: form.customer_id,
+                license_plate: form.license_plate,
+                brand: form.brand,
+                model: form.model,
+                year: form.year || null,
+                vin: form.vin || null,
+                color: form.color || null,
+                fuel_type: form.fuel_type || null,
+                transmission: form.transmission || null,
+                mileage: form.mileage || 0,
+                next_service_date: form.next_service_date || null,
+                notes: form.notes || null,
+            },
+        });
+        form.reset(
+            'license_plate',
+            'brand',
+            'model',
+            'year',
+            'vin',
+            'color',
+            'mileage',
+            'first_registration_date',
+            'next_service_date',
+            'next_service_mileage',
+            'notes'
+        );
+        window.bootstrap?.Modal.getInstance(document.getElementById('modalAddVehicle'))?.hide();
+        return;
+    }
+
     form.post('/vehicules', {
         onSuccess: () => {
             form.reset(
@@ -144,7 +221,19 @@ function createVehicle() {
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-if="!vehicles?.data?.length">
+                            <tr v-for="item in offlineVehicles" :key="item.client_uuid" class="table-warning">
+                                <td class="fw-bold">
+                                    {{ String(item.payload?.license_plate || '').toUpperCase() }}
+                                    <span class="badge bg-warning text-dark ms-1">
+                                        <i class="bi bi-wifi-off me-1"></i>Hors ligne
+                                    </span>
+                                </td>
+                                <td>{{ item.payload?.brand }} {{ item.payload?.model }}</td>
+                                <td class="small text-muted">En attente de synchro</td>
+                                <td>{{ Number(item.payload?.mileage || 0).toLocaleString('fr-FR') }} km</td>
+                                <td class="text-end small text-muted">Sauvegardé localement</td>
+                            </tr>
+                            <tr v-if="!vehicles?.data?.length && !offlineVehicles.length">
                                 <td colspan="5" class="text-center text-muted py-4 small">Aucun véhicule enregistré.</td>
                             </tr>
                             <tr v-for="v in vehicles.data" :key="v.id">
@@ -199,8 +288,8 @@ function createVehicle() {
                     <label class="form-label small fw-semibold">Affecter au client <span class="text-danger">*</span></label>
                     <select v-model="form.customer_id" class="form-select" required>
                         <option value="">-- Choisir un client --</option>
-                        <option v-for="c in customers" :key="c.id" :value="c.id">
-                            {{ c.name }} {{ c.first_name || '' }} ({{ c.phone }})
+                        <option v-for="c in selectableCustomers" :key="c.id" :value="c.id">
+                            {{ c.name }} {{ c.first_name || '' }} <template v-if="c.phone">({{ c.phone }})</template>
                         </option>
                     </select>
                     <div v-if="form.errors.customer_id" class="text-danger small mt-1">{{ form.errors.customer_id }}</div>

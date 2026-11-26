@@ -4,10 +4,13 @@ import FileDropzone from '@/Components/FileDropzone.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { useLightbox } from '@/composables/useLightbox';
+import { useOfflineSync } from '@/composables/useOfflineSync';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { nextTick, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 
 const { openLightbox } = useLightbox();
+const { isOnline, enqueueOperation, pendingItemsForEntity } = useOfflineSync();
+const offlineCustomers = pendingItemsForEntity('customer');
 
 const props = defineProps({
     customers: Object,
@@ -120,7 +123,41 @@ function doSearch() {
     router.get('/clients', { q: query.value }, { preserveState: true });
 }
 
-function createCustomer() {
+async function createCustomer() {
+    if (!isOnline.value) {
+        const dial = form.phone_dial_code || props.defaultDialCode || '+237';
+        const rawPhone = String(form.phone || '').trim();
+        const fullPhone = rawPhone && !rawPhone.startsWith('+') ? `${dial}${rawPhone.replace(/\D/g, '')}` : rawPhone;
+        await enqueueOperation({
+            entity: 'customer',
+            action: 'create',
+            label: `${form.first_name ? form.first_name + ' ' : ''}${form.name || 'Nouveau client'}`.trim(),
+            payload: {
+                name: form.name,
+                first_name: form.first_name || null,
+                gender: form.gender || 'homme',
+                id_number: form.id_number || null,
+                phone_dial_code: dial,
+                phone: fullPhone || null,
+                whatsapp_phone: fullPhone || null,
+                email: form.email || null,
+                type: form.type || 'particulier',
+                city: form.city || null,
+                address: form.address || null,
+                company_name: form.company_name || null,
+                profession: form.profession || null,
+                date_of_birth: form.date_of_birth || null,
+                emergency_contact: form.emergency_contact || null,
+                description: form.description || null,
+            },
+        });
+        form.reset();
+        form.phone_dial_code = props.defaultDialCode || '+237';
+        form.gender = 'homme';
+        window.bootstrap?.Modal.getInstance(document.getElementById('modalAddCustomer'))?.hide();
+        return;
+    }
+
     form.post('/clients', {
         forceFormData: true,
         onSuccess: () => {
@@ -178,8 +215,44 @@ async function openEditCustomer(c) {
     window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalEditCustomer'))?.show();
 }
 
-function updateCustomer() {
+async function updateCustomer() {
     if (!editingCustomer.value) return;
+
+    if (!isOnline.value) {
+        const dial = editForm.phone_dial_code || props.defaultDialCode || '+237';
+        const rawPhone = String(editForm.phone || '').trim();
+        const fullPhone = rawPhone && !rawPhone.startsWith('+') ? `${dial}${rawPhone.replace(/\D/g, '')}` : rawPhone;
+        await enqueueOperation({
+            entity: 'customer',
+            action: 'update',
+            recordId: editingCustomer.value.id,
+            baseUpdatedAt: editingCustomer.value.updated_at || null,
+            label: `Modif. client ${editForm.name}`,
+            payload: {
+                name: editForm.name,
+                first_name: editForm.first_name || null,
+                gender: editForm.gender || 'homme',
+                id_number: editForm.id_number || null,
+                phone_dial_code: dial,
+                phone: fullPhone || null,
+                whatsapp_phone: fullPhone || null,
+                email: editForm.email || null,
+                type: editForm.type || 'particulier',
+                city: editForm.city || null,
+                address: editForm.address || null,
+                company_name: editForm.company_name || null,
+                profession: editForm.profession || null,
+                date_of_birth: editForm.date_of_birth || null,
+                emergency_contact: editForm.emergency_contact || null,
+                description: editForm.description || null,
+            },
+        });
+        editingCustomer.value = null;
+        editForm.reset('photo');
+        window.bootstrap?.Modal.getInstance(document.getElementById('modalEditCustomer'))?.hide();
+        return;
+    }
+
     editForm.post(`/clients/${editingCustomer.value.id}`, {
         forceFormData: true,
         preserveScroll: true,
@@ -230,6 +303,18 @@ function updateCustomer() {
                         </tr>
                     </thead>
                     <tbody>
+                        <tr v-for="item in offlineCustomers" :key="item.client_uuid" class="table-warning">
+                            <td class="fw-semibold">
+                                {{ item.payload?.name }} {{ item.payload?.first_name || '' }}
+                                <span class="badge bg-warning text-dark ms-2">
+                                    <i class="bi bi-wifi-off me-1"></i>En attente de synchro
+                                </span>
+                            </td>
+                            <td>{{ item.payload?.phone || '—' }}</td>
+                            <td><span class="badge bg-light text-dark border">{{ item.payload?.type || 'particulier' }}</span></td>
+                            <td>0</td>
+                            <td class="text-end small text-muted">Sauvegardé localement</td>
+                        </tr>
                         <tr v-for="c in customers.data" :key="c.id">
                             <td class="fw-semibold">
                                 <div class="d-flex align-items-center gap-2">

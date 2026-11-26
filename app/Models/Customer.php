@@ -19,6 +19,7 @@ class Customer extends Model
 
     protected $fillable = [
         'tenant_id',
+        'client_uuid',
         'global_customer_id',
         'agency_id',
         'name',

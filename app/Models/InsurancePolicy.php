@@ -13,6 +13,7 @@ class InsurancePolicy extends Model
 
     protected $fillable = [
         'tenant_id',
+        'client_uuid',
         'agency_id',
         'customer_id',
         'vehicle_id',

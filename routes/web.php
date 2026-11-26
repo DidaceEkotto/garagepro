@@ -29,6 +29,7 @@ use App\Http\Controllers\Tenant\MaintenanceReminderController;
 use App\Http\Controllers\Tenant\MarketplaceManagementController;
 use App\Http\Controllers\Tenant\MessageController;
 use App\Http\Controllers\Tenant\PaymentController;
+use App\Http\Controllers\Tenant\OfflineSyncController;
 use App\Http\Controllers\Tenant\ProfessionalController;
 use App\Http\Controllers\Tenant\ProfileController;
 use App\Http\Controllers\Tenant\PurchaseOrderController;
@@ -244,6 +245,11 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
     Route::post('/assistant-ia/messages/{messageId}/feedback', [AiDiagnosticController::class, 'submitFeedback'])
         ->name('tenant.ai_diagnostic.feedback');
     Route::delete('/assistant-ia/{conversationId}', [AiDiagnosticController::class, 'destroy'])->name('tenant.ai_diagnostic.destroy');
+
+    // Mode Hors Ligne & Synchronisation (PWA / IndexedDB)
+    Route::get('/offline/ping', [OfflineSyncController::class, 'ping'])->name('tenant.offline.ping');
+    Route::get('/offline/bootstrap', [OfflineSyncController::class, 'bootstrap'])->name('tenant.offline.bootstrap');
+    Route::post('/offline/sync', [OfflineSyncController::class, 'sync'])->name('tenant.offline.sync');
 
     // Clients & Véhicules
     Route::get('/clients', [CustomerController::class, 'index'])
