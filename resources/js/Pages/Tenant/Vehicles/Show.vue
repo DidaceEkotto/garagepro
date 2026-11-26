@@ -24,7 +24,7 @@ const whatsappReminderUrl = computed(() => {
 </script>
 
 <template>
-    <Head :title="vehicle.license_plate" />
+    <Head :title="vehicle?.license_plate ? `Véhicule ${vehicle.license_plate}` : 'Fiche Véhicule'" />
     <TenantLayout>
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
             <div>

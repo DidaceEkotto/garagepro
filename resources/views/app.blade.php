@@ -179,7 +179,62 @@
         <meta name="twitter:description" head-key="twitter:description" content="{{ $seoDesc }}">
         <meta name="twitter:image" head-key="twitter:image" content="{{ $seoImg }}">
     @else
-        <title inertia>{{ $siteName }}</title>
+        @php
+            $routeName = request()->route()?->getName() ?? '';
+            $proTitles = [
+                'tenant.dashboard' => 'Tableau de bord',
+                'tenant.tutorial' => 'Tutoriel & Documentation',
+                'tenant.agencies.index' => 'Agences',
+                'tenant.professionals.index' => 'Professionnels & Équipe',
+                'tenant.profile.index' => 'Mon Profil',
+                'tenant.settings.index' => 'Paramètres Espace',
+                'tenant.ai_diagnostic.index' => 'Assistant IA Diagnostic Auto',
+                'tenant.customers.index' => 'Clients',
+                'tenant.customers.show' => 'Fiche Client',
+                'tenant.vehicles.index' => 'Véhicules',
+                'tenant.vehicles.show' => 'Fiche Véhicule',
+                'tenant.appointments.index' => 'Rendez-vous',
+                'tenant.receptions.index' => 'Réceptions véhicules',
+                'tenant.repair_orders.index' => 'Ordres de réparation',
+                'tenant.quotes.index' => 'Devis',
+                'tenant.inventory.index' => 'Stock & Pièces',
+                'tenant.purchase_orders.index' => 'Approvisionnement & Fournisseurs',
+                'tenant.workshop.my_orders' => 'Atelier — Mes OR du jour',
+                'tenant.inspections.index' => 'Inspections Visuelles (DVI)',
+                'tenant.subcontracting.index' => 'Sous-traitance & Dépannage',
+                'tenant.tools_bulk.index' => 'Outillage & Consommables',
+                'tenant.planning.index' => 'Planning Atelier',
+                'tenant.maintenance_reminders.index' => 'Rappels Entretien & Documents',
+                'tenant.fleets.index' => 'Flottes Entreprises (B2B)',
+                'tenant.technical_inspection.index' => 'Visite Technique & PV',
+                'tenant.insurance.index' => 'Assurances & Sinistres',
+                'tenant.invoices.index' => 'Facturation & Caisse',
+                'tenant.accounting.index' => 'Comptabilité SYSCOHADA',
+                'tenant.hr.index' => 'Pointage & Paie (RH)',
+                'tenant.after_sales.index' => 'Après-vente & Fidélité',
+                'tenant.reports.index' => 'Statistiques & Rapports',
+                'tenant.messages.index' => 'Messagerie & Notifications',
+                'tenant.marketplace.categories' => 'Marketplace — Catégories',
+                'tenant.marketplace.products' => 'Marketplace — Mes Produits',
+                'tenant.marketplace.orders' => 'Marketplace — Commandes reçues',
+                'tenant.subscription.index' => 'Abonnement',
+                'tenant.affiliation.index' => 'Affiliation & Parrainage',
+                'tenant.payments.return' => 'Statut du paiement',
+                'tenant.login' => 'Connexion',
+                'password.request' => 'Mot de passe oublié',
+                'password.otp' => 'Vérification OTP',
+                'password.reset.form' => 'Nouveau mot de passe',
+                'public.customer_portal' => 'Portail Client Unique',
+                'public.vehicle.passport' => "Carnet d'entretien numérique",
+                'public.technical_pv.show' => 'Procès-Verbal Visite Technique',
+                'public.repair_order.tracking' => 'Suivi de réparation',
+                'public.appointment.show' => 'Prise de rendez-vous',
+            ];
+            $fallbackPageTitle = isset($proTitles[$routeName])
+                ? $proTitles[$routeName] . ' - ' . $siteName
+                : $siteName;
+        @endphp
+        <title inertia>{{ $fallbackPageTitle }}</title>
         <meta name="robots" content="noindex, nofollow">
     @endif
 

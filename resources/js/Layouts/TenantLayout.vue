@@ -9,7 +9,7 @@ import StaticModal from '@/Components/StaticModal.vue';
 import { useI18n } from '@/composables/useI18n';
 import { usePageLoading } from '@/composables/usePageLoading';
 import { Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 const { t } = useI18n();
 const { isNavigating } = usePageLoading();
@@ -25,6 +25,70 @@ const pendingAppointmentRequestsCount = computed(() => page.props.pendingAppoint
 const recentNotifications = computed(() => page.props.recentNotifications ?? []);
 const currentUrl = computed(() => page.url);
 const marketplaceMenuOpen = ref(currentUrl.value.startsWith('/marketplace-gestion'));
+
+const routeTitleMap = [
+    ['/tableau-de-bord', 'Tableau de bord'],
+    ['/assistant-ia', 'Assistant IA Diagnostic Auto'],
+    ['/clients/', 'Fiche Client'],
+    ['/clients', 'Clients'],
+    ['/vehicules/', 'Fiche Véhicule'],
+    ['/vehicules', 'Véhicules'],
+    ['/rendez-vous', 'Rendez-vous'],
+    ['/receptions', 'Réceptions véhicules'],
+    ['/ordres-reparation', 'Ordres de réparation'],
+    ['/devis', 'Devis'],
+    ['/stock', 'Stock & Pièces'],
+    ['/approvisionnement', 'Approvisionnement & Fournisseurs'],
+    ['/atelier/mes-or', 'Atelier — Mes OR du jour'],
+    ['/inspections', 'Inspections Visuelles (DVI)'],
+    ['/sous-traitance', 'Sous-traitance & Dépannage'],
+    ['/outillage-vrac', 'Outillage & Consommables'],
+    ['/planning-atelier', 'Planning Atelier'],
+    ['/rappels-entretien', 'Rappels Entretien & Documents'],
+    ['/flottes', 'Flottes Entreprises (B2B)'],
+    ['/visite-technique', 'Visite Technique & PV'],
+    ['/assurances', 'Assurances & Sinistres'],
+    ['/factures', 'Facturation & Caisse'],
+    ['/comptabilite', 'Comptabilité SYSCOHADA'],
+    ['/rh', 'Pointage & Paie (RH)'],
+    ['/apres-vente', 'Après-vente & Fidélité'],
+    ['/rapports', 'Statistiques & Rapports'],
+    ['/messagerie', 'Messagerie & Notifications'],
+    ['/marketplace-gestion/categories', 'Marketplace — Catégories'],
+    ['/marketplace-gestion/produits', 'Marketplace — Mes Produits'],
+    ['/marketplace-gestion/commandes', 'Marketplace — Commandes reçues'],
+    ['/agences', 'Agences'],
+    ['/professionnels', 'Professionnels & Équipe'],
+    ['/mon-profil', 'Mon Profil'],
+    ['/parametres-espace', 'Paramètres Espace'],
+    ['/abonnement', 'Abonnement'],
+    ['/affiliation', 'Affiliation & Parrainage'],
+    ['/tutoriel', 'Tutoriel & Documentation'],
+    ['/paiements/', 'Statut du paiement'],
+];
+
+const currentPageTitle = computed(() => {
+    const cleanPath = (currentUrl.value || '').split('?')[0];
+    for (const [prefix, label] of routeTitleMap) {
+        if (cleanPath === prefix || (prefix.endsWith('/') && cleanPath.startsWith(prefix)) || cleanPath.startsWith(prefix + '/')) {
+            return label;
+        }
+    }
+    return 'Espace Professionnel';
+});
+
+function ensureDocumentTitle() {
+    const appName = page.props.app?.name || 'MboaCar';
+    const current = (document.title || '').trim();
+    if (!current || current === appName || current === 'MboaCar' || current === 'Laravel') {
+        document.title = `${currentPageTitle.value} - ${appName}`;
+    }
+}
+
+watch(currentUrl, () => {
+    setTimeout(ensureDocumentTitle, 0);
+});
+onMounted(ensureDocumentTitle);
 
 const replyingNotification = ref(null);
 const quickReplyForm = useForm({
@@ -226,6 +290,10 @@ function resetDemo() {
                         />
                         <span>{{ tenant?.name ?? 'MboaCar' }}</span>
                     </Link>
+                    <span class="text-white-50 d-none d-xl-inline">|</span>
+                    <span class="small fw-semibold text-white d-none d-xl-inline text-truncate" style="max-width: 240px;">
+                        {{ currentPageTitle }}
+                    </span>
                 </div>
 
                 <div class="d-flex align-items-center gap-2 text-white">

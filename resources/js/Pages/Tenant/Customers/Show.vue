@@ -35,7 +35,7 @@ function addVehicle() {
 </script>
 
 <template>
-    <Head :title="customer.name" />
+    <Head :title="customer?.name ? `Client : ${customer.name}` : 'Fiche Client'" />
 
     <TenantLayout>
         <div class="d-flex justify-content-between align-items-center mb-4">
