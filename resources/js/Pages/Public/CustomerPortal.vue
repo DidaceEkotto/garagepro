@@ -1024,8 +1024,8 @@ const tabs = computed(() => [
 }
 
 .cp-feature-icon {
-    width: 38px;
-    height: 38px;
+    width: 40px;
+    height: 40px;
     flex-shrink: 0;
     border-radius: 11px;
     background: rgba(255, 255, 255, 0.09);
@@ -1034,17 +1034,25 @@ const tabs = computed(() => [
     align-items: center;
     justify-content: center;
     color: #60a5fa;
-    font-size: 1rem;
+    font-size: 1.1rem;
+    line-height: 1;
 }
 
-.cp-feature-list strong {
+.cp-feature-icon i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.cp-feature-list li > div > strong {
     display: block;
     font-size: 0.9rem;
     font-weight: 700;
     color: #f8fafc;
 }
 
-.cp-feature-list span {
+.cp-feature-list li > div > span {
     display: block;
     font-size: 0.8rem;
     color: #94a3b8;
