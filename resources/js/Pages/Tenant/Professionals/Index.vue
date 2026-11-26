@@ -1,6 +1,7 @@
 <script setup>
 import DatePickerInput from '@/Components/DatePickerInput.vue';
 import FileDropzone from '@/Components/FileDropzone.vue';
+import PhoneInput from '@/Components/PhoneInput.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { useLightbox } from '@/composables/useLightbox';
@@ -258,7 +259,7 @@ function resetPassword(p) {
                 <div class="row g-3 mb-3">
                     <div class="col-md-4">
                         <label class="form-label small">Téléphone</label>
-                        <input v-model="form.phone" type="text" class="form-control" />
+                        <PhoneInput v-model="form.phone" :is-invalid="!!form.errors.phone" />
                     </div>
                     <div class="col-md-4">
                         <label class="form-label small">Rôle métier</label>
@@ -364,7 +365,7 @@ function resetPassword(p) {
                 <div class="row g-3 mb-3">
                     <div class="col-md-4">
                         <label class="form-label small">Téléphone</label>
-                        <input v-model="editForm.phone" type="text" class="form-control" />
+                        <PhoneInput v-model="editForm.phone" :is-invalid="!!editForm.errors.phone" />
                     </div>
                     <div class="col-md-4">
                         <label class="form-label small">Rôle métier</label>

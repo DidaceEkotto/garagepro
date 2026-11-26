@@ -300,7 +300,7 @@ class InsuranceController extends Controller
             'description' => ['required', 'string', 'max:2000'],
             'expert_name' => ['nullable', 'string', 'max:150'],
             'estimated_amount' => ['required', 'integer', 'min:0'],
-            'photos' => ['nullable', 'array', 'max:6'],
+            'photos' => ['nullable', 'array'],
             'photos.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ]);
 

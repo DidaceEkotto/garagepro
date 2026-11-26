@@ -1,5 +1,6 @@
 <script setup>
 import FileDropzone from '@/Components/FileDropzone.vue';
+import PhoneInput from '@/Components/PhoneInput.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { useLightbox } from '@/composables/useLightbox';
 import { Head, useForm } from '@inertiajs/vue3';
@@ -91,7 +92,7 @@ function savePassword() {
                             <div class="row g-2 mb-3">
                                 <div class="col-md-6">
                                     <label class="form-label small">Téléphone / WhatsApp</label>
-                                    <input v-model="infoForm.phone" type="text" class="form-control" />
+                                    <PhoneInput v-model="infoForm.phone" :is-invalid="!!infoForm.errors.phone" />
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label small">Sexe</label>

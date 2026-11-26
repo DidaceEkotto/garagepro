@@ -1,4 +1,5 @@
 <script setup>
+import PhoneInput from '@/Components/PhoneInput.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { useLightbox } from '@/composables/useLightbox';
@@ -830,7 +831,7 @@ function formatDateTime(iso) {
                     <div v-if="explainError" class="alert alert-danger small">{{ explainError }}</div>
                     <div class="mb-3">
                         <label class="form-label small fw-semibold">Numéro WhatsApp du client</label>
-                        <input v-model="clientWhatsappForm.phone" type="text" class="form-control" placeholder="+237 6XX XXX XXX" required />
+                        <PhoneInput v-model="clientWhatsappForm.phone" required />
                     </div>
                     <div class="mb-3">
                         <div class="d-flex justify-content-between align-items-center mb-1">

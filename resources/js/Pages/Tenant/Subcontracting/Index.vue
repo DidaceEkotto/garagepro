@@ -1,4 +1,5 @@
 <script setup>
+import PhoneInput from '@/Components/PhoneInput.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { useConfirm } from '@/Composables/useConfirm';
@@ -156,7 +157,7 @@ function formatMoney(v) {
                     </div>
                     <div class="col-md-4">
                         <label class="form-label small fw-semibold">Téléphone prestataire</label>
-                        <input v-model="form.provider_phone" type="text" class="form-control" />
+                        <PhoneInput v-model="form.provider_phone" :is-invalid="!!form.errors.provider_phone" />
                     </div>
                 </div>
                 <div class="row g-2 mb-3">

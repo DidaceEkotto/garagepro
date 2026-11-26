@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\AffiliateLink;
 use App\Models\AppointmentLink;
 use App\Models\Category;
+use App\Models\Country;
 use App\Models\Employee;
 use App\Models\MarketplaceOrderItem;
 use App\Models\PlatformMessage;
@@ -148,6 +149,24 @@ class HandleInertiaRequests extends Middleware
                 : "https://{$authTenant->slug}.{$baseDomain}/tableau-de-bord";
         }
 
+        $tenantDialCode = '+237';
+        if ($tenant) {
+            $countryCode = strtoupper(trim((string) ($tenant->country ?? '')));
+            if ($countryCode !== '') {
+                $resolvedDial = Cache::remember(
+                    "mboacar_dial_code_{$countryCode}",
+                    3600,
+                    fn () => Country::where('code', $countryCode)->value('dial_code')
+                );
+                if ($resolvedDial) {
+                    $tenantDialCode = $resolvedDial;
+                }
+            }
+            if ($tenantDialCode === '+237' && ! empty($tenant->phone) && preg_match('/^(\+\d{1,4})/', trim((string) $tenant->phone), $m)) {
+                $tenantDialCode = $m[1];
+            }
+        }
+
         return [
             ...parent::share($request),
             'unreadMessagesCount' => $unreadMessagesCount,
@@ -170,6 +189,8 @@ class HandleInertiaRequests extends Middleware
                 'name' => $tenant->name,
                 'slug' => $tenant->slug,
                 'type' => $tenant->type ?? 'garage',
+                'country' => $tenant->country ?? 'CM',
+                'dialCode' => $tenantDialCode,
                 'status' => $tenant->status,
                 'isReadOnly' => $tenant->isReadOnly(),
                 'isInTrialGrace' => $tenant->isInTrialGrace(),

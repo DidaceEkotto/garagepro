@@ -1,8 +1,10 @@
 <script setup>
 import DatePickerInput from '@/Components/DatePickerInput.vue';
+import FileDropzone from '@/Components/FileDropzone.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { useConfirm } from '@/Composables/useConfirm';
+import { useLightbox } from '@/composables/useLightbox';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, ref, watch } from 'vue';
 
@@ -19,6 +21,7 @@ const props = defineProps({
 });
 
 const { confirm } = useConfirm();
+const { openLightbox } = useLightbox();
 const isInsuranceSpace = computed(() => props.tenantType === 'assurance');
 
 const activeTab = ref('claims');
@@ -251,7 +254,13 @@ function policyStatusBadge(p) {
                         />
                     </div>
                     <div class="col-md-3">
-                        <select v-if="activeTab === 'claims'" v-model="claimStatusFilter" class="form-select form-select-sm" @change="applyFilters">
+                        <select
+                            v-show="activeTab === 'claims'"
+                            key="claim-status-filter"
+                            v-model="claimStatusFilter"
+                            class="form-select form-select-sm no-select2"
+                            @change="applyFilters"
+                        >
                             <option value="all">Tous les statuts sinistres</option>
                             <option value="declare">Déclaré</option>
                             <option value="expertise">En expertise</option>
@@ -260,7 +269,13 @@ function policyStatusBadge(p) {
                             <option value="cloture">Clôturé</option>
                             <option value="refuse">Refusé</option>
                         </select>
-                        <select v-else v-model="policyStatusFilter" class="form-select form-select-sm" @change="applyFilters">
+                        <select
+                            v-show="activeTab === 'policies'"
+                            key="policy-status-filter"
+                            v-model="policyStatusFilter"
+                            class="form-select form-select-sm no-select2"
+                            @change="applyFilters"
+                        >
                             <option value="all">Tous les statuts polices</option>
                             <option value="active">Actives</option>
                             <option value="expiree">Expirées</option>
@@ -327,9 +342,16 @@ function policyStatusBadge(p) {
                                     </span>
                                 </div>
                                 <div v-if="c.photo_urls && c.photo_urls.length" class="d-flex flex-wrap gap-1 mt-2">
-                                    <a v-for="(url, idx) in c.photo_urls" :key="idx" :href="url" target="_blank" rel="noopener">
-                                        <img :src="url" alt="Photo sinistre" class="rounded border" style="width: 38px; height: 38px; object-fit: cover;" />
-                                    </a>
+                                    <button
+                                        v-for="(url, idx) in c.photo_urls"
+                                        :key="idx"
+                                        type="button"
+                                        class="btn p-0 border-0 bg-transparent"
+                                        title="Agrandir la photo"
+                                        @click="openLightbox(c.photo_urls, idx)"
+                                    >
+                                        <img :src="url" alt="Photo sinistre" class="rounded border shadow-sm" style="width: 42px; height: 42px; object-fit: cover; cursor: zoom-in;" />
+                                    </button>
                                 </div>
                             </td>
                             <td>
@@ -622,9 +644,13 @@ function policyStatusBadge(p) {
                     </div>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label small fw-semibold">Photos des dégâts / constat (jusqu'à 6 images)</label>
-                    <input type="file" accept="image/*" multiple class="form-control form-control-sm" @change="onClaimPhotosChange" />
-                    <div v-if="claimForm.photos.length" class="small text-muted mt-1">{{ claimForm.photos.length }} photo(s) sélectionnée(s)</div>
+                    <label class="form-label small fw-semibold">Photos des dégâts / constat (nombre illimité)</label>
+                    <FileDropzone
+                        v-model="claimForm.photos"
+                        :multiple="true"
+                        accept="image/jpeg,image/png,image/webp"
+                        label="Glissez-déposez autant d'images que vous voulez ici ou cliquez pour parcourir"
+                    />
                 </div>
                 <div class="mb-4">
                     <label class="form-label small fw-semibold">Circonstances &amp; dommages <span class="text-danger">*</span></label>

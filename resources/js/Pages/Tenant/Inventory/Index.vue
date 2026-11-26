@@ -1,4 +1,5 @@
 <script setup>
+import PhoneInput from '@/Components/PhoneInput.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
@@ -337,7 +338,7 @@ function submitMovement() {
                 <div class="row g-2 mb-3">
                     <div class="col-md-4">
                         <label class="form-label small">Téléphone</label>
-                        <input v-model="supplierForm.phone" type="text" class="form-control" />
+                        <PhoneInput v-model="supplierForm.phone" :is-invalid="!!supplierForm.errors.phone" />
                     </div>
                     <div class="col-md-4">
                         <label class="form-label small">Ville</label>

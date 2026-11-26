@@ -1,5 +1,6 @@
 <script setup>
 import FileDropzone from '@/Components/FileDropzone.vue';
+import PhoneInput from '@/Components/PhoneInput.vue';
 import TimePickerInput from '@/Components/TimePickerInput.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { useLightbox } from '@/composables/useLightbox';
@@ -75,7 +76,7 @@ function saveSettings() {
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label small">Téléphone</label>
-                                    <input v-model="form.phone" type="text" class="form-control" />
+                                    <PhoneInput v-model="form.phone" :is-invalid="!!form.errors.phone" />
                                 </div>
                             </div>
 
