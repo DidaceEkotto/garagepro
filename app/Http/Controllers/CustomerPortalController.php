@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Country;
 use App\Models\Customer;
 use App\Models\GlobalCustomer;
 use App\Services\GlobalCustomerService;
@@ -19,6 +20,21 @@ class CustomerPortalController extends Controller
 {
     public function index(Request $request): Response
     {
+        $countries = Country::active()
+            ->orderBy('name')
+            ->get(['code', 'name', 'dial_code'])
+            ->map(fn (Country $c) => [
+                'code' => $c->code,
+                'name' => $c->name,
+                'dial_code' => $c->dial_code,
+            ])
+            ->values()
+            ->all();
+
+        if ($countries === []) {
+            $countries = Country::defaultAfricanCountries();
+        }
+
         $globalId = $request->session()->get('global_customer_id');
         $global = $globalId ? GlobalCustomer::find($globalId) : null;
 
@@ -26,12 +42,14 @@ class CustomerPortalController extends Controller
             return Inertia::render('Public/CustomerPortal', [
                 'authenticated' => false,
                 'otpPendingPhone' => $request->session()->get('portal_otp_phone'),
+                'otpPendingDialCode' => $request->session()->get('portal_otp_dial_code', '+237'),
+                'countries' => $countries,
             ]);
         }
 
         $linkedCustomers = Customer::withoutTenantScope()
             ->with([
-                'tenant:id,name,slug,phone,city',
+                'tenant:id,name,slug,phone,city,tenant_type',
                 'vehicles:id,tenant_id,customer_id,license_plate,brand,model,year,mileage,public_token,next_service_date,technical_inspection_expires_at,insurance_expires_at',
                 'appointments' => fn ($q) => $q->with('vehicle:id,license_plate')->latest('scheduled_at')->take(15),
                 'repairOrders' => fn ($q) => $q->with('vehicle:id,license_plate')->latest('id')->take(20),
@@ -42,9 +60,10 @@ class CustomerPortalController extends Controller
 
         $garages = $linkedCustomers->map(fn (Customer $c) => [
             'id' => $c->tenant?->id,
-            'name' => $c->tenant?->name ?? 'Garage',
+            'name' => $c->tenant?->name ?? 'Établissement',
             'city' => $c->tenant?->city,
             'phone' => $c->tenant?->phone,
+            'tenant_type' => $c->tenant?->tenant_type ?? 'garage',
         ])->filter(fn ($g) => $g['id'] !== null)->unique('id')->values();
 
         $vehicles = $linkedCustomers->flatMap(function (Customer $c) {
@@ -109,6 +128,7 @@ class CustomerPortalController extends Controller
 
         return Inertia::render('Public/CustomerPortal', [
             'authenticated' => true,
+            'countries' => $countries,
             'profile' => [
                 'id' => $global->id,
                 'name' => $global->name,
@@ -132,17 +152,44 @@ class CustomerPortalController extends Controller
         ]);
     }
 
+    private function combineDialAndPhone(string $rawPhone, ?string $dialCode): string
+    {
+        $trimmed = trim($rawPhone);
+        if (str_starts_with($trimmed, '+')) {
+            return preg_replace('/[^\d+]/', '', $trimmed) ?: $trimmed;
+        }
+
+        $cleanDial = trim((string) $dialCode);
+        if ($cleanDial !== '') {
+            $cleanDial = '+'.ltrim(preg_replace('/\D+/', '', $cleanDial), '+');
+            $localDigits = preg_replace('/\D+/', '', $trimmed);
+            $dialDigits = ltrim($cleanDial, '+');
+            if ($dialDigits !== '' && str_starts_with($localDigits, $dialDigits) && strlen($localDigits) > strlen($dialDigits) + 5) {
+                $localDigits = substr($localDigits, strlen($dialDigits));
+            }
+
+            return $cleanDial.$localDigits;
+        }
+
+        return $trimmed;
+    }
+
     public function requestOtp(
         Request $request,
         GlobalCustomerService $service,
         GreenApiService $greenApi
     ): RedirectResponse {
         $validated = $request->validate([
+            'phone_dial_code' => ['nullable', 'string', 'max:10'],
             'phone' => ['required', 'string', 'min:6', 'max:50'],
         ]);
 
-        $global = $service->findByPhoneOrId($validated['phone']);
-        $request->session()->put('portal_otp_phone', $validated['phone']);
+        $dialCode = $validated['phone_dial_code'] ?? '+237';
+        $fullPhone = $this->combineDialAndPhone($validated['phone'], $validated['phone_dial_code'] ?? null);
+
+        $global = $service->findByPhoneOrId($fullPhone);
+        $request->session()->put('portal_otp_phone', $fullPhone);
+        $request->session()->put('portal_otp_dial_code', $dialCode);
 
         if ($global) {
             $code = (string) random_int(10000, 99999);
@@ -173,11 +220,14 @@ class CustomerPortalController extends Controller
     public function verifyOtp(Request $request, GlobalCustomerService $service): RedirectResponse
     {
         $validated = $request->validate([
+            'phone_dial_code' => ['nullable', 'string', 'max:10'],
             'phone' => ['required', 'string', 'min:6', 'max:50'],
             'code' => ['required', 'string', 'size:5'],
         ]);
 
-        $global = $service->findByPhoneOrId($validated['phone']);
+        $fullPhone = $this->combineDialAndPhone($validated['phone'], $validated['phone_dial_code'] ?? null);
+
+        $global = $service->findByPhoneOrId($fullPhone);
         if (! $global || ! $global->otp_code || ! $global->otp_expires_at?->isFuture()) {
             return back()->withErrors([
                 'code' => 'Code invalide ou expiré. Veuillez demander un nouveau code.',
@@ -220,7 +270,7 @@ class CustomerPortalController extends Controller
         // Régénération de session contre la fixation de session
         $request->session()->regenerate();
         $request->session()->put('global_customer_id', $global->id);
-        $request->session()->forget('portal_otp_phone');
+        $request->session()->forget(['portal_otp_phone', 'portal_otp_dial_code']);
 
         return back()->with('success', 'Connexion réussie à votre Espace Client MboaCar.');
     }
@@ -253,7 +303,7 @@ class CustomerPortalController extends Controller
 
     public function logout(Request $request): RedirectResponse
     {
-        $request->session()->forget(['global_customer_id', 'portal_otp_phone']);
+        $request->session()->forget(['global_customer_id', 'portal_otp_phone', 'portal_otp_dial_code']);
 
         return back()->with('success', 'Vous êtes déconnecté de l\'Espace Client.');
     }
