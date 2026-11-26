@@ -156,6 +156,17 @@ onUnmounted(() => {
                                 <i class="bi bi-stars me-1"></i>IA Auto
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a
+                                class="nav-link fw-semibold d-inline-flex align-items-center gap-1"
+                                href="#mode-hors-ligne"
+                                style="color: #6ee7b7;"
+                                @click.prevent="scrollToSection('mode-hors-ligne')"
+                            >
+                                <i class="bi bi-wifi-off"></i>
+                                <span>Hors Ligne</span>
+                            </a>
+                        </li>
                         <li class="nav-item"><a class="nav-link text-white" href="#tarifs" @click.prevent="scrollToSection('tarifs')">{{ t('nav.pricing') }}</a></li>
                         <li class="nav-item">
                             <Link class="nav-link text-warning fw-semibold" href="/marketplace">
@@ -212,9 +223,19 @@ onUnmounted(() => {
                     <div class="container py-5 d-flex align-items-center" style="min-height: 680px; padding-top: 6.5rem !important;">
                         <div class="row align-items-center g-5 w-100">
                             <div class="col-lg-7">
-                                <span class="badge bg-primary bg-opacity-75 border border-light border-opacity-25 rounded-pill mb-3 px-3 py-2 pulse-badge">
-                                    <i class="bi bi-stars me-1"></i>{{ t('hero.badge') }}
-                                </span>
+                                <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                                    <span class="badge bg-primary bg-opacity-75 border border-light border-opacity-25 rounded-pill px-3 py-2 pulse-badge">
+                                        <i class="bi bi-stars me-1"></i>{{ t('hero.badge') }}
+                                    </span>
+                                    <a
+                                        href="#mode-hors-ligne"
+                                        class="badge rounded-pill px-3 py-2 text-decoration-none d-inline-flex align-items-center gap-1 hero-offline-pill"
+                                        @click.prevent="scrollToSection('mode-hors-ligne')"
+                                    >
+                                        <i class="bi bi-wifi-off"></i>
+                                        <span>Mode Hors Ligne &amp; PWA inclus</span>
+                                    </a>
+                                </div>
                                 <h1 class="display-4 fw-bold mb-3 lh-sm">{{ t('hero.title') }}</h1>
                                 <p class="lead text-white-50 mb-4" style="max-width: 600px;">{{ t('hero.subtitle') }}</p>
                                 <div class="d-flex flex-wrap gap-3">
@@ -252,6 +273,13 @@ onUnmounted(() => {
                                             <div>
                                                 <div class="fw-semibold">{{ t('features.f6Title') }}</div>
                                                 <div class="text-white-50">{{ t('features.f6Desc') }}</div>
+                                            </div>
+                                        </div>
+                                        <div class="d-flex align-items-start gap-3 pt-2 border-top border-white border-opacity-10">
+                                            <span class="badge bg-warning text-dark p-2"><i class="bi bi-wifi-off fs-6"></i></span>
+                                            <div>
+                                                <div class="fw-semibold text-warning">Mode Hors Ligne &amp; Synchro Auto</div>
+                                                <div class="text-white-50">Continuez sans Internet : vos dossiers se synchronisent automatiquement dès le retour du réseau.</div>
                                             </div>
                                         </div>
                                     </div>
@@ -344,6 +372,125 @@ onUnmounted(() => {
                 <div class="col-6 col-md-3">
                     <div class="h3 fw-bold text-primary mb-0">24/7</div>
                     <div class="small text-muted">{{ t('stats.support') }}</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Mise en avant permanente : Mode Hors Ligne & PWA Installable -->
+    <section id="mode-hors-ligne" class="offline-showcase py-5 position-relative overflow-hidden">
+        <div class="container py-3 position-relative" style="z-index: 1;">
+            <div class="row align-items-center g-4 g-lg-5">
+                <div class="col-lg-6">
+                    <span class="offline-kicker">
+                        <i class="bi bi-wifi-off"></i>
+                        <span>Conçu pour les réalités terrain en Afrique</span>
+                    </span>
+                    <h2 class="offline-title mt-3 mb-3">
+                        Internet coupe ? <span class="text-emerald">Votre activité continue sans interruption.</span>
+                    </h2>
+                    <p class="offline-lead mb-4">
+                        Avec le <strong>Mode Hors Ligne &amp; PWA</strong> de {{ appName }}, vos équipes enregistrent clients, véhicules, PV de visite technique, polices d'assurance et sinistres (photos incluses) même sans connexion. Tout se synchronise automatiquement dès le retour du réseau.
+                    </p>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-sm-6">
+                            <div class="offline-pillar">
+                                <span class="offline-pillar-icon"><i class="bi bi-hdd-stack-fill"></i></span>
+                                <div>
+                                    <strong>Sauvegarde locale sécurisée</strong>
+                                    <p>Vos saisies et photos restent protégées dans votre appareil tant que le réseau est coupé.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="offline-pillar">
+                                <span class="offline-pillar-icon"><i class="bi bi-arrow-repeat"></i></span>
+                                <div>
+                                    <strong>Synchro automatique</strong>
+                                    <p>Envoi automatique dans l'ordre chronologique dès qu'Internet revient, sans rien ressaisir.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="offline-pillar">
+                                <span class="offline-pillar-icon"><i class="bi bi-shield-check"></i></span>
+                                <div>
+                                    <strong>Zéro doublon garanti</strong>
+                                    <p>Identifiant unique anti-doublon et résolution intelligente des conflits multi-postes.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="offline-pillar">
+                                <span class="offline-pillar-icon"><i class="bi bi-laptop"></i></span>
+                                <div>
+                                    <strong>Installable en 1 clic (PWA)</strong>
+                                    <p>Utilisez {{ appName }} comme une vraie application sur PC Windows, tablette ou mobile.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-wrap align-items-center gap-3">
+                        <Link href="/inscription" class="btn btn-success btn-lg rounded-pill px-4 fw-bold shadow">
+                            <i class="bi bi-rocket-takeoff-fill me-2"></i>Essayer avec le Mode Hors Ligne
+                        </Link>
+                        <a href="/demo" class="btn btn-outline-light rounded-pill px-4 fw-semibold">
+                            <i class="bi bi-play-circle me-1"></i>Voir la démo
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Maquette visuelle du Centre de Synchronisation -->
+                <div class="col-lg-6">
+                    <div class="offline-mockup-card">
+                        <div class="offline-mockup-header">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="offline-dot-amber"></span>
+                                <span class="fw-bold small text-white">Centre de Synchronisation MboaCar</span>
+                            </div>
+                            <span class="badge rounded-pill bg-warning text-dark fw-bold px-3 py-1">
+                                <i class="bi bi-wifi-off me-1"></i>Hors ligne • 3 en attente
+                            </span>
+                        </div>
+
+                        <div class="offline-mockup-body">
+                            <div class="offline-queue-row">
+                                <span class="offline-row-icon bg-primary-subtle text-primary"><i class="bi bi-person-plus-fill"></i></span>
+                                <div class="flex-grow-1">
+                                    <div class="fw-bold small text-white">Client : Samuel Nkeng (+237 691...)</div>
+                                    <div class="offline-row-sub">Sauvegardé localement • anti-doublon actif</div>
+                                </div>
+                                <span class="badge bg-warning text-dark">En attente</span>
+                            </div>
+
+                            <div class="offline-queue-row">
+                                <span class="offline-row-icon bg-success-subtle text-success"><i class="bi bi-clipboard2-check-fill"></i></span>
+                                <div class="flex-grow-1">
+                                    <div class="fw-bold small text-white">PV Visite Technique — LT 888 ZZ</div>
+                                    <div class="offline-row-sub">Verdict : Favorable • Ligne 2</div>
+                                </div>
+                                <span class="badge bg-warning text-dark">En attente</span>
+                            </div>
+
+                            <div class="offline-queue-row">
+                                <span class="offline-row-icon bg-danger-subtle text-danger"><i class="bi bi-shield-exclamation"></i></span>
+                                <div class="flex-grow-1">
+                                    <div class="fw-bold small text-white">Sinistre Assurance + 4 photos dégâts</div>
+                                    <div class="offline-row-sub">Photos stockées hors ligne en haute qualité</div>
+                                </div>
+                                <span class="badge bg-info text-dark"><i class="bi bi-images me-1"></i>4 photos</span>
+                            </div>
+                        </div>
+
+                        <div class="offline-mockup-footer">
+                            <div class="d-flex align-items-center gap-2 small" style="color: #6ee7b7;">
+                                <i class="bi bi-cloud-check-fill fs-5"></i>
+                                <span><strong>Dès le retour d'Internet :</strong> synchronisation automatique en quelques secondes</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -473,6 +620,7 @@ onUnmounted(() => {
                                 <span class="pricing-space-chip"><i class="bi bi-wrench-adjustable me-1"></i>Garages</span>
                                 <span class="pricing-space-chip"><i class="bi bi-clipboard2-check me-1"></i>Visite Technique</span>
                                 <span class="pricing-space-chip"><i class="bi bi-shield-check me-1"></i>Assurances</span>
+                                <span class="pricing-space-chip" style="border-color: rgba(110, 231, 183, 0.45); color: #6ee7b7;"><i class="bi bi-wifi-off me-1"></i>Mode Hors Ligne &amp; PWA</span>
                             </div>
                         </div>
 
@@ -997,5 +1145,171 @@ onUnmounted(() => {
     100% {
         transform: translateX(-50%);
     }
+}
+
+/* Mode Hors Ligne & PWA Showcase */
+.hero-offline-pill {
+    background: rgba(16, 185, 129, 0.2);
+    border: 1px solid rgba(110, 231, 183, 0.45);
+    color: #a7f3d0;
+    font-weight: 700;
+    transition: background 0.18s ease, transform 0.15s ease;
+}
+
+.hero-offline-pill:hover {
+    background: rgba(16, 185, 129, 0.34);
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+
+.offline-showcase {
+    background:
+        radial-gradient(circle at 15% 20%, rgba(16, 185, 129, 0.2), transparent 46%),
+        radial-gradient(circle at 85% 80%, rgba(37, 99, 235, 0.24), transparent 50%),
+        linear-gradient(135deg, #0f172a 0%, #111c33 55%, #0f172a 100%);
+    color: #f8fafc;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.offline-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.9rem;
+    border-radius: 999px;
+    background: rgba(16, 185, 129, 0.16);
+    border: 1px solid rgba(110, 231, 183, 0.35);
+    color: #6ee7b7;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.offline-title {
+    font-size: clamp(1.75rem, 3vw, 2.35rem);
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: -0.025em;
+    color: #ffffff;
+}
+
+.text-emerald {
+    color: #6ee7b7;
+}
+
+.offline-lead {
+    color: #cbd5e1;
+    font-size: 0.98rem;
+    line-height: 1.6;
+}
+
+.offline-pillar {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.8rem;
+    padding: 0.9rem;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    height: 100%;
+}
+
+.offline-pillar-icon {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    background: rgba(16, 185, 129, 0.18);
+    border: 1px solid rgba(110, 231, 183, 0.3);
+    color: #6ee7b7;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.offline-pillar strong {
+    display: block;
+    font-size: 0.88rem;
+    color: #ffffff;
+    margin-bottom: 0.2rem;
+}
+
+.offline-pillar p {
+    margin: 0;
+    font-size: 0.78rem;
+    color: #94a3b8;
+    line-height: 1.45;
+}
+
+.offline-mockup-card {
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+.offline-mockup-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.65rem;
+    padding: 1rem 1.25rem;
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.offline-dot-amber {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #fbbf24;
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.8);
+    display: inline-block;
+}
+
+.offline-mockup-body {
+    padding: 1.15rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.offline-queue-row {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.8rem 0.9rem;
+    border-radius: 13px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.offline-row-icon {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.offline-row-sub {
+    font-size: 0.76rem;
+    color: #94a3b8;
+}
+
+.offline-mockup-footer {
+    padding: 0.9rem 1.25rem;
+    background: rgba(16, 185, 129, 0.12);
+    border-top: 1px solid rgba(110, 231, 183, 0.22);
 }
 </style>
