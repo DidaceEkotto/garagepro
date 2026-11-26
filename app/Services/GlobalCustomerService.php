@@ -62,6 +62,7 @@ class GlobalCustomerService
                 'phone_dial_code' => $customer->phone_dial_code,
                 'phone' => $customer->phone,
                 'whatsapp_phone' => $customer->whatsapp_phone ?: $customer->phone,
+                'photo_path' => $customer->photo_path,
                 'email' => $customer->email,
                 'profession' => $customer->profession,
                 'date_of_birth' => $customer->date_of_birth,
@@ -71,7 +72,7 @@ class GlobalCustomerService
         } else {
             // Compléter les champs encore vides sur le profil global
             $updates = [];
-            foreach (['first_name', 'gender', 'id_number', 'phone_dial_code', 'email', 'profession', 'date_of_birth', 'emergency_contact'] as $field) {
+            foreach (['first_name', 'gender', 'id_number', 'phone_dial_code', 'photo_path', 'email', 'profession', 'date_of_birth', 'emergency_contact'] as $field) {
                 if (empty($global->{$field}) && ! empty($customer->{$field})) {
                     $updates[$field] = $customer->{$field};
                 }
@@ -101,6 +102,7 @@ class GlobalCustomerService
                 'phone_dial_code' => $global->phone_dial_code,
                 'phone' => $global->phone,
                 'whatsapp_phone' => $global->whatsapp_phone,
+                'photo_path' => $global->photo_path,
                 'email' => $global->email,
                 'profession' => $global->profession,
                 'date_of_birth' => $global->date_of_birth,

@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\CustomerProfileUpdatedMail;
 use App\Models\Country;
 use App\Models\Customer;
 use App\Models\GlobalCustomer;
+use App\Models\Tenant;
 use App\Services\GlobalCustomerService;
 use App\Services\GreenApiService;
 use Illuminate\Http\RedirectResponse;
@@ -12,6 +14,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -135,9 +139,10 @@ class CustomerPortalController extends Controller
                 'first_name' => $global->first_name,
                 'gender' => $global->gender ?? 'homme',
                 'id_number' => $global->id_number,
-                'phone_dial_code' => $global->phone_dial_code,
+                'phone_dial_code' => $global->phone_dial_code ?: '+237',
                 'phone' => $global->phone,
                 'whatsapp_phone' => $global->whatsapp_phone,
+                'photo_url' => $global->photoUrl(),
                 'email' => $global->email,
                 'profession' => $global->profession,
                 'date_of_birth' => $global->date_of_birth?->format('Y-m-d'),
@@ -275,8 +280,11 @@ class CustomerPortalController extends Controller
         return back()->with('success', 'Connexion réussie à votre Espace Client MboaCar.');
     }
 
-    public function updateProfile(Request $request, GlobalCustomerService $service): RedirectResponse
-    {
+    public function updateProfile(
+        Request $request,
+        GlobalCustomerService $service,
+        GreenApiService $greenApi
+    ): RedirectResponse {
         $globalId = $request->session()->get('global_customer_id');
         $global = $globalId ? GlobalCustomer::find($globalId) : null;
         if (! $global) {
@@ -288,17 +296,137 @@ class CustomerPortalController extends Controller
             'first_name' => ['nullable', 'string', 'max:100'],
             'gender' => ['required', Rule::in(['homme', 'femme', 'autre'])],
             'id_number' => ['nullable', 'string', 'max:100'],
+            'phone_dial_code' => ['nullable', 'string', 'max:10'],
+            'phone' => ['nullable', 'string', 'min:6', 'max:50'],
             'email' => ['nullable', 'email', 'max:150'],
             'profession' => ['nullable', 'string', 'max:120'],
             'date_of_birth' => ['nullable', 'date'],
             'emergency_contact' => ['nullable', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:2000'],
+            'photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+            'remove_photo' => ['nullable', 'boolean'],
         ]);
 
-        $global->update($validated);
+        $updateData = [
+            'name' => $validated['name'],
+            'first_name' => $validated['first_name'] ?? null,
+            'gender' => $validated['gender'],
+            'id_number' => $validated['id_number'] ?? null,
+            'email' => $validated['email'] ?? null,
+            'profession' => $validated['profession'] ?? null,
+            'date_of_birth' => $validated['date_of_birth'] ?? null,
+            'emergency_contact' => $validated['emergency_contact'] ?? null,
+            'description' => $validated['description'] ?? null,
+        ];
+
+        // Mise à jour optionnelle du téléphone WhatsApp avec indicatif
+        if (! empty($validated['phone'])) {
+            $dialCode = trim((string) ($validated['phone_dial_code'] ?? $global->phone_dial_code ?? '+237'));
+            if ($dialCode !== '') {
+                $dialCode = '+'.ltrim(preg_replace('/\D+/', '', $dialCode), '+');
+            }
+            $fullPhone = $this->combineDialAndPhone($validated['phone'], $dialCode ?: null);
+
+            $conflict = GlobalCustomer::where('id', '!=', $global->id)
+                ->where(function ($q) use ($fullPhone) {
+                    $q->where('whatsapp_phone', $fullPhone)
+                        ->orWhere('phone', $fullPhone);
+                })
+                ->exists();
+
+            if ($conflict) {
+                return back()->withErrors([
+                    'phone' => 'Ce numéro WhatsApp est déjà utilisé par un autre compte client.',
+                ]);
+            }
+
+            $updateData['phone_dial_code'] = $dialCode ?: ($global->phone_dial_code ?: '+237');
+            $updateData['phone'] = $fullPhone;
+            $updateData['whatsapp_phone'] = $fullPhone;
+        }
+
+        // Gestion de la photo de profil (dropzone)
+        $photoUpdated = false;
+        if ($request->hasFile('photo')) {
+            if ($global->photo_path && Storage::disk('public')->exists($global->photo_path)) {
+                Storage::disk('public')->delete($global->photo_path);
+            }
+            $updateData['photo_path'] = $request->file('photo')->store('customers/avatars', 'public');
+            $photoUpdated = true;
+        } elseif ($request->boolean('remove_photo')) {
+            if ($global->photo_path && Storage::disk('public')->exists($global->photo_path)) {
+                Storage::disk('public')->delete($global->photo_path);
+            }
+            $updateData['photo_path'] = null;
+        }
+
+        $global->update($updateData);
+        $global->refresh();
         $service->syncGlobalToLinkedCustomers($global);
 
-        return back()->with('success', 'Votre profil unique MboaCar a été mis à jour et synchronisé avec tous vos garages.');
+        // Notifier par Email et WhatsApp UNIQUEMENT les établissements (garage, visite technique, assurance)
+        // où cette personne est actuellement cliente. Si aucun lien client actif, rien n'est envoyé.
+        $this->notifyLinkedEstablishments($global, $greenApi, $photoUpdated);
+
+        return back()->with('success', 'Votre profil unique MboaCar a été mis à jour et synchronisé avec vos établissements.');
+    }
+
+    private function notifyLinkedEstablishments(
+        GlobalCustomer $global,
+        GreenApiService $greenApi,
+        bool $photoUpdated
+    ): void {
+        $linkedTenants = Customer::withoutTenantScope()
+            ->where('global_customer_id', $global->id)
+            ->with('tenant:id,name,type,email,phone')
+            ->get()
+            ->pluck('tenant')
+            ->filter(fn ($tenant) => $tenant instanceof Tenant)
+            ->unique('id')
+            ->values();
+
+        if ($linkedTenants->isEmpty()) {
+            return;
+        }
+
+        $fullName = trim(($global->first_name ? $global->first_name.' ' : '').$global->name);
+        $phoneDisplay = $global->whatsapp_phone ?: $global->phone ?: 'Non renseigné';
+        $emailDisplay = $global->email ?: 'Non renseigné';
+
+        foreach ($linkedTenants as $tenant) {
+            if (! empty($tenant->email)) {
+                try {
+                    Mail::to($tenant->email)->send(new CustomerProfileUpdatedMail($tenant, $global, $photoUpdated));
+                } catch (\Throwable $e) {
+                    Log::warning('CustomerPortal profile update email failed (non-blocking)', [
+                        'tenant_id' => $tenant->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            if ($greenApi->isConfigured() && ! empty($tenant->phone)) {
+                try {
+                    $typeLabel = match ($tenant->type) {
+                        Tenant::TYPE_TECHNICAL_CENTER => 'Centre de Visite Technique',
+                        Tenant::TYPE_INSURANCE => 'Assurance',
+                        default => 'Garage',
+                    };
+                    $msg = "MboaCar ({$typeLabel}) : votre client {$fullName} vient de mettre à jour son profil unique.\n"
+                        ."• Téléphone WhatsApp : {$phoneDisplay}\n"
+                        ."• E-mail : {$emailDisplay}\n"
+                        .($photoUpdated ? "• Photo de profil : mise à jour\n" : '')
+                        ."Sa fiche client chez {$tenant->name} a été synchronisée automatiquement.";
+
+                    $greenApi->sendMessage($tenant->phone, $msg);
+                } catch (\Throwable $e) {
+                    Log::warning('CustomerPortal profile update WhatsApp failed (non-blocking)', [
+                        'tenant_id' => $tenant->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
     }
 
     public function logout(Request $request): RedirectResponse

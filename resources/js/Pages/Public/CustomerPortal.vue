@@ -153,20 +153,120 @@ function resetPhoneStep() {
     }, 30);
 }
 
+const profileDialCode = ref(props.profile?.phone_dial_code || '+237');
+const profileLocalPhone = ref(
+    extractLocalPhone(props.profile?.whatsapp_phone || props.profile?.phone, profileDialCode.value)
+);
+const photoInputRef = ref(null);
+const isDraggingPhoto = ref(false);
+const localPhotoPreview = ref(null);
+
+const profilePhotoPreview = computed(() => {
+    if (profileForm.remove_photo) return null;
+    return localPhotoPreview.value || props.profile?.photo_url || null;
+});
+
+const profileFullPhonePreview = computed(() => {
+    const digits = profileLocalPhone.value.replace(/\D/g, '');
+    if (!digits) return '';
+    return `${profileDialCode.value}${digits}`;
+});
+
 const profileForm = useForm({
     name: props.profile?.name ?? '',
     first_name: props.profile?.first_name ?? '',
     gender: props.profile?.gender ?? 'homme',
     id_number: props.profile?.id_number ?? '',
+    phone_dial_code: profileDialCode.value,
+    phone: profileLocalPhone.value,
     email: props.profile?.email ?? '',
     profession: props.profile?.profession ?? '',
     date_of_birth: props.profile?.date_of_birth ?? '',
     emergency_contact: props.profile?.emergency_contact ?? '',
     description: props.profile?.description ?? '',
+    photo: null,
+    remove_photo: false,
 });
 
+watch(profileDialCode, (val) => {
+    profileForm.phone_dial_code = val;
+});
+
+function onProfilePhoneInput(event) {
+    let val = event.target.value;
+    if (val.trim().startsWith('+')) {
+        const compact = val.replace(/\s+/g, '');
+        const matched = [...countryList.value]
+            .sort((a, b) => b.dial_code.length - a.dial_code.length)
+            .find((c) => compact.startsWith(c.dial_code));
+        if (matched) {
+            profileDialCode.value = matched.dial_code;
+            val = compact.slice(matched.dial_code.length);
+        }
+    }
+    profileLocalPhone.value = val;
+    profileForm.phone = val;
+}
+
+function handlePhotoFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    profileForm.photo = file;
+    profileForm.remove_photo = false;
+    if (localPhotoPreview.value) {
+        URL.revokeObjectURL(localPhotoPreview.value);
+    }
+    localPhotoPreview.value = URL.createObjectURL(file);
+}
+
+function onPhotoSelected(event) {
+    const file = event.target.files?.[0];
+    if (file) {
+        handlePhotoFile(file);
+    }
+}
+
+function onPhotoDrop(event) {
+    isDraggingPhoto.value = false;
+    const file = event.dataTransfer?.files?.[0];
+    if (file) {
+        handlePhotoFile(file);
+    }
+}
+
+function removeProfilePhoto() {
+    profileForm.photo = null;
+    profileForm.remove_photo = true;
+    if (localPhotoPreview.value) {
+        URL.revokeObjectURL(localPhotoPreview.value);
+        localPhotoPreview.value = null;
+    }
+    if (photoInputRef.value) {
+        photoInputRef.value.value = '';
+    }
+}
+
 function saveProfile() {
-    profileForm.put('/mon-espace-client/profil', { preserveScroll: true });
+    const cleanLocal = profileLocalPhone.value.replace(/\D/g, '');
+    profileForm.phone_dial_code = profileDialCode.value;
+    profileForm.phone = cleanLocal;
+
+    profileForm
+        .transform((data) => ({
+            ...data,
+            _method: 'put',
+        }))
+        .post('/mon-espace-client/profil', {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                profileForm.photo = null;
+                profileForm.remove_photo = false;
+                if (localPhotoPreview.value) {
+                    URL.revokeObjectURL(localPhotoPreview.value);
+                    localPhotoPreview.value = null;
+                }
+            },
+        });
 }
 
 function logout() {
@@ -452,7 +552,10 @@ const tabs = computed(() => [
                     <section class="cp-hero mb-4">
                         <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
                             <div class="d-flex align-items-center gap-3">
-                                <div class="cp-avatar">{{ customerInitials }}</div>
+                                <div class="cp-avatar">
+                                    <img v-if="profilePhotoPreview" :src="profilePhotoPreview" :alt="customerFullName" class="cp-avatar-img" />
+                                    <span v-else>{{ customerInitials }}</span>
+                                </div>
                                 <div>
                                     <div class="cp-hero-kicker">Compte Client Unique {{ siteName }}</div>
                                     <h1 class="cp-hero-name mb-1">Bonjour, {{ customerFullName }}</h1>
@@ -789,6 +892,98 @@ const tabs = computed(() => [
                         </div>
 
                         <form @submit.prevent="saveProfile">
+                            <!-- Photo de profil (Dropzone) -->
+                            <div class="mb-4">
+                                <label class="cp-label">Photo de profil</label>
+                                <div
+                                    class="cp-avatar-dropzone"
+                                    :class="{ 'is-dragging': isDraggingPhoto }"
+                                    @dragover.prevent="isDraggingPhoto = true"
+                                    @dragleave.prevent="isDraggingPhoto = false"
+                                    @drop.prevent="onPhotoDrop"
+                                    @click="photoInputRef?.click()"
+                                >
+                                    <input
+                                        ref="photoInputRef"
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp"
+                                        class="d-none"
+                                        @change="onPhotoSelected"
+                                    />
+
+                                    <div class="cp-dz-preview">
+                                        <img
+                                            v-if="profilePhotoPreview"
+                                            :src="profilePhotoPreview"
+                                            :alt="customerFullName"
+                                            class="cp-dz-img"
+                                        />
+                                        <span v-else class="cp-dz-initials">{{ customerInitials }}</span>
+                                    </div>
+
+                                    <div class="cp-dz-text">
+                                        <div class="fw-bold text-dark">
+                                            <i class="bi bi-cloud-arrow-up-fill text-primary me-1"></i>
+                                            Glissez-déposez votre photo ici ou cliquez pour choisir
+                                        </div>
+                                        <div class="small text-muted">
+                                            Formats acceptés : JPG, PNG ou WebP • Taille max : 4 Mo
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        v-if="profilePhotoPreview"
+                                        type="button"
+                                        class="cp-dz-remove"
+                                        @click.stop="removeProfilePhoto"
+                                    >
+                                        <i class="bi bi-trash3 me-1"></i>Retirer
+                                    </button>
+                                </div>
+                                <div v-if="profileForm.errors.photo" class="cp-error-msg">
+                                    <i class="bi bi-exclamation-circle me-1"></i>{{ profileForm.errors.photo }}
+                                </div>
+                            </div>
+
+                            <!-- Téléphone WhatsApp avec indicatif pays -->
+                            <div class="mb-4">
+                                <label class="cp-label">Numéro de téléphone (WhatsApp) <span class="text-danger">*</span></label>
+                                <div class="cp-phone-group" :class="{ 'is-invalid': profileForm.errors.phone }">
+                                    <div class="cp-dial-wrap">
+                                        <select
+                                            v-model="profileDialCode"
+                                            class="cp-dial-select no-select2"
+                                            aria-label="Indicatif téléphonique du pays"
+                                        >
+                                            <option
+                                                v-for="c in countryList"
+                                                :key="c.code"
+                                                :value="c.dial_code"
+                                            >
+                                                {{ c.code }} ({{ c.dial_code }}) — {{ c.name }}
+                                            </option>
+                                        </select>
+                                    </div>
+                                    <input
+                                        :value="profileLocalPhone"
+                                        type="tel"
+                                        inputmode="tel"
+                                        class="cp-phone-input"
+                                        placeholder="6XX XXX XXX"
+                                        autocomplete="tel-national"
+                                        required
+                                        @input="onProfilePhoneInput"
+                                    />
+                                </div>
+                                <div v-if="profileFullPhonePreview" class="cp-phone-preview">
+                                    <i class="bi bi-whatsapp text-success"></i>
+                                    Numéro WhatsApp synchronisé : <strong>{{ profileFullPhonePreview }}</strong>
+                                </div>
+                                <div v-if="profileForm.errors.phone" class="cp-error-msg">
+                                    <i class="bi bi-exclamation-circle me-1"></i>{{ profileForm.errors.phone }}
+                                </div>
+                            </div>
+
                             <div class="row g-3 mb-3">
                                 <div class="col-md-5">
                                     <label class="cp-label">Nom <span class="text-danger">*</span></label>
@@ -1341,7 +1536,85 @@ const tabs = computed(() => [
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    overflow: hidden;
     box-shadow: 0 10px 24px rgba(37, 99, 235, 0.35);
+}
+
+.cp-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Profile Photo Dropzone */
+.cp-avatar-dropzone {
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
+    padding: 1rem 1.25rem;
+    border: 2px dashed #cbd5e1;
+    border-radius: 16px;
+    background: #f8fafc;
+    cursor: pointer;
+    transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.cp-avatar-dropzone:hover,
+.cp-avatar-dropzone.is-dragging {
+    border-color: #2563eb;
+    background: #eff6ff;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.08);
+}
+
+.cp-dz-preview {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid #ffffff;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+}
+
+.cp-dz-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.cp-dz-initials {
+    color: #ffffff;
+    font-size: 1.25rem;
+    font-weight: 800;
+}
+
+.cp-dz-text {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.9rem;
+}
+
+.cp-dz-remove {
+    border: 1px solid #fecaca;
+    background: #fef2f2;
+    color: #dc2626;
+    border-radius: 10px;
+    padding: 0.42rem 0.8rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+}
+
+.cp-dz-remove:hover {
+    background: #dc2626;
+    border-color: #dc2626;
+    color: #ffffff;
 }
 
 .cp-hero-kicker {

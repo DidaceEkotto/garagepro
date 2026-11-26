@@ -19,6 +19,7 @@ class GlobalCustomer extends Model
         'phone_dial_code',
         'phone',
         'whatsapp_phone',
+        'photo_path',
         'email',
         'profession',
         'date_of_birth',
@@ -40,6 +41,11 @@ class GlobalCustomer extends Model
             'otp_expires_at' => 'datetime',
             'last_login_at' => 'datetime',
         ];
+    }
+
+    public function photoUrl(): ?string
+    {
+        return $this->photo_path ? asset('storage/'.$this->photo_path) : null;
     }
 
     public function garageCustomers(): HasMany

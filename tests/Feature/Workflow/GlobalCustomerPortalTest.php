@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Workflow;
 
+use App\Mail\CustomerProfileUpdatedMail;
 use App\Models\Agency;
 use App\Models\Customer;
 use App\Models\GlobalCustomer;
@@ -10,7 +11,10 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\TenantRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class GlobalCustomerPortalTest extends TestCase
@@ -132,5 +136,150 @@ class GlobalCustomerPortalTest extends TestCase
         $this->assertSame('Dupont-Mbarga', $custA->fresh()->name);
         $this->assertSame('Dupont-Mbarga', $custB->fresh()->name);
         $this->assertSame('Architecte', $custB->fresh()->profession);
+    }
+
+    public function test_profile_update_uploads_photo_updates_phone_and_notifies_only_linked_establishments(): void
+    {
+        Storage::fake('public');
+        Mail::fake();
+
+        config([
+            'services.greenapi.url' => 'https://api.green-api.com',
+            'services.greenapi.id_instance' => '123456',
+            'services.greenapi.api_token_instance' => 'token-secret',
+        ]);
+
+        $sentChats = [];
+        Http::fake(function ($req) use (&$sentChats) {
+            if (isset($req['chatId'])) {
+                $sentChats[] = $req['chatId'];
+            }
+
+            return Http::response(['idMessage' => 'msg-notif'], 200);
+        });
+
+        $garage = Tenant::create([
+            'name' => 'Garage Horizon',
+            'slug' => 'horizon',
+            'type' => Tenant::TYPE_GARAGE,
+            'email' => 'garage@horizon.cm',
+            'phone' => '+237690000001',
+        ]);
+        $visite = Tenant::create([
+            'name' => 'Centre Visite Auto',
+            'slug' => 'visite-auto',
+            'type' => Tenant::TYPE_TECHNICAL_CENTER,
+            'email' => 'visite@centre.cm',
+            'phone' => '+237690000002',
+        ]);
+        $unrelatedAssurance = Tenant::create([
+            'name' => 'Assurance Autre',
+            'slug' => 'assur-autre',
+            'type' => Tenant::TYPE_INSURANCE,
+            'email' => 'autre@assurance.cm',
+            'phone' => '+237690000003',
+        ]);
+
+        $custGarage = Customer::create([
+            'tenant_id' => $garage->id,
+            'name' => 'Kamga',
+            'first_name' => 'Paul',
+            'gender' => 'homme',
+            'phone_dial_code' => '+237',
+            'phone' => '+237677112233',
+            'whatsapp_phone' => '+237677112233',
+        ]);
+        $custVisite = Customer::create([
+            'tenant_id' => $visite->id,
+            'name' => 'Kamga',
+            'first_name' => 'Paul',
+            'gender' => 'homme',
+            'phone_dial_code' => '+237',
+            'phone' => '+237677112233',
+            'whatsapp_phone' => '+237677112233',
+        ]);
+
+        $global = GlobalCustomer::findOrFail($custGarage->global_customer_id);
+
+        // Mini PNG 1x1 valide (évite la dépendance GD en environnement CLI)
+        $pngBytes = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+        $photo = UploadedFile::fake()->createWithContent('avatar.png', $pngBytes);
+
+        $this->withSession(['global_customer_id' => $global->id])
+            ->post('/mon-espace-client/profil', [
+                '_method' => 'put',
+                'name' => 'Kamga',
+                'first_name' => 'Paul-Henri',
+                'gender' => 'homme',
+                'phone_dial_code' => '+225',
+                'phone' => '0701020304',
+                'email' => 'paul@example.com',
+                'photo' => $photo,
+            ])
+            ->assertSessionHas('success');
+
+        $global->refresh();
+        $this->assertNotNull($global->photo_path);
+        Storage::disk('public')->assertExists($global->photo_path);
+        $this->assertSame('+225', $global->phone_dial_code);
+        $this->assertSame('+2250701020304', $global->whatsapp_phone);
+
+        // Synchronisation vers les établissements où il est client
+        $this->assertSame($global->photo_path, $custGarage->fresh()->photo_path);
+        $this->assertSame('+2250701020304', $custVisite->fresh()->whatsapp_phone);
+
+        // E-mails envoyés UNIQUEMENT au garage et au centre de visite technique
+        Mail::assertSent(CustomerProfileUpdatedMail::class, 2);
+        Mail::assertSent(CustomerProfileUpdatedMail::class, fn ($m) => $m->hasTo('garage@horizon.cm'));
+        Mail::assertSent(CustomerProfileUpdatedMail::class, fn ($m) => $m->hasTo('visite@centre.cm'));
+        Mail::assertNotSent(CustomerProfileUpdatedMail::class, fn ($m) => $m->hasTo('autre@assurance.cm'));
+
+        // WhatsApp envoyés UNIQUEMENT au garage et au centre de visite technique
+        $this->assertContains('237690000001@c.us', $sentChats);
+        $this->assertContains('237690000002@c.us', $sentChats);
+        $this->assertNotContains('237690000003@c.us', $sentChats);
+        $this->assertNotNull($unrelatedAssurance->id);
+    }
+
+    public function test_profile_update_sends_no_email_or_whatsapp_when_not_linked_to_any_establishment(): void
+    {
+        Mail::fake();
+        Http::fake();
+
+        config([
+            'services.greenapi.url' => 'https://api.green-api.com',
+            'services.greenapi.id_instance' => '123456',
+            'services.greenapi.api_token_instance' => 'token-secret',
+        ]);
+
+        Tenant::create([
+            'name' => 'Garage Non Lié',
+            'slug' => 'non-lie',
+            'type' => Tenant::TYPE_GARAGE,
+            'email' => 'nonlie@example.com',
+            'phone' => '+237690009999',
+        ]);
+
+        $standaloneGlobal = GlobalCustomer::create([
+            'name' => 'SansLien',
+            'first_name' => 'Marie',
+            'gender' => 'femme',
+            'phone_dial_code' => '+237',
+            'phone' => '+237691111111',
+            'whatsapp_phone' => '+237691111111',
+        ]);
+
+        $this->withSession(['global_customer_id' => $standaloneGlobal->id])
+            ->put('/mon-espace-client/profil', [
+                'name' => 'SansLien',
+                'first_name' => 'Marie-Claire',
+                'gender' => 'femme',
+                'phone_dial_code' => '+237',
+                'phone' => '691111112',
+            ])
+            ->assertSessionHas('success');
+
+        Mail::assertNothingSent();
+        Http::assertNothingSent();
     }
 }
