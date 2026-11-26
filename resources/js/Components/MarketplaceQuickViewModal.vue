@@ -91,8 +91,8 @@ function fmt(n) {
                             </div>
                             <div
                                 class="small text-dark mb-3"
-                                v-html="product.description || 'Pièce automobile vérifiée prête pour expédition ou retrait au garage.'"
-                            ></div>
+                                style="white-space: pre-line;"
+                            >{{ product.description || 'Pièce automobile vérifiée prête pour expédition ou retrait au garage.' }}</div>
 
                             <div v-if="isInCart" class="alert alert-warning py-2 small mb-3">
                                 <i class="bi bi-exclamation-circle me-1"></i>Ce produit est déjà dans votre panier. Vous pouvez augmenter sa quantité.

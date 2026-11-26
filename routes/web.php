@@ -74,7 +74,9 @@ Route::post('/contact', [ContactController::class, 'store'])
 // Marketplace Public (Pièces Automobiles)
 Route::get('/marketplace', [MarketplaceController::class, 'index'])->name('marketplace.index');
 Route::get('/marketplace/bons-plans', [MarketplaceController::class, 'bestSellers'])->name('marketplace.best_sellers');
-Route::get('/marketplace/api/search', [MarketplaceController::class, 'apiSearch'])->name('marketplace.api.search');
+Route::get('/marketplace/api/search', [MarketplaceController::class, 'apiSearch'])
+    ->middleware('throttle:60,1')
+    ->name('marketplace.api.search');
 Route::get('/marketplace/categorie/{categorySlug}/{subCategorySlug?}', [MarketplaceController::class, 'category'])->name('marketplace.category');
 Route::get('/marketplace/produit/{product}', [MarketplaceController::class, 'show'])->name('marketplace.show');
 Route::post('/marketplace/produit/{product}/avis', [MarketplaceController::class, 'storeReview'])
@@ -87,13 +89,15 @@ Route::post('/panier/ajouter/{product}', [MarketplaceController::class, 'addToCa
 Route::patch('/panier/{productId}', [MarketplaceController::class, 'updateCart'])->name('marketplace.cart.update');
 Route::delete('/panier/{productId}', [MarketplaceController::class, 'removeFromCart'])->name('marketplace.cart.remove');
 Route::get('/commander', [MarketplaceController::class, 'checkout'])->name('marketplace.checkout');
-Route::post('/commander', [MarketplaceController::class, 'placeOrder'])->name('marketplace.order.place');
+Route::post('/commander', [MarketplaceController::class, 'placeOrder'])
+    ->middleware('throttle:15,1')
+    ->name('marketplace.order.place');
 
 Route::get('/conditions-utilisation', function () {
     return Inertia::render('Legal/Show', [
         'title' => 'Conditions d\'utilisation',
         'slug' => 'terms',
-        'content' => \App\Models\PlatformSetting::termsOfUse(),
+        'content' => \App\Services\HtmlSanitizer::clean(\App\Models\PlatformSetting::termsOfUse()),
     ]);
 })->name('legal.terms');
 
@@ -101,13 +105,17 @@ Route::get('/politique-confidentialite', function () {
     return Inertia::render('Legal/Show', [
         'title' => 'Politique de confidentialité',
         'slug' => 'privacy',
-        'content' => \App\Models\PlatformSetting::privacyPolicy(),
+        'content' => \App\Services\HtmlSanitizer::clean(\App\Models\PlatformSetting::privacyPolicy()),
     ]);
 })->name('legal.privacy');
 
 // Mode Sandbox Démo sans inscription
-Route::get('/demo', [DemoController::class, 'enter'])->name('demo.enter');
-Route::post('/demo/reinitialiser', [DemoController::class, 'reset'])->name('demo.reset');
+Route::get('/demo', [DemoController::class, 'enter'])
+    ->middleware('throttle:10,5')
+    ->name('demo.enter');
+Route::post('/demo/reinitialiser', [DemoController::class, 'reset'])
+    ->middleware('throttle:3,5')
+    ->name('demo.reset');
 Route::get('/demo/quitter', [DemoController::class, 'exitAndRedirect'])->name('demo.exit');
 
 // Carnet d'entretien numérique & Suivi client en direct
@@ -315,38 +323,44 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
         Route::post('/inspections/{inspection}/whatsapp', [InspectionController::class, 'sendWhatsapp'])->name('tenant.inspections.whatsapp');
 
         // Sous-traitance & Dépannage / Remorquage
-        Route::get('/sous-traitance', [SubcontractController::class, 'index'])->name('tenant.subcontracting.index');
-        Route::post('/sous-traitance', [SubcontractController::class, 'store'])->name('tenant.subcontracting.store');
-        Route::patch('/sous-traitance/{intervention}/statut', [SubcontractController::class, 'updateStatus'])->name('tenant.subcontracting.status');
-        Route::delete('/sous-traitance/{intervention}', [SubcontractController::class, 'destroy'])->name('tenant.subcontracting.destroy');
+        Route::middleware('tenant.permission:repair_orders.manage|receptions.manage')->group(function () {
+            Route::get('/sous-traitance', [SubcontractController::class, 'index'])->name('tenant.subcontracting.index');
+            Route::post('/sous-traitance', [SubcontractController::class, 'store'])->name('tenant.subcontracting.store');
+            Route::patch('/sous-traitance/{intervention}/statut', [SubcontractController::class, 'updateStatus'])->name('tenant.subcontracting.status');
+            Route::delete('/sous-traitance/{intervention}', [SubcontractController::class, 'destroy'])->name('tenant.subcontracting.destroy');
+        });
 
         // Outillage Atelier & Consommables en Vrac
-        Route::get('/outillage-vrac', [ToolsAndBulkController::class, 'index'])->name('tenant.tools_bulk.index');
-        Route::post('/outillage-vrac/outils', [ToolsAndBulkController::class, 'storeTool'])->name('tenant.tools_bulk.tools.store');
-        Route::post('/outillage-vrac/outils/{tool}/emprunter', [ToolsAndBulkController::class, 'borrowTool'])->name('tenant.tools_bulk.tools.borrow');
-        Route::post('/outillage-vrac/outils/{tool}/rendre', [ToolsAndBulkController::class, 'returnTool'])->name('tenant.tools_bulk.tools.return');
-        Route::delete('/outillage-vrac/outils/{tool}', [ToolsAndBulkController::class, 'destroyTool'])->name('tenant.tools_bulk.tools.destroy');
-        Route::post('/outillage-vrac/vrac', [ToolsAndBulkController::class, 'storeBulk'])->name('tenant.tools_bulk.bulk.store');
-        Route::post('/outillage-vrac/vrac/{consumable}/mouvement', [ToolsAndBulkController::class, 'logBulkMovement'])->name('tenant.tools_bulk.bulk.movement');
+        Route::middleware('tenant.permission:stock.view|stock.manage|repair_orders.manage|receptions.manage')->group(function () {
+            Route::get('/outillage-vrac', [ToolsAndBulkController::class, 'index'])->name('tenant.tools_bulk.index');
+            Route::post('/outillage-vrac/outils', [ToolsAndBulkController::class, 'storeTool'])->name('tenant.tools_bulk.tools.store');
+            Route::post('/outillage-vrac/outils/{tool}/emprunter', [ToolsAndBulkController::class, 'borrowTool'])->name('tenant.tools_bulk.tools.borrow');
+            Route::post('/outillage-vrac/outils/{tool}/rendre', [ToolsAndBulkController::class, 'returnTool'])->name('tenant.tools_bulk.tools.return');
+            Route::delete('/outillage-vrac/outils/{tool}', [ToolsAndBulkController::class, 'destroyTool'])->name('tenant.tools_bulk.tools.destroy');
+            Route::post('/outillage-vrac/vrac', [ToolsAndBulkController::class, 'storeBulk'])->name('tenant.tools_bulk.bulk.store');
+            Route::post('/outillage-vrac/vrac/{consumable}/mouvement', [ToolsAndBulkController::class, 'logBulkMovement'])->name('tenant.tools_bulk.bulk.movement');
+        });
     });
 
     // Fichiers privés signés (photos, signatures)
     Route::get('/fichiers-securises/{path}', [SecureFileController::class, 'show'])->name('tenant.files.show');
 
     // Planning Visuel (Garage & Centre Technique)
-    Route::middleware('tenant.type:garage,centre_technique')->group(function () {
+    Route::middleware(['tenant.type:garage,centre_technique', 'tenant.permission:planning.manage|appointments.view|receptions.manage'])->group(function () {
         Route::get('/planning-atelier', [WorkshopPlanningController::class, 'index'])->name('tenant.planning.index');
         Route::patch('/planning-atelier/rdv/{appointment}', [WorkshopPlanningController::class, 'assignAppointment'])->name('tenant.planning.assign_appointment');
         Route::patch('/planning-atelier/or/{repairOrder}', [WorkshopPlanningController::class, 'assignRepairOrder'])->name('tenant.planning.assign_ro');
     });
 
     // Rappels Périodiques (Vidange, Visite Technique, Assurance — tous espaces)
-    Route::get('/rappels-entretien', [MaintenanceReminderController::class, 'index'])->name('tenant.maintenance_reminders.index');
-    Route::patch('/rappels-entretien/{vehicle}', [MaintenanceReminderController::class, 'updateDates'])->name('tenant.maintenance_reminders.update');
-    Route::post('/rappels-entretien/{vehicle}/whatsapp', [MaintenanceReminderController::class, 'sendWhatsapp'])->name('tenant.maintenance_reminders.whatsapp');
+    Route::middleware('tenant.permission:clients.view|vehicles.view|receptions.manage')->group(function () {
+        Route::get('/rappels-entretien', [MaintenanceReminderController::class, 'index'])->name('tenant.maintenance_reminders.index');
+        Route::patch('/rappels-entretien/{vehicle}', [MaintenanceReminderController::class, 'updateDates'])->name('tenant.maintenance_reminders.update');
+        Route::post('/rappels-entretien/{vehicle}/whatsapp', [MaintenanceReminderController::class, 'sendWhatsapp'])->name('tenant.maintenance_reminders.whatsapp');
+    });
 
     // Flottes Entreprises (B2B — Garage & Assurance)
-    Route::middleware('tenant.type:garage,assurance')->group(function () {
+    Route::middleware(['tenant.type:garage,assurance', 'tenant.permission:clients.manage|invoices.manage'])->group(function () {
         Route::get('/flottes', [FleetController::class, 'index'])->name('tenant.fleets.index');
         Route::post('/flottes/{customer}/parametres', [FleetController::class, 'updateSettings'])->name('tenant.fleets.settings');
         Route::post('/flottes/{customer}/facture-mensuelle', [FleetController::class, 'generateMonthlyInvoice'])->name('tenant.fleets.monthly_invoice');
@@ -400,6 +414,7 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
     Route::get('/paiements/{payment}/imprimer', [PaymentController::class, 'printReceipt'])
         ->name('tenant.payments.receipt_print');
     Route::get('/export-excel/{type}', [ExportController::class, 'excel'])
+        ->middleware('tenant.permission:reports.view|invoices.view|clients.view')
         ->name('tenant.export.excel');
     Route::post('/caisse/cloture', [PaymentController::class, 'closeCashRegister'])->name('tenant.cash_register.close');
 
@@ -440,13 +455,15 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
     });
 
     // Messagerie & Notifications internes / clients
-    Route::get('/messagerie', [MessageController::class, 'index'])->name('tenant.messages.index');
-    Route::post('/messagerie', [MessageController::class, 'store'])->name('tenant.messages.store');
-    Route::post('/messagerie/{message}/repondre', [MessageController::class, 'reply'])->name('tenant.messages.reply');
-    Route::post('/messagerie/{message}/lu', [MessageController::class, 'markRead'])->name('tenant.messages.read');
+    Route::middleware('tenant.permission:clients.view|settings.manage')->group(function () {
+        Route::get('/messagerie', [MessageController::class, 'index'])->name('tenant.messages.index');
+        Route::post('/messagerie', [MessageController::class, 'store'])->name('tenant.messages.store');
+        Route::post('/messagerie/{message}/repondre', [MessageController::class, 'reply'])->name('tenant.messages.reply');
+        Route::post('/messagerie/{message}/lu', [MessageController::class, 'markRead'])->name('tenant.messages.read');
+    });
 
     // Gestion Marketplace côté Garage (Catégories, Sous-catégories, Produits, Commandes)
-    Route::prefix('marketplace-gestion')->name('tenant.marketplace.')->group(function () {
+    Route::prefix('marketplace-gestion')->name('tenant.marketplace.')->middleware('tenant.permission:stock.manage|settings.manage')->group(function () {
         Route::get('/categories', [MarketplaceManagementController::class, 'categories'])->name('categories');
         Route::post('/categories', [MarketplaceManagementController::class, 'storeCategory'])->name('categories.store');
         Route::delete('/categories/{category}', [MarketplaceManagementController::class, 'deleteCategory'])->name('categories.delete');
@@ -473,9 +490,11 @@ Route::middleware('tenant.auth')->group(function () {
     Route::post('/abonnement/payer', [PaymentController::class, 'paySubscription'])->name('tenant.subscription.pay');
     Route::get('/abonnement/export/pdf', [PaymentController::class, 'exportSubscriptionsPdf'])->name('tenant.subscription.export.pdf');
     Route::get('/abonnement/export/excel', [PaymentController::class, 'exportSubscriptionsExcel'])->name('tenant.subscription.export.excel');
-    Route::get('/affiliation', [AffiliationController::class, 'index'])->name('tenant.affiliation.index');
-    Route::post('/affiliation', [AffiliationController::class, 'store'])->middleware('tenant.writable')->name('tenant.affiliation.store');
-    Route::post('/affiliation/payer-abonnement', [AffiliationController::class, 'paySubscription'])->name('tenant.affiliation.pay');
+    Route::middleware('tenant.permission:settings.manage')->group(function () {
+        Route::get('/affiliation', [AffiliationController::class, 'index'])->name('tenant.affiliation.index');
+        Route::post('/affiliation', [AffiliationController::class, 'store'])->middleware('tenant.writable')->name('tenant.affiliation.store');
+        Route::post('/affiliation/payer-abonnement', [AffiliationController::class, 'paySubscription'])->name('tenant.affiliation.pay');
+    });
     Route::get('/paiements/{payment}/retour', [PaymentController::class, 'returnCallback'])->name('tenant.payments.return');
 });
 
@@ -512,20 +531,4 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/parametres', fn () => view('admin.dashboard', ['section' => 'settings']))->name('settings');
         Route::get('/profil', fn () => view('admin.dashboard', ['section' => 'profile']))->name('profile');
     });
-});
-
-Route::get('/create-symlink', function () {
-    if (is_link(public_path('storage'))) {
-        return 'Le lien symbolique existe déjà !';
-    }
-
-    try {
-        symlink(
-            storage_path('app/public'),
-            public_path('storage')
-        );
-        return 'Lien symbolique créé avec succès !';
-    } catch (\Exception $e) {
-        return 'Erreur : ' . $e->getMessage();
-    }
 });

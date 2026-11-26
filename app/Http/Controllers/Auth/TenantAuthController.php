@@ -75,9 +75,14 @@ class TenantAuthController extends Controller
         }
 
         if (! $user->is_active) {
-            return back()->withErrors([
-                'email' => __('auth.inactive'),
-            ])->onlyInput('email');
+            AuditLog::record(
+                action: 'auth.login_inactive_blocked',
+                subject: $user,
+                tenantId: $user->tenant_id,
+                request: $request
+            );
+
+            return $this->recordIpFailure($request, $ip, $failKey, $blockKey);
         }
 
         if (! Hash::check($password, $user->password)) {
@@ -109,7 +114,7 @@ class TenantAuthController extends Controller
             'locked_until' => null,
         ]);
 
-        Auth::guard('web')->login($user, true);
+        Auth::guard('web')->login($user, $request->boolean('remember'));
         $request->session()->regenerate();
         $request->session()->put('active_tenant_id', $user->tenant_id);
 

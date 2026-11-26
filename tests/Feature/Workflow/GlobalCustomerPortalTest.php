@@ -20,14 +20,20 @@ class GlobalCustomerPortalTest extends TestCase
     public function test_unique_global_customer_links_across_garages_prefills_and_works_in_portal(): void
     {
         config([
-            'services.green_api.url' => 'https://api.green-api.com',
-            'services.green_api.id_instance' => '123456',
-            'services.green_api.api_token_instance' => 'token-secret',
+            'services.greenapi.url' => 'https://api.green-api.com',
+            'services.greenapi.id_instance' => '123456',
+            'services.greenapi.api_token_instance' => 'token-secret',
         ]);
 
-        Http::fake([
-            '*' => Http::response(['idMessage' => 'msg-otp'], 200),
-        ]);
+        $sentOtp = null;
+        Http::fake(function ($req) use (&$sentOtp) {
+            $body = (string) ($req['message'] ?? '');
+            if (preg_match('/(\d{5})/', $body, $m)) {
+                $sentOtp = $m[1];
+            }
+
+            return Http::response(['idMessage' => 'msg-otp'], 200);
+        });
 
         // Garage A
         $tenantA = Tenant::create(['name' => 'Garage Alpha', 'slug' => 'alpha', 'email' => 'alpha@example.com']);
@@ -106,10 +112,12 @@ class GlobalCustomerPortalTest extends TestCase
 
         $global = GlobalCustomer::firstOrFail();
         $this->assertNotNull($global->otp_code);
+        $this->assertNotNull($sentOtp);
+        $this->assertNotSame($sentOtp, $global->otp_code, 'OTP must be hashed in database');
 
         $this->post('/mon-espace-client/verifier', [
             'phone' => '+237699123456',
-            'code' => $global->otp_code,
+            'code' => $sentOtp,
         ])->assertSessionHas('success');
 
         // Mise à jour du profil unique -> synchronisé dans les deux garages

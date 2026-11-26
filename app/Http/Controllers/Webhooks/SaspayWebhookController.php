@@ -38,8 +38,15 @@ class SaspayWebhookController extends Controller
             return response()->json(['message' => 'Payload webhook invalide.'], 400);
         }
 
-        // En cas de doute sur la signature, on re-vérifie obligatoirement côté serveur via /verify/.
+        // Si un secret webhook est configuré, toute signature HMAC invalide est rejetée immédiatement (pas d'appel sortant)
+        $webhookSecretConfigured = ! empty(config('saspay.webhook_secret'));
         if (! $signatureValid) {
+            if ($webhookSecretConfigured) {
+                AuditLog::record('webhook.saspay_invalid_signature', request: $request);
+
+                return response()->json(['message' => 'Signature invalide.'], 401);
+            }
+
             try {
                 $verifiedData = $saspayClient->verifyPayment($providerPaymentId);
                 if (empty($verifiedData)) {

@@ -140,7 +140,7 @@ function fmt(n) {
                             </div>
                         </div>
 
-                        <div v-if="product.description" class="text-muted small mb-4" v-html="product.description"></div>
+                        <div v-if="product.description" class="text-muted small mb-4" style="white-space: pre-line;">{{ product.description }}</div>
 
                         <div class="mt-auto">
                             <div class="row g-2 align-items-center">

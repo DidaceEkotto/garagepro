@@ -258,9 +258,16 @@ class MessageController extends Controller
         }
 
         $att = $attachments[$index];
-        $path = $att['path'] ?? '';
+        $path = (string) ($att['path'] ?? '');
+        $expectedPrefix = "messages/{$message->tenant_id}/";
 
-        if (! $path || ! Storage::disk('local')->exists($path)) {
+        if (
+            $path === ''
+            || str_contains($path, '..')
+            || str_contains($path, "\0")
+            || (! str_starts_with($path, $expectedPrefix) && ! str_starts_with($path, "tenants/{$message->tenant_id}/"))
+            || ! Storage::disk('local')->exists($path)
+        ) {
             abort(404);
         }
 

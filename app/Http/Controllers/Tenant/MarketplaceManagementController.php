@@ -175,7 +175,7 @@ class MarketplaceManagementController extends Controller
             'country_code' => ['required', 'string', 'size:2'],
             'description' => ['nullable', 'string', 'max:3000'],
             'images' => ['nullable', 'array'],
-            'images.*' => ['file', 'image', 'max:8192'],
+            'images.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
         ]);
 
         $categoryId = $data['category_id'] ?? null;
@@ -218,14 +218,21 @@ class MarketplaceManagementController extends Controller
         }
 
         $imagePaths = [];
+        $allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
         foreach ($request->file('images', []) as $file) {
             if ($file instanceof UploadedFile) {
+                $realMime = $finfo->file($file->getRealPath()) ?: '';
+                if (! in_array($realMime, $allowedMimes, true)) {
+                    return back()->withErrors(['images' => 'Format d\'image non autorisé. Formats acceptés : JPEG, PNG, WebP.']);
+                }
                 $imagePaths[] = Storage::disk('local')->putFile("marketplace/{$tenantId}", $file);
             }
         }
 
+        // Supprime tout HTML pour empêcher toute attaque XSS stockée sur le Marketplace public
         $cleanDescription = ! empty($data['description'])
-            ? strip_tags($data['description'], '<p><br><b><strong><i><em><u><ul><ol><li><h3><h4>')
+            ? trim(strip_tags($data['description']))
             : null;
 
         $product = Product::create([

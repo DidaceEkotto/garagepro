@@ -302,8 +302,8 @@ function verdictBadge(verdict) {
                 <nav>
                     <ul class="pagination pagination-sm mb-0">
                         <li v-for="(link, idx) in pvLinks" :key="idx" class="page-item" :class="{ active: link.active, disabled: !link.url }">
-                            <Link v-if="link.url" :href="link.url" class="page-link" v-html="link.label" preserve-scroll />
-                            <span v-else class="page-link" v-html="link.label" />
+                            <Link v-if="link.url" :href="link.url" class="page-link" preserve-scroll>{{ link.label.replace(/&laquo;/g, '«').replace(/&raquo;/g, '»').replace(/<[^>]*>/g, '') }}</Link>
+                            <span v-else class="page-link">{{ link.label.replace(/&laquo;/g, '«').replace(/&raquo;/g, '»').replace(/<[^>]*>/g, '') }}</span>
                         </li>
                     </ul>
                 </nav>

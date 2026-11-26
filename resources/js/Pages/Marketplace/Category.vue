@@ -332,8 +332,8 @@ function fmt(n) {
                                 class="page-item"
                                 :class="{ active: link.active, disabled: !link.url }"
                             >
-                                <Link v-if="link.url" :href="link.url" class="page-link" v-html="link.label" />
-                                <span v-else class="page-link" v-html="link.label" />
+                                <Link v-if="link.url" :href="link.url" class="page-link">{{ link.label.replace(/&laquo;/g, '«').replace(/&raquo;/g, '»').replace(/<[^>]*>/g, '') }}</Link>
+                                <span v-else class="page-link">{{ link.label.replace(/&laquo;/g, '«').replace(/&raquo;/g, '»').replace(/<[^>]*>/g, '') }}</span>
                             </li>
                         </ul>
                     </nav>

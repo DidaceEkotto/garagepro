@@ -8,6 +8,8 @@ use App\Services\GlobalCustomerService;
 use App\Services\GreenApiService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -140,34 +142,32 @@ class CustomerPortalController extends Controller
         ]);
 
         $global = $service->findByPhoneOrId($validated['phone']);
-        if (! $global) {
-            return back()->withErrors([
-                'phone' => 'Aucun compte client MboaCar trouvé avec ce numéro WhatsApp.',
-            ]);
-        }
-
-        $code = (string) random_int(10000, 99999);
-        $global->update([
-            'otp_code' => $code,
-            'otp_expires_at' => now()->addMinutes(5),
-        ]);
-
-        $targetPhone = $global->whatsapp_phone ?: $global->phone;
-
-        try {
-            if ($greenApi->isConfigured() && $targetPhone) {
-                $greenApi->sendMessage(
-                    $targetPhone,
-                    "MboaCar Espace Client : votre code de connexion sécurisé est {$code} (valable 5 minutes)."
-                );
-            }
-        } catch (\Throwable $e) {
-            Log::warning('CustomerPortal OTP WhatsApp failed (non-blocking)', ['error' => $e->getMessage()]);
-        }
-
         $request->session()->put('portal_otp_phone', $validated['phone']);
 
-        return back()->with('success', 'Code de connexion à 5 chiffres envoyé sur votre WhatsApp (valable 5 minutes).');
+        if ($global) {
+            $code = (string) random_int(10000, 99999);
+            $global->update([
+                'otp_code' => Hash::make($code),
+                'otp_expires_at' => now()->addMinutes(5),
+            ]);
+            Cache::forget("portal_otp_attempts:{$global->id}");
+
+            $targetPhone = $global->whatsapp_phone ?: $global->phone;
+
+            try {
+                if ($greenApi->isConfigured() && $targetPhone) {
+                    $greenApi->sendMessage(
+                        $targetPhone,
+                        "MboaCar Espace Client : votre code de connexion sécurisé est {$code} (valable 5 minutes)."
+                    );
+                }
+            } catch (\Throwable $e) {
+                Log::warning('CustomerPortal OTP WhatsApp failed (non-blocking)', ['error' => $e->getMessage()]);
+            }
+        }
+
+        // Réponse volontairement générique pour empêcher l'énumération des numéros clients
+        return back()->with('success', 'Si un compte client MboaCar correspond à ce numéro, un code de connexion à 5 chiffres vient d\'être envoyé sur WhatsApp (valable 5 minutes).');
     }
 
     public function verifyOtp(Request $request, GlobalCustomerService $service): RedirectResponse
@@ -178,11 +178,38 @@ class CustomerPortalController extends Controller
         ]);
 
         $global = $service->findByPhoneOrId($validated['phone']);
-        if (! $global || ! $global->otp_code || ! $global->otp_expires_at?->isFuture() || $global->otp_code !== $validated['code']) {
+        if (! $global || ! $global->otp_code || ! $global->otp_expires_at?->isFuture()) {
             return back()->withErrors([
                 'code' => 'Code invalide ou expiré. Veuillez demander un nouveau code.',
             ]);
         }
+
+        $attemptsKey = "portal_otp_attempts:{$global->id}";
+        $attempts = (int) Cache::get($attemptsKey, 0);
+
+        if ($attempts >= 5) {
+            $global->update(['otp_code' => null, 'otp_expires_at' => null]);
+            Cache::forget($attemptsKey);
+
+            return back()->withErrors([
+                'code' => 'Trop de tentatives incorrectes. Veuillez demander un nouveau code.',
+            ]);
+        }
+
+        if (! Hash::check($validated['code'], $global->otp_code)) {
+            $newAttempts = $attempts + 1;
+            Cache::put($attemptsKey, $newAttempts, now()->addMinutes(5));
+            if ($newAttempts >= 5) {
+                $global->update(['otp_code' => null, 'otp_expires_at' => null]);
+                Cache::forget($attemptsKey);
+            }
+
+            return back()->withErrors([
+                'code' => 'Code invalide ou expiré. Veuillez demander un nouveau code.',
+            ]);
+        }
+
+        Cache::forget($attemptsKey);
 
         $global->update([
             'otp_code' => null,
@@ -190,6 +217,8 @@ class CustomerPortalController extends Controller
             'last_login_at' => now(),
         ]);
 
+        // Régénération de session contre la fixation de session
+        $request->session()->regenerate();
         $request->session()->put('global_customer_id', $global->id);
         $request->session()->forget('portal_otp_phone');
 

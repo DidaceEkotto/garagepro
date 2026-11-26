@@ -21,6 +21,7 @@ use App\Models\SubCategory;
 use App\Models\Tenant;
 use App\Models\Testimonial;
 use App\Services\GreenApiService;
+use App\Services\HtmlSanitizer;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
@@ -141,6 +142,14 @@ class PlatformDashboard extends Component
     public int $partnerSortOrder = 0;
     public $partnerLogoFile = null;
 
+    private function authorizeSection(string $section): Admin
+    {
+        $actor = Auth::guard('admin')->user();
+        abort_unless($actor instanceof Admin && $actor->canAccessSection($section), 403, 'Accès non autorisé à cette action administrateur.');
+
+        return $actor;
+    }
+
     public function setSection(string $section): void
     {
         $admin = Auth::guard('admin')->user();
@@ -247,6 +256,8 @@ class PlatformDashboard extends Component
 
     public function saveSettings(): void
     {
+        $this->authorizeSection('settings');
+
         $this->validate([
             'subscriptionPrice' => ['required', 'integer', 'min:1'],
             'trialDays' => ['required', 'integer', 'min:1', 'max:30'],
@@ -321,6 +332,8 @@ class PlatformDashboard extends Component
 
     public function suspendTenant(int $tenantId): void
     {
+        $this->authorizeSection('tenants');
+
         $tenant = Tenant::findOrFail($tenantId);
         $tenant->update(['status' => Tenant::STATUS_SUSPENDED]);
 
@@ -330,6 +343,8 @@ class PlatformDashboard extends Component
 
     public function reactivateTenant(int $tenantId): void
     {
+        $this->authorizeSection('tenants');
+
         $tenant = Tenant::findOrFail($tenantId);
         $tenant->update(['status' => Tenant::STATUS_ACTIVE]);
 
@@ -339,6 +354,8 @@ class PlatformDashboard extends Component
 
     public function extendTrial(int $tenantId, int $days = 7): void
     {
+        $this->authorizeSection('tenants');
+
         $tenant = Tenant::findOrFail($tenantId);
         $base = ($tenant->trial_ends_at && $tenant->trial_ends_at->isFuture()) ? $tenant->trial_ends_at : now();
 
@@ -353,6 +370,8 @@ class PlatformDashboard extends Component
 
     public function impersonateTenant(int $tenantId): void
     {
+        $this->authorizeSection('tenants');
+
         $tenant = Tenant::with('users')->findOrFail($tenantId);
         $gerant = $tenant->users()->first();
         if (! $gerant) {
@@ -391,6 +410,7 @@ class PlatformDashboard extends Component
 
     public function remindTenantEmail(int $tenantId): void
     {
+        $this->authorizeSection('tenants');
         $this->feedbackMessage = '';
         $this->feedbackError = '';
 
@@ -438,6 +458,7 @@ class PlatformDashboard extends Component
 
     public function remindTenantWhatsapp(int $tenantId): void
     {
+        $this->authorizeSection('tenants');
         $this->feedbackMessage = '';
         $this->feedbackError = '';
 
@@ -481,6 +502,7 @@ class PlatformDashboard extends Component
 
     public function remindTenantBoth(int $tenantId): void
     {
+        $this->authorizeSection('tenants');
         $this->feedbackMessage = '';
         $this->feedbackError = '';
 
@@ -547,6 +569,7 @@ class PlatformDashboard extends Component
 
     public function remindAllExpiringTenants(): void
     {
+        $this->authorizeSection('tenants');
         $this->feedbackMessage = '';
         $this->feedbackError = '';
 
@@ -733,6 +756,8 @@ class PlatformDashboard extends Component
 
     public function blockIpManual(): void
     {
+        $this->authorizeSection('security');
+
         $this->validate([
             'newIp' => ['required', 'ip'],
             'newIpReason' => ['required', 'string', 'max:255'],
@@ -747,6 +772,8 @@ class PlatformDashboard extends Component
 
     public function unblockIp(int $id): void
     {
+        $this->authorizeSection('security');
+
         $record = BlockedIp::findOrFail($id);
         $record->delete();
         AuditLog::record('admin.ip_unblocked', actor: Auth::guard('admin')->user(), metadata: ['ip' => $record->ip_address]);
@@ -755,6 +782,8 @@ class PlatformDashboard extends Component
 
     public function addTestimonial(): void
     {
+        $this->authorizeSection('testimonials');
+
         $this->validate([
             'testiAuthor' => ['required', 'string', 'max:120'],
             'testiRole' => ['required', 'string', 'max:120'],
@@ -780,18 +809,24 @@ class PlatformDashboard extends Component
 
     public function toggleTestimonial(int $id): void
     {
+        $this->authorizeSection('testimonials');
+
         $t = Testimonial::findOrFail($id);
         $t->update(['is_published' => ! $t->is_published]);
     }
 
     public function deleteTestimonial(int $id): void
     {
+        $this->authorizeSection('testimonials');
+
         Testimonial::findOrFail($id)->delete();
         $this->feedbackMessage = 'Témoignage supprimé.';
     }
 
     public function addCountry(): void
     {
+        $this->authorizeSection('countries');
+
         $this->validate([
             'newCountryCode' => ['required', 'string', 'size:2', 'alpha'],
             'newCountryName' => ['required', 'string', 'max:120'],
@@ -813,24 +848,26 @@ class PlatformDashboard extends Component
 
     public function toggleCountry(int $id): void
     {
+        $this->authorizeSection('countries');
+
         $country = Country::findOrFail($id);
         $country->update(['is_active' => ! $country->is_active]);
     }
 
     public function sendAdminMessage(): void
     {
+        $admin = $this->authorizeSection('messages');
+
         $this->validate([
             'adminMsgTenantId' => ['required', 'integer', 'exists:tenants,id'],
             'adminMsgSubject' => ['required', 'string', 'min:2', 'max:200'],
             'adminMsgBody' => ['required', 'string', 'min:2', 'max:5000'],
         ]);
 
-        $admin = Auth::guard('admin')->user();
-
         PlatformMessage::create([
             'tenant_id' => $this->adminMsgTenantId,
             'sender_type' => PlatformMessage::TYPE_ADMIN,
-            'sender_id' => $admin?->id,
+            'sender_id' => $admin->id,
             'sender_name' => 'Administration MboaCar',
             'recipient_type' => PlatformMessage::TYPE_TENANT,
             'recipient_id' => $this->adminMsgTenantId,
@@ -845,6 +882,8 @@ class PlatformDashboard extends Component
 
     public function startAdminReply(int $messageId): void
     {
+        $this->authorizeSection('messages');
+
         $this->replyingMsgId = $messageId;
         $this->adminReplyBody = '';
         $msg = PlatformMessage::find($messageId);
@@ -855,6 +894,8 @@ class PlatformDashboard extends Component
 
     public function submitAdminReply(): void
     {
+        $admin = $this->authorizeSection('messages');
+
         if (! $this->replyingMsgId) {
             return;
         }
@@ -864,14 +905,13 @@ class PlatformDashboard extends Component
         ]);
 
         $original = PlatformMessage::findOrFail($this->replyingMsgId);
-        $admin = Auth::guard('admin')->user();
         $subject = str_starts_with($original->subject, 'Re:') ? $original->subject : 'Re: '.$original->subject;
 
         PlatformMessage::create([
             'tenant_id' => $original->tenant_id,
             'parent_id' => $original->id,
             'sender_type' => PlatformMessage::TYPE_ADMIN,
-            'sender_id' => $admin?->id,
+            'sender_id' => $admin->id,
             'sender_name' => 'Administration MboaCar',
             'recipient_type' => PlatformMessage::TYPE_TENANT,
             'recipient_id' => $original->tenant_id,
@@ -886,6 +926,8 @@ class PlatformDashboard extends Component
 
     public function addMarketplaceCategory(): void
     {
+        $this->authorizeSection('categories');
+
         $this->validate(['mpCatName' => ['required', 'string', 'min:2', 'max:120']]);
         $slug = \Illuminate\Support\Str::slug($this->mpCatName);
         if (Category::whereNull('tenant_id')->where('slug', $slug)->exists()) {
@@ -904,6 +946,8 @@ class PlatformDashboard extends Component
 
     public function addMarketplaceSubCategory(): void
     {
+        $this->authorizeSection('categories');
+
         $this->validate([
             'mpSubParentId' => ['required', 'integer', 'exists:marketplace_categories,id'],
             'mpSubName' => ['required', 'string', 'min:2', 'max:120'],
@@ -922,12 +966,16 @@ class PlatformDashboard extends Component
 
     public function deleteMarketplaceCategory(int $id): void
     {
+        $this->authorizeSection('categories');
+
         Category::findOrFail($id)->delete();
         $this->feedbackMessage = 'Catégorie supprimée.';
     }
 
     public function saveBanner(): void
     {
+        $this->authorizeSection('banners');
+
         $this->validate([
             'bannerTitle' => ['required', 'string', 'min:2', 'max:180'],
             'bannerSubtitle' => ['nullable', 'string', 'max:255'],
@@ -936,7 +984,7 @@ class PlatformDashboard extends Component
             'bannerGradientTo' => ['required', 'string', 'max:30'],
             'bannerButtonText' => ['nullable', 'string', 'max:80'],
             'bannerButtonUrl' => ['nullable', 'string', 'max:500'],
-            'bannerImage' => ['nullable', 'image', 'max:5120'],
+            'bannerImage' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ]);
 
         $payload = [
@@ -969,6 +1017,8 @@ class PlatformDashboard extends Component
 
     public function editBanner(int $id): void
     {
+        $this->authorizeSection('banners');
+
         $b = MarketplaceBanner::findOrFail($id);
         $this->editingBannerId = $b->id;
         $this->bannerTitle = $b->title;
@@ -982,18 +1032,24 @@ class PlatformDashboard extends Component
 
     public function toggleBanner(int $id): void
     {
+        $this->authorizeSection('banners');
+
         $b = MarketplaceBanner::findOrFail($id);
         $b->update(['is_active' => ! $b->is_active]);
     }
 
     public function deleteBanner(int $id): void
     {
+        $this->authorizeSection('banners');
+
         MarketplaceBanner::findOrFail($id)->delete();
         $this->feedbackMessage = 'Bannière supprimée.';
     }
 
     public function toggleAffiliateBlock(int $linkId): void
     {
+        $this->authorizeSection('affiliation');
+
         $link = AffiliateLink::findOrFail($linkId);
         $willBlock = ! $link->is_blocked;
 
@@ -1010,6 +1066,8 @@ class PlatformDashboard extends Component
 
     public function inspectAffiliateReferrals(int $linkId): void
     {
+        $this->authorizeSection('affiliation');
+
         $this->selectedAffiliateLinkId = $this->selectedAffiliateLinkId === $linkId ? null : $linkId;
     }
 
@@ -1124,20 +1182,22 @@ class PlatformDashboard extends Component
 
     public function saveTerms(): void
     {
-        $actor = Auth::guard('admin')->user();
-        abort_unless($actor && $actor->canAccessSection('terms'), 403);
+        $actor = $this->authorizeSection('terms');
 
-        PlatformSetting::setValue('terms_of_use', $this->termsContent);
+        $clean = HtmlSanitizer::clean($this->termsContent);
+        $this->termsContent = $clean;
+        PlatformSetting::setValue('terms_of_use', $clean);
         AuditLog::record('admin.terms_updated', actor: $actor);
         $this->feedbackMessage = 'Conditions d\'utilisation enregistrées.';
     }
 
     public function savePrivacy(): void
     {
-        $actor = Auth::guard('admin')->user();
-        abort_unless($actor && $actor->canAccessSection('privacy'), 403);
+        $actor = $this->authorizeSection('privacy');
 
-        PlatformSetting::setValue('privacy_policy', $this->privacyContent);
+        $clean = HtmlSanitizer::clean($this->privacyContent);
+        $this->privacyContent = $clean;
+        PlatformSetting::setValue('privacy_policy', $clean);
         AuditLog::record('admin.privacy_updated', actor: $actor);
         $this->feedbackMessage = 'Politique de confidentialité enregistrée.';
     }
@@ -1240,6 +1300,7 @@ class PlatformDashboard extends Component
 
     public function addPartner(): void
     {
+        $this->authorizeSection('partners');
         $this->feedbackMessage = '';
         $this->feedbackError = '';
 
@@ -1247,7 +1308,7 @@ class PlatformDashboard extends Component
             'partnerName' => ['required', 'string', 'min:2', 'max:150'],
             'partnerWebsiteUrl' => ['nullable', 'url', 'max:255'],
             'partnerSortOrder' => ['nullable', 'integer', 'min:0', 'max:9999'],
-            'partnerLogoFile' => ['required', 'image', 'max:3072'],
+            'partnerLogoFile' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
         ]);
 
         $logoPath = $this->partnerLogoFile->store('partners', 'public');
@@ -1267,6 +1328,8 @@ class PlatformDashboard extends Component
 
     public function togglePartner(int $id): void
     {
+        $this->authorizeSection('partners');
+
         $partner = Partner::findOrFail($id);
         $partner->update(['is_active' => ! $partner->is_active]);
         AuditLog::record('admin.partner_toggled', subject: $partner, actor: Auth::guard('admin')->user());
@@ -1277,6 +1340,8 @@ class PlatformDashboard extends Component
 
     public function deletePartner(int $id): void
     {
+        $this->authorizeSection('partners');
+
         $partner = Partner::findOrFail($id);
         if ($partner->logo_path && Storage::disk('public')->exists($partner->logo_path)) {
             Storage::disk('public')->delete($partner->logo_path);
