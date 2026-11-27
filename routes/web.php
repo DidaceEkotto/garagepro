@@ -148,7 +148,9 @@ Route::post('/mon-espace-client/otp', [CustomerPortalController::class, 'request
 Route::post('/mon-espace-client/verifier', [CustomerPortalController::class, 'verifyOtp'])
     ->middleware('throttle:15,1')
     ->name('public.customer_portal.verify');
-Route::put('/mon-espace-client/profil', [CustomerPortalController::class, 'updateProfile'])->name('public.customer_portal.profile');
+Route::put('/mon-espace-client/profil', [CustomerPortalController::class, 'updateProfile'])
+    ->middleware('throttle:10,5')
+    ->name('public.customer_portal.profile');
 Route::post('/mon-espace-client/deconnexion', [CustomerPortalController::class, 'logout'])->name('public.customer_portal.logout');
 
 // Changement de langue (fr, en, es, pt, ar, zh)
@@ -252,9 +254,15 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
     Route::delete('/assistant-ia/{conversationId}', [AiDiagnosticController::class, 'destroy'])->name('tenant.ai_diagnostic.destroy');
 
     // Mode Hors Ligne & Synchronisation (PWA / IndexedDB)
-    Route::get('/offline/ping', [OfflineSyncController::class, 'ping'])->name('tenant.offline.ping');
-    Route::get('/offline/bootstrap', [OfflineSyncController::class, 'bootstrap'])->name('tenant.offline.bootstrap');
-    Route::post('/offline/sync', [OfflineSyncController::class, 'sync'])->name('tenant.offline.sync');
+    Route::get('/offline/ping', [OfflineSyncController::class, 'ping'])
+        ->middleware('throttle:60,1')
+        ->name('tenant.offline.ping');
+    Route::get('/offline/bootstrap', [OfflineSyncController::class, 'bootstrap'])
+        ->middleware('throttle:15,1')
+        ->name('tenant.offline.bootstrap');
+    Route::post('/offline/sync', [OfflineSyncController::class, 'sync'])
+        ->middleware('throttle:60,1')
+        ->name('tenant.offline.sync');
 
     // Clients & Véhicules
     Route::get('/clients', [CustomerController::class, 'index'])

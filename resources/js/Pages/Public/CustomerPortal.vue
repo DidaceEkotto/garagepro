@@ -272,6 +272,13 @@ function saveProfile() {
 }
 
 function logout() {
+    try {
+        if (typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_AUTH_CACHES' });
+        }
+    } catch {
+        // Non bloquant
+    }
     router.post('/mon-espace-client/deconnexion');
 }
 

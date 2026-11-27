@@ -161,8 +161,8 @@ class RemoteQuoteApprovalTest extends TestCase
         $this->assertSame('237699887766@c.us', $sentMessages[2]['chatId']);
         $this->assertStringContainsString('v2', $sentMessages[2]['message']);
 
-        // 4. Le client valide et signe électroniquement (PNG base64)
-        $fakePngBase64 = 'data:image/png;base64,'.base64_encode(str_repeat("\x89PNG\r\n\x1a\n", 20));
+        // 4. Le client valide et signe électroniquement (vrai PNG 1x1 valide)
+        $fakePngBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
         $this->post("/devis-public/{$quote->public_token}/repondre", [
             'decision' => 'accept',
             'signed_by_name' => 'Eric Tchoumi',

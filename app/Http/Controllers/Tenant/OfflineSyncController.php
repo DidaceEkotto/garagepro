@@ -383,7 +383,9 @@ class OfflineSyncController extends Controller
             'parent_inspection_id' => [
                 'nullable',
                 'integer',
-                Rule::exists('technical_inspections', 'id')->where('tenant_id', $tenantId),
+                Rule::exists('technical_inspections', 'id')
+                    ->where('tenant_id', $tenantId)
+                    ->where('vehicle_id', (int) ($payload['vehicle_id'] ?? 0)),
             ],
             'inspection_line' => ['nullable', 'string', 'max:60'],
             'mileage' => ['nullable', 'integer', 'min:0'],
@@ -509,6 +511,9 @@ class OfflineSyncController extends Controller
         $data['deductible_amount'] = (int) ($data['deductible_amount'] ?? 0);
 
         $vehicle = Vehicle::where('tenant_id', $tenantId)->findOrFail($data['vehicle_id']);
+        if ((int) $vehicle->customer_id !== (int) $data['customer_id']) {
+            return response()->json(['message' => 'Le véhicule sélectionné n\'appartient pas à ce client.'], 422);
+        }
 
         if ($meta['action'] === 'create') {
             $policy = InsurancePolicy::create(array_merge($data, [
@@ -602,10 +607,29 @@ class OfflineSyncController extends Controller
             'description' => ['required', 'string', 'max:3000'],
             'expert_name' => ['nullable', 'string', 'max:120'],
             'estimated_amount' => ['nullable', 'integer', 'min:0'],
-            'garage_tenant_id' => ['nullable', 'integer', 'exists:tenants,id'],
-            'insurance_tenant_id' => ['nullable', 'integer', 'exists:tenants,id'],
+            'garage_tenant_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('tenants', 'id')
+                    ->where('type', Tenant::TYPE_GARAGE)
+                    ->whereNull('deleted_at')
+                    ->where('status', '!=', Tenant::STATUS_SUSPENDED),
+            ],
+            'insurance_tenant_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('tenants', 'id')
+                    ->where('type', Tenant::TYPE_INSURANCE)
+                    ->whereNull('deleted_at')
+                    ->where('status', '!=', Tenant::STATUS_SUSPENDED),
+            ],
             'expert_notes' => ['nullable', 'string', 'max:3000'],
         ])->validate();
+
+        $claimVehicle = Vehicle::where('tenant_id', $tenantId)->findOrFail($data['vehicle_id']);
+        if ((int) $claimVehicle->customer_id !== (int) $data['customer_id']) {
+            return response()->json(['message' => 'Le véhicule sélectionné n\'appartient pas à ce client.'], 422);
+        }
 
         // Validation des photos transmises en multipart/form-data (Blobs stockés dans IndexedDB)
         $storedPhotos = [];

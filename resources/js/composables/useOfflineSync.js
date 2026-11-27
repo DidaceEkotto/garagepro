@@ -1,6 +1,7 @@
 import {
     addQueueItem,
     addSyncLog,
+    clearSnapshotsForTenant,
     clearSyncLogsForTenant,
     deleteQueueItem,
     getOfflineMeta,
@@ -717,6 +718,23 @@ async function clearLogs() {
     await refreshQueueAndLogs();
 }
 
+async function clearAuthOfflineCaches() {
+    try {
+        if (activeTenantId.value) {
+            await clearSnapshotsForTenant(activeTenantId.value);
+        }
+    } catch {
+        // Non bloquant
+    }
+    try {
+        if (typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_AUTH_CACHES' });
+        }
+    } catch {
+        // Non bloquant
+    }
+}
+
 /**
  * Suggestion bonus #3 : Export JSON de secours des saisies en attente (clé USB / sauvegarde locale).
  */
@@ -919,6 +937,7 @@ export function useOfflineSync() {
         syncNow,
         removeQueueItem,
         clearLogs,
+        clearAuthOfflineCaches,
         exportQueueBackup,
         installPwa,
         pendingItemsForEntity,

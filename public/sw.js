@@ -1,6 +1,28 @@
-const CACHE_VERSION = 'mboacar-pwa-v1';
+const CACHE_VERSION = 'mboacar-pwa-v2';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const PAGE_CACHE = `${CACHE_VERSION}-pages`;
+
+const NO_CACHE_PREFIXES = [
+    '/admin',
+    '/mon-espace-client',
+    '/devis-public/',
+    '/suivi/',
+    '/carnet/',
+    '/pv-visite/',
+    '/connexion',
+    '/deconnexion',
+    '/offline/',
+];
+
+function isSensitiveNoCachePath(pathname) {
+    return NO_CACHE_PREFIXES.some((p) => pathname === p || pathname.startsWith(p));
+}
+
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'CLEAR_AUTH_CACHES') {
+        event.waitUntil(caches.delete(PAGE_CACHE).catch(() => {}));
+    }
+});
 
 const PRECACHE_URLS = [
     '/manifest.webmanifest',
@@ -46,7 +68,7 @@ self.addEventListener('fetch', (event) => {
     }
 
     const url = new URL(req.url);
-    if (url.pathname.startsWith('/offline/ping') || url.pathname.startsWith('/offline/sync')) {
+    if (isSensitiveNoCachePath(url.pathname)) {
         return;
     }
 

@@ -390,12 +390,20 @@ class CustomerPortalController extends Controller
         }
 
         $global->update($updateData);
+        $hasRealChanges = $global->wasChanged([
+            'name', 'first_name', 'gender', 'id_number', 'phone_dial_code',
+            'phone', 'whatsapp_phone', 'photo_path', 'email', 'profession',
+            'date_of_birth', 'emergency_contact', 'description',
+        ]) || $photoUpdated;
+
         $global->refresh();
         $service->syncGlobalToLinkedCustomers($global);
 
-        // Notifier par Email et WhatsApp UNIQUEMENT les établissements (garage, visite technique, assurance)
-        // où cette personne est actuellement cliente. Si aucun lien client actif, rien n'est envoyé.
-        $this->notifyLinkedEstablishments($global, $greenApi, $photoUpdated);
+        // Notifier par Email et WhatsApp UNIQUEMENT si des informations ont réellement changé,
+        // avec cooldown anti-spam de 5 minutes, et uniquement aux établissements où il est client.
+        if ($hasRealChanges && Cache::add("portal_profile_notify:{$global->id}", true, now()->addMinutes(5))) {
+            $this->notifyLinkedEstablishments($global, $greenApi, $photoUpdated);
+        }
 
         return back()->with('success', 'Votre profil unique MboaCar a été mis à jour et synchronisé avec vos établissements.');
     }

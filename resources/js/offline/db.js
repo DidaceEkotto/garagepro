@@ -117,6 +117,14 @@ export async function getSnapshot(tenantId, entity) {
     return row?.data ?? null;
 }
 
+export async function clearSnapshotsForTenant(tenantId) {
+    for (const entity of ['customers', 'vehicles', 'agencies']) {
+        await withStore('snapshots', 'readwrite', (store) =>
+            store.delete(`${tenantId}:${entity}`)
+        );
+    }
+}
+
 export async function addSyncLog(entry) {
     return withStore('logs', 'readwrite', (store) => store.add(entry));
 }

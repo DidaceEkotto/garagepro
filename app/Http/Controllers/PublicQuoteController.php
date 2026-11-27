@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -53,7 +54,9 @@ class PublicQuoteController extends Controller
                 'rejection_reason' => $quote->rejection_reason,
                 'rejected_at' => $quote->rejected_at?->format('d/m/Y à H:i'),
                 'created_at' => $quote->created_at?->format('d/m/Y'),
-                'can_respond' => in_array($quote->status, [Quote::STATUS_DRAFT, Quote::STATUS_SENT], true),
+                'is_expired' => $quote->valid_until ? $quote->valid_until->lt(today()) : false,
+                'can_respond' => in_array($quote->status, [Quote::STATUS_DRAFT, Quote::STATUS_SENT], true)
+                    && ! ($quote->valid_until && $quote->valid_until->lt(today())),
                 'items' => $quote->items->map(fn ($item) => [
                     'id' => $item->id,
                     'type' => $item->type,
@@ -101,6 +104,10 @@ class PublicQuoteController extends Controller
 
         if (! in_array($quote->status, [Quote::STATUS_DRAFT, Quote::STATUS_SENT], true)) {
             return back()->with('error', 'Une décision a déjà été enregistrée sur cette version du devis.');
+        }
+
+        if ($quote->valid_until && $quote->valid_until->lt(today())) {
+            return back()->with('error', 'Ce devis a expiré. Veuillez demander une nouvelle version actualisée au garage.');
         }
 
         $validated = $request->validate([
@@ -152,20 +159,52 @@ class PublicQuoteController extends Controller
             return back()->with('success', 'Votre retour a bien été transmis au garage. Il pourra réajuster le devis et vous le renvoyer sur WhatsApp.');
         }
 
-        // Validation & signature électronique manuscrite
+        // Validation & signature électronique manuscrite (facultative, vérification binaire PNG stricte)
         $signaturePath = $quote->client_signature_path;
-        $sigData = (string) ($validated['signature_data'] ?? '');
-        if (str_starts_with($sigData, 'data:image/png;base64,')) {
-            $raw = base64_decode(substr($sigData, strlen('data:image/png;base64,')), true);
-            if ($raw !== false && strlen($raw) > 100) {
-                $path = "quotes/signatures/{$quote->tenant_id}/quote-{$quote->id}-v{$quote->version}.png";
-                Storage::disk('public')->put($path, $raw);
-                $signaturePath = $path;
+        $sigData = trim((string) ($validated['signature_data'] ?? ''));
+        if ($sigData !== '') {
+            if (! str_starts_with($sigData, 'data:image/png;base64,')) {
+                return back()->withErrors([
+                    'signature_data' => 'Format de signature invalide (PNG requis).',
+                ]);
             }
+
+            $raw = base64_decode(substr($sigData, strlen('data:image/png;base64,')), true);
+            $pngMagic = "\x89PNG\r\n\x1a\n";
+            $imgInfo = ($raw !== false && strlen($raw) >= 24 && strlen($raw) <= 256000 && str_starts_with($raw, $pngMagic))
+                ? @getimagesizefromstring($raw)
+                : false;
+
+            if ($imgInfo === false || ($imgInfo['mime'] ?? '') !== 'image/png') {
+                return back()->withErrors([
+                    'signature_data' => 'La signature fournie n\'est pas une image PNG valide.',
+                ]);
+            }
+
+            $randomName = Str::random(32).'.png';
+            $path = "quotes/signatures/{$quote->tenant_id}/{$randomName}";
+            Storage::disk('public')->put($path, $raw);
+            $signaturePath = $path;
         }
 
         $signerName = trim((string) ($validated['signed_by_name'] ?? '')) ?: $customerName;
         $acceptedItemIds = $validated['accepted_item_ids'] ?? null;
+
+        if (is_array($acceptedItemIds)) {
+            $urgentIds = $quote->items()->where('urgency', 'urgent')->pluck('id')->all();
+            $validQuoteItemIds = $quote->items()->pluck('id')->all();
+            $requestedValidIds = array_values(array_intersect(
+                array_map('intval', $acceptedItemIds),
+                array_map('intval', $validQuoteItemIds)
+            ));
+            $finalCheckIds = array_values(array_unique(array_merge($requestedValidIds, array_map('intval', $urgentIds))));
+
+            if ($quote->items()->count() > 0 && $finalCheckIds === []) {
+                return back()->withErrors([
+                    'accepted_item_ids' => 'Veuillez sélectionner au moins une prestation pour valider le devis.',
+                ]);
+            }
+        }
 
         DB::transaction(function () use ($quote, $signaturePath, $signerName, $acceptedItemIds, $request, $sequences): void {
             if (is_array($acceptedItemIds)) {

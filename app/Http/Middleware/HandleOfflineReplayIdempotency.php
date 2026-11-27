@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Services\TenantContext;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -60,6 +61,13 @@ class HandleOfflineReplayIdempotency
                 'status_code' => $status,
                 'created_at' => now(),
             ]);
+
+            // Purge quotidienne automatique des clés d'idempotence de plus de 30 jours
+            if (Cache::add('offline_replay_prune_lock', true, now()->addDay())) {
+                DB::table('offline_replay_keys')
+                    ->where('created_at', '<', now()->subDays(30))
+                    ->delete();
+            }
         }
 
         return $response;

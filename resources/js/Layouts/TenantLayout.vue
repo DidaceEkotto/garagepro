@@ -18,6 +18,7 @@ const { isNavigating } = usePageLoading();
 const {
     initOfflineSync,
     precacheMenuPages,
+    clearAuthOfflineCaches,
     offlineNotice,
     isOnline: offlineIsOnline,
     pendingCount: offlinePendingCount,
@@ -276,8 +277,9 @@ function isActive(href) {
         || currentUrl.value.startsWith(href + '?');
 }
 
-function confirmLogout() {
+async function confirmLogout() {
     window.bootstrap?.Modal.getInstance(document.getElementById('modalConfirmLogout'))?.hide();
+    await clearAuthOfflineCaches();
     router.post('/deconnexion');
 }
 
