@@ -101,6 +101,7 @@ const site = computed(() => page.props.app?.site || {});
                     <h4 class="h6 fw-bold mb-3">{{ t('footer.product') }}</h4>
                     <ul class="list-unstyled small vstack gap-2 mb-0">
                         <li><Link href="/#fonctionnalites" class="text-white-50 text-decoration-none">{{ t('nav.features') }}</Link></li>
+                        <li><Link href="/#mode-hors-ligne" class="text-decoration-none fw-semibold" style="color: #6ee7b7;"><i class="bi bi-wifi-off me-1"></i>Mode Hors Ligne</Link></li>
                         <li><Link href="/#tarifs" class="text-white-50 text-decoration-none">{{ t('nav.pricing') }}</Link></li>
                         <li><Link href="/marketplace" class="text-white-50 text-decoration-none">{{ t('mp.marketplace') }}</Link></li>
                         <li><Link href="/#faq" class="text-white-50 text-decoration-none">{{ t('nav.faq') }}</Link></li>

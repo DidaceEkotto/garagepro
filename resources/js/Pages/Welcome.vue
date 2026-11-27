@@ -173,7 +173,6 @@ onUnmounted(() => {
                                 <i class="bi bi-shop me-1"></i>Marketplace
                             </Link>
                         </li>
-                        <li class="nav-item"><Link class="nav-link text-white" href="/contact">{{ t('nav.contact') }}</Link></li>
                     </ul>
                     <div class="d-flex flex-wrap align-items-center gap-2">
                         <LanguageSwitcher variant="light" />
