@@ -1,5 +1,5 @@
 const DB_NAME = 'mboacar_offline_v1';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise = null;
 
@@ -31,6 +31,10 @@ function openDb() {
             if (!db.objectStoreNames.contains('logs')) {
                 const logStore = db.createObjectStore('logs', { keyPath: 'id', autoIncrement: true });
                 logStore.createIndex('tenant_id', 'tenant_id', { unique: false });
+            }
+
+            if (!db.objectStoreNames.contains('meta')) {
+                db.createObjectStore('meta', { keyPath: 'key' });
             }
         };
 
@@ -143,4 +147,19 @@ export async function clearSyncLogsForTenant(tenantId) {
             await withStore('logs', 'readwrite', (store) => store.delete(log.id));
         }
     }
+}
+
+export async function setOfflineMeta(key, value) {
+    return withStore('meta', 'readwrite', (store) =>
+        store.put({
+            key,
+            value,
+            updated_at: new Date().toISOString(),
+        })
+    );
+}
+
+export async function getOfflineMeta(key) {
+    const row = await withStore('meta', 'readonly', (store) => store.get(key));
+    return row?.value ?? null;
 }

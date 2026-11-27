@@ -7,6 +7,7 @@ use App\Http\Middleware\EnsureTenantType;
 use App\Http\Middleware\EnsureTenantUser;
 use App\Http\Middleware\EnsureTenantWritable;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\HandleOfflineReplayIdempotency;
 use App\Http\Middleware\ResolveTenantFromSubdomain;
 use App\Http\Middleware\RunAutoQuoteReminders;
 use App\Http\Middleware\SecurityHeaders;
@@ -36,6 +37,7 @@ return Application::configure(basePath: dirname(__DIR__))
             SetLocale::class,
             CheckSiteMaintenance::class,
             ResolveTenantFromSubdomain::class,
+            HandleOfflineReplayIdempotency::class,
             HandleInertiaRequests::class,
             RunAutoQuoteReminders::class,
         ]);

@@ -269,4 +269,53 @@ class OfflineSyncTest extends TestCase
             ])
             ->assertForbidden();
     }
+
+    public function test_offline_lease_is_capped_by_subscription_and_universal_replay_is_idempotent(): void
+    {
+        [$tenant, , $owner] = $this->createTenantWithOwner('lease-off', Tenant::TYPE_GARAGE);
+
+        // Abonnement expire dans 3 jours (+ 2j de grâce = 5j) -> le bail doit être plafonné à ~5j (et non 14j)
+        $tenant->update(['subscription_ends_at' => now()->addDays(3)]);
+
+        $ping = $this->actingAs($owner, 'web')
+            ->getJson('http://lease-off.mboacar.com/offline/ping')
+            ->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('offline_lease_days_max', 14)
+            ->assertJsonPath('is_read_only', false);
+
+        $leaseDate = \Carbon\Carbon::parse($ping->json('offline_lease_expires_at'));
+        $this->assertTrue($leaseDate->lessThan(now()->addDays(7)), 'Le bail hors ligne doit être plafonné par la fin d\'abonnement');
+
+        // Replay universel idempotent sur n'importe quelle route (X-Offline-Replay: 1 + X-Client-Uuid)
+        $headers = [
+            'X-Offline-Replay' => '1',
+            'X-Client-Uuid' => 'universal-replay-uuid-001',
+        ];
+        $payload = [
+            'name' => 'Replay Universel',
+            'gender' => 'homme',
+            'id_number' => 'CNI-REPLAY-001',
+            'phone_dial_code' => '+237',
+            'phone' => '699554433',
+            'type' => 'particulier',
+        ];
+
+        $this->actingAs($owner, 'web')
+            ->withHeaders($headers)
+            ->post('http://lease-off.mboacar.com/clients', $payload)
+            ->assertRedirect();
+
+        $this->assertSame(1, Customer::where('tenant_id', $tenant->id)->where('name', 'Replay Universel')->count());
+
+        // 2e replay du même client_uuid -> intercepté par HandleOfflineReplayIdempotency, aucun doublon !
+        $this->actingAs($owner, 'web')
+            ->withHeaders($headers)
+            ->postJson('http://lease-off.mboacar.com/clients', $payload)
+            ->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('duplicate', true);
+
+        $this->assertSame(1, Customer::where('tenant_id', $tenant->id)->where('name', 'Replay Universel')->count());
+    }
 }

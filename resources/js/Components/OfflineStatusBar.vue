@@ -11,9 +11,14 @@ const {
     pendingCount,
     failedCount,
     conflictLogsCount,
+    leaseDaysRemaining,
+    leaseWarning,
+    leaseExpired,
+    clockTampered,
     syncNow,
     removeQueueItem,
     clearLogs,
+    exportQueueBackup,
 } = useOfflineSync();
 
 const modalTab = ref('queue');
@@ -27,6 +32,7 @@ function entityLabel(entity) {
         technical_inspection: 'Visite Technique',
         insurance_policy: 'Police Assurance',
         insurance_claim: 'Sinistre Assurance',
+        http_request: 'Action Pro',
     };
     return map[entity] || entity;
 }
@@ -106,8 +112,14 @@ function formatDate(iso) {
                             </h5>
                             <div class="small text-muted">
                                 État actuel :
-                                <strong :class="isOnline ? 'text-success' : 'text-warning'">
-                                    {{ isOnline ? 'Connecté à Internet' : 'Hors ligne (enregistrement local actif)' }}
+                                <strong :class="isOnline ? 'text-success' : leaseExpired ? 'text-danger' : 'text-warning'">
+                                    {{
+                                        isOnline
+                                            ? 'Connecté à Internet'
+                                            : leaseExpired
+                                                ? 'Hors ligne — Lecture seule (reconnexion requise)'
+                                                : `Hors ligne (bail actif : ${leaseDaysRemaining} j restant(s))`
+                                    }}
                                 </strong>
                             </div>
                         </div>
@@ -115,6 +127,18 @@ function formatDate(iso) {
                     </div>
 
                     <div class="modal-body">
+                        <!-- Alerte bail hors ligne 14 jours / horloge -->
+                        <div v-if="leaseExpired" class="alert alert-danger small mb-3">
+                            <i class="bi bi-lock-fill me-2"></i>
+                            <strong v-if="clockTampered">Décalage d'horloge système détecté :</strong>
+                            <strong v-else>Bail hors ligne de 14 jours expiré :</strong>
+                            reconnectez-vous à Internet pour synchroniser vos données et renouveler 14 jours de mode hors ligne.
+                        </div>
+                        <div v-else-if="leaseWarning" class="alert alert-warning small mb-3">
+                            <i class="bi bi-clock-history me-2"></i>
+                            Il vous reste <strong>{{ leaseDaysRemaining }} jour(s)</strong> en mode hors ligne. Pensez à vous connecter brièvement à Internet pour synchroniser et prolonger votre bail.
+                        </div>
+
                         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
                             <ul class="nav nav-pills nav-sm gap-1">
                                 <li class="nav-item">
@@ -142,7 +166,16 @@ function formatDate(iso) {
                                 </li>
                             </ul>
 
-                            <div class="d-flex gap-2">
+                            <div class="d-flex flex-wrap gap-2">
+                                <button
+                                    v-if="modalTab === 'queue' && queueItems.length > 0"
+                                    type="button"
+                                    class="btn btn-outline-secondary btn-sm"
+                                    title="Télécharger une copie de secours JSON (clé USB)"
+                                    @click="exportQueueBackup"
+                                >
+                                    <i class="bi bi-file-earmark-arrow-down me-1"></i>Secours JSON
+                                </button>
                                 <button
                                     v-if="modalTab === 'queue' && queueItems.length > 0"
                                     type="button"

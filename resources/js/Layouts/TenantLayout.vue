@@ -15,14 +15,30 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 const { t } = useI18n();
 const { isNavigating } = usePageLoading();
-const { initOfflineSync, offlineNotice, isOnline: offlineIsOnline, pendingCount: offlinePendingCount } = useOfflineSync();
+const {
+    initOfflineSync,
+    precacheMenuPages,
+    offlineNotice,
+    isOnline: offlineIsOnline,
+    pendingCount: offlinePendingCount,
+    leaseDaysRemaining,
+    leaseWarning,
+    leaseExpired,
+    clockTampered,
+} = useOfflineSync();
 const page = usePage();
 const tenant = computed(() => page.props.tenant);
 
 watch(
     () => tenant.value?.id,
     (id) => {
-        if (id) initOfflineSync(id);
+        if (id) {
+            initOfflineSync(id);
+            setTimeout(() => {
+                const urls = (menuGroups.value || []).flatMap((g) => (g.items || []).map((it) => it.href));
+                precacheMenuPages(urls);
+            }, 500);
+        }
     },
     { immediate: true }
 );
@@ -439,43 +455,58 @@ function resetDemo() {
             </div>
         </nav>
 
-        <!-- Bannière d'alerte Mode Hors Ligne / Synchro -->
+        <!-- Bannière d'alerte Mode Hors Ligne / Synchro / Bail 14 jours -->
         <div
             v-if="!offlineIsOnline || offlineNotice"
             class="px-3 py-2 small fw-semibold d-flex flex-wrap align-items-center justify-content-between gap-2"
             :class="
-                offlineNotice?.type === 'success'
-                    ? 'bg-success text-white'
-                    : offlineNotice?.type === 'danger'
-                        ? 'bg-danger text-white'
-                        : 'bg-warning text-dark'
+                leaseExpired
+                    ? 'bg-danger text-white'
+                    : offlineNotice?.type === 'success'
+                        ? 'bg-success text-white'
+                        : offlineNotice?.type === 'danger'
+                            ? 'bg-danger text-white'
+                            : 'bg-warning text-dark'
             "
         >
             <div>
                 <i
                     class="bi me-2"
                     :class="
-                        offlineNotice?.type === 'success'
-                            ? 'bi-cloud-check-fill'
-                            : offlineNotice?.type === 'danger'
-                                ? 'bi-exclamation-triangle-fill'
-                                : 'bi-wifi-off'
+                        leaseExpired
+                            ? 'bi-lock-fill'
+                            : offlineNotice?.type === 'success'
+                                ? 'bi-cloud-check-fill'
+                                : offlineNotice?.type === 'danger'
+                                    ? 'bi-exclamation-triangle-fill'
+                                    : 'bi-wifi-off'
                     "
                 ></i>
-                <span v-if="offlineNotice">{{ offlineNotice.message }}</span>
-                <span v-else>
-                    Mode Hors Ligne actif — Vos saisies (Clients, Véhicules, Visite Technique, Assurances) sont sauvegardées localement
+                <span v-if="leaseExpired">
+                    {{
+                        clockTampered
+                            ? 'Horloge système modifiée : reconnectez-vous à Internet pour réactiver les saisies hors ligne.'
+                            : 'Période hors ligne (14 jours) expirée — Mode lecture seule. Connectez-vous à Internet pour synchroniser et prolonger.'
+                    }}
+                </span>
+                <span v-else-if="offlineNotice">{{ offlineNotice.message }}</span>
+                <span v-else-if="leaseWarning">
+                    Mode Hors Ligne actif — Attention : il reste {{ leaseDaysRemaining }} jour(s) avant reconnexion obligatoire
                     <template v-if="offlinePendingCount > 0"> ({{ offlinePendingCount }} en attente)</template>.
+                </span>
+                <span v-else>
+                    Mode Hors Ligne actif (tous modules sauf IA Auto • WhatsApp envoyé au retour du réseau • bail {{ leaseDaysRemaining }} j)
+                    <template v-if="offlinePendingCount > 0"> — {{ offlinePendingCount }} saisie(s) en attente</template>.
                 </span>
             </div>
             <button
                 type="button"
                 class="btn btn-sm py-0 px-2 fw-semibold"
-                :class="offlineNotice?.type === 'success' || offlineNotice?.type === 'danger' ? 'btn-light' : 'btn-dark'"
+                :class="leaseExpired || offlineNotice?.type === 'success' || offlineNotice?.type === 'danger' ? 'btn-light' : 'btn-dark'"
                 data-bs-toggle="modal"
                 data-bs-target="#modalOfflineSyncCenter"
             >
-                Voir la file
+                Centre de synchro
             </button>
         </div>
 

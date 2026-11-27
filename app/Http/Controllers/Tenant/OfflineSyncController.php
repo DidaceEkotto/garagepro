@@ -20,15 +20,41 @@ use Illuminate\Validation\Rule;
 class OfflineSyncController extends Controller
 {
     /**
-     * Vérifie la vraie connectivité réseau et rafraîchit le jeton CSRF.
+     * Vérifie la vraie connectivité réseau, rafraîchit le jeton CSRF
+     * et délivre le bail hors ligne de 14 jours plafonné à l'expiration de l'abonnement.
      */
     public function ping(Request $request, TenantContext $tenantContext): JsonResponse
     {
+        $tenant = $tenantContext->getTenant();
+        $now = now();
+        $maxLeaseEnd = $now->copy()->addDays(14);
+        $leaseEnd = $maxLeaseEnd;
+        $isReadOnly = false;
+
+        if ($tenant) {
+            if (in_array($tenant->status, [Tenant::STATUS_EXPIRED, Tenant::STATUS_CANCELLED, Tenant::STATUS_SUSPENDED], true)) {
+                $isReadOnly = true;
+                $leaseEnd = $now->copy();
+            } else {
+                $subDeadline = $tenant->status === Tenant::STATUS_TRIALING
+                    ? $tenant->trial_ends_at?->copy()?->addDays(2)
+                    : ($tenant->grace_ends_at?->copy() ?? $tenant->subscription_ends_at?->copy()?->addDays(2));
+
+                if ($subDeadline && $subDeadline->lessThan($leaseEnd)) {
+                    $leaseEnd = $subDeadline;
+                }
+            }
+        }
+
         return response()->json([
             'ok' => true,
-            'server_time' => now()->toIso8601String(),
+            'server_time' => $now->toIso8601String(),
+            'server_timestamp_ms' => $now->getTimestampMs(),
             'csrf_token' => csrf_token(),
-            'tenant_id' => $tenantContext->id(),
+            'tenant_id' => $tenant?->id,
+            'offline_lease_expires_at' => $leaseEnd->toIso8601String(),
+            'offline_lease_days_max' => 14,
+            'is_read_only' => $isReadOnly,
         ]);
     }
 
