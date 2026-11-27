@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Workflow;
 
+use App\Http\Middleware\RunAutoQuoteReminders;
 use App\Models\Agency;
 use App\Models\Customer;
 use App\Models\Quote;
@@ -13,7 +14,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\TenantRoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -279,15 +280,21 @@ class RemoteQuoteApprovalTest extends TestCase
         $quote->recalculateTotals();
         $this->assertSame(50000, $quote->fresh()->total_ttc);
 
-        // 1. Exécution de la commande J+2 -> envoie 1 relance WhatsApp et marque auto_reminded_at
-        Artisan::call('quotes:remind-pending');
+        // 1. Une simple visite HTTP déclenche automatiquement la relance J+2 (sans cron ni job)
+        Cache::forget(RunAutoQuoteReminders::LOCK_KEY);
+        config(['quotes.auto_remind_in_tests' => true]);
+
+        $this->get('/mon-espace-client')->assertOk();
+
         $this->assertNotNull($quote->fresh()->auto_reminded_at);
         $this->assertCount(1, $sentMessages);
         $this->assertStringContainsString("/devis-public/{$quote->public_token}", $sentMessages[0]['message']);
 
-        // 2. Relancer la commande une 2e fois -> aucun doublon de relance !
-        Artisan::call('quotes:remind-pending');
+        // 2. Une 2e visite HTTP ne renvoie rien (verrou 15 min + auto_reminded_at déjà posé)
+        $this->get('/mon-espace-client')->assertOk();
         $this->assertCount(1, $sentMessages);
+
+        config(['quotes.auto_remind_in_tests' => false]);
 
         // 3. Validation partielle par le client (décoche la ligne optionnelle, garde l'urgente)
         $this->post("/devis-public/{$quote->public_token}/repondre", [

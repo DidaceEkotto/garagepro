@@ -8,6 +8,7 @@ use App\Http\Middleware\EnsureTenantUser;
 use App\Http\Middleware\EnsureTenantWritable;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\ResolveTenantFromSubdomain;
+use App\Http\Middleware\RunAutoQuoteReminders;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SetLocale;
 use Illuminate\Foundation\Application;
@@ -36,6 +37,7 @@ return Application::configure(basePath: dirname(__DIR__))
             CheckSiteMaintenance::class,
             ResolveTenantFromSubdomain::class,
             HandleInertiaRequests::class,
+            RunAutoQuoteReminders::class,
         ]);
 
         $middleware->prependToPriorityList(
