@@ -108,6 +108,8 @@ class PublicQuoteController extends Controller
             'signed_by_name' => ['nullable', 'string', 'max:150'],
             'signature_data' => ['nullable', 'string', 'max:500000'],
             'rejection_reason' => ['nullable', 'string', 'max:2000'],
+            'accepted_item_ids' => ['nullable', 'array'],
+            'accepted_item_ids.*' => ['integer'],
         ]);
 
         $customerName = trim(($quote->customer?->first_name ? $quote->customer->first_name.' ' : '').($quote->customer?->name ?? 'Client'));
@@ -163,11 +165,32 @@ class PublicQuoteController extends Controller
         }
 
         $signerName = trim((string) ($validated['signed_by_name'] ?? '')) ?: $customerName;
+        $acceptedItemIds = $validated['accepted_item_ids'] ?? null;
 
-        DB::transaction(function () use ($quote, $signaturePath, $signerName, $request, $sequences): void {
+        DB::transaction(function () use ($quote, $signaturePath, $signerName, $acceptedItemIds, $request, $sequences): void {
+            if (is_array($acceptedItemIds)) {
+                $urgentIds = $quote->items()
+                    ->where('urgency', 'urgent')
+                    ->pluck('id')
+                    ->all();
+                $finalAcceptedIds = array_values(array_unique(array_merge(
+                    array_map('intval', $acceptedItemIds),
+                    array_map('intval', $urgentIds)
+                )));
+
+                $quote->items()->update(['is_accepted' => false]);
+                if ($finalAcceptedIds !== []) {
+                    $quote->items()->whereIn('id', $finalAcceptedIds)->update(['is_accepted' => true]);
+                }
+            }
+
+            $totalItems = $quote->items()->count();
+            $acceptedCount = $quote->items()->where('is_accepted', true)->count();
+            $isPartial = $totalItems > 0 && $acceptedCount < $totalItems;
+
             $quote->recalculateTotals();
             $quote->update([
-                'status' => Quote::STATUS_ACCEPTED,
+                'status' => $isPartial ? Quote::STATUS_PARTIALLY_ACCEPTED : Quote::STATUS_ACCEPTED,
                 'client_signature_path' => $signaturePath,
                 'signed_at' => now(),
                 'signed_ip' => $request->ip(),
@@ -214,6 +237,10 @@ class PublicQuoteController extends Controller
             }
         });
 
+        $quote->refresh();
+        $totalFormatted = number_format((int) $quote->total_ttc, 0, ',', ' ');
+        $validationLabel = $quote->status === Quote::STATUS_PARTIALLY_ACCEPTED ? 'VALIDÉ PARTIELLEMENT & SIGNÉ' : 'VALIDÉ & SIGNÉ';
+
         AuditLog::record('quote.accepted_remote', subject: $quote, tenantId: $quote->tenant_id, request: $request);
 
         // Notifier le garage sur WhatsApp que le devis est validé & signé
@@ -222,7 +249,7 @@ class PublicQuoteController extends Controller
             try {
                 $greenApi->sendMessage(
                     $garagePhone,
-                    "✅ MboaCar — Devis VALIDÉ & SIGNÉ à distance !\n"
+                    "✅ MboaCar — Devis {$validationLabel} à distance !\n"
                     ."Devis : {$quote->quote_number} (v{$quote->version}) — {$totalFormatted} FCFA\n"
                     ."Client : {$signerName}{$plate}\n"
                     ."L'ordre de réparation a été activé automatiquement dans votre espace."

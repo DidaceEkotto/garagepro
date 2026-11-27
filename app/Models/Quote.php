@@ -35,6 +35,7 @@ class Quote extends Model
         'version',
         'status',
         'sent_at',
+        'auto_reminded_at',
         'valid_until',
         'vat_rate',
         'discount_amount',
@@ -56,6 +57,7 @@ class Quote extends Model
         return [
             'version' => 'integer',
             'sent_at' => 'datetime',
+            'auto_reminded_at' => 'datetime',
             'valid_until' => 'date',
             'vat_rate' => 'decimal:2',
             'discount_amount' => 'integer',

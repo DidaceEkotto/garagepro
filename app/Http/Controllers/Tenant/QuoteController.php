@@ -24,6 +24,7 @@ use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -116,6 +117,7 @@ class QuoteController extends Controller
                 'version' => 1,
                 'status' => Quote::STATUS_SENT,
                 'sent_at' => now(),
+                'auto_reminded_at' => null,
                 'valid_until' => $data['valid_until'] ?? now()->addDays(15),
                 'vat_rate' => $tenant->vat_rate,
                 'discount_amount' => $data['discount_amount'] ?? 0,
@@ -208,6 +210,7 @@ class QuoteController extends Controller
                 'version' => ((int) $quote->version) + 1,
                 'status' => Quote::STATUS_SENT,
                 'sent_at' => now(),
+                'auto_reminded_at' => null,
                 'discount_amount' => (int) ($validated['discount_amount'] ?? 0),
                 'deposit_required' => (int) ($validated['deposit_required'] ?? 0),
                 'notes' => $validated['notes'] ?? null,
@@ -450,9 +453,18 @@ class QuoteController extends Controller
 
         $quote->load(['customer', 'vehicle', 'agency', 'items']);
 
+        $signatureDataUri = null;
+        if ($quote->client_signature_path && Storage::disk('public')->exists($quote->client_signature_path)) {
+            $raw = Storage::disk('public')->get($quote->client_signature_path);
+            if ($raw !== '') {
+                $signatureDataUri = 'data:image/png;base64,'.base64_encode($raw);
+            }
+        }
+
         $pdf = Pdf::loadView('pdf.quote', [
             'quote' => $quote,
             'tenant' => $tenantContext->getTenant(),
+            'signatureDataUri' => $signatureDataUri,
         ]);
 
         return $pdf->download("{$quote->quote_number}-v{$quote->version}.pdf");

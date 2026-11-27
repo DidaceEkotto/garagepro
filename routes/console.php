@@ -3,3 +3,4 @@
 use Illuminate\Support\Facades\Schedule;
 
 Schedule::command('garagepro:process-subscriptions')->dailyAt('07:00');
+Schedule::command('quotes:remind-pending')->hourly();

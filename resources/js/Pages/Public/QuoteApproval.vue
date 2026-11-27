@@ -21,11 +21,54 @@ const canvasRef = ref(null);
 const isDrawing = ref(false);
 const hasSignature = ref(false);
 
+// Validation partielle : toutes les lignes cochées par défaut ; les lignes "urgent" restent obligatoires
+const selectedItemIds = ref(
+    (props.quote.items || [])
+        .filter((it) => it.is_accepted !== false || it.urgency === 'urgent')
+        .map((it) => it.id)
+);
+
+function isItemSelected(id) {
+    return selectedItemIds.value.includes(id);
+}
+
+function toggleItemSelection(item) {
+    if (!props.quote.can_respond || item.urgency === 'urgent') return;
+    if (selectedItemIds.value.includes(item.id)) {
+        selectedItemIds.value = selectedItemIds.value.filter((x) => x !== item.id);
+    } else {
+        selectedItemIds.value = [...selectedItemIds.value, item.id];
+    }
+}
+
+const liveTotals = computed(() => {
+    const items = props.quote.items || [];
+    const accepted = props.quote.can_respond
+        ? items.filter((it) => it.urgency === 'urgent' || selectedItemIds.value.includes(it.id))
+        : items.filter((it) => it.is_accepted !== false);
+
+    const subtotal = accepted.reduce((sum, it) => sum + Number(it.total_price || 0), 0);
+    const discount = Number(props.quote.discount_amount || 0);
+    const netHt = Math.max(0, subtotal - discount);
+    const vat = Math.round((netHt * Number(props.quote.vat_rate || 0)) / 100);
+    const ttc = netHt + vat;
+    return {
+        subtotal,
+        discount,
+        vat,
+        ttc,
+        acceptedCount: accepted.length,
+        totalCount: items.length,
+        isPartial: accepted.length < items.length,
+    };
+});
+
 const responseForm = useForm({
     decision: 'accept',
     signed_by_name: props.customer?.full_name || '',
     signature_data: '',
     rejection_reason: '',
+    accepted_item_ids: [],
 });
 
 function getPointerPos(event) {
@@ -87,6 +130,7 @@ onMounted(() => {
 function submitAccept() {
     responseForm.decision = 'accept';
     responseForm.rejection_reason = '';
+    responseForm.accepted_item_ids = [...selectedItemIds.value];
     if (hasSignature.value && canvasRef.value) {
         responseForm.signature_data = canvasRef.value.toDataURL('image/png');
     } else {
@@ -183,8 +227,10 @@ function urgencyBadge(u) {
                         </div>
 
                         <div class="text-md-end">
-                            <div class="small text-white-50 text-uppercase">Total TTC</div>
-                            <div class="display-6 fw-bold text-white lh-1">{{ formatMoney(quote.total_ttc) }}</div>
+                            <div class="small text-white-50 text-uppercase">
+                                {{ liveTotals.isPartial && quote.can_respond ? 'Total sélectionné TTC' : 'Total TTC' }}
+                            </div>
+                            <div class="display-6 fw-bold text-white lh-1">{{ formatMoney(liveTotals.ttc) }}</div>
                             <div v-if="quote.deposit_required > 0" class="small mt-1" style="color: #93c5fd;">
                                 Acompte demandé : <strong>{{ formatMoney(quote.deposit_required) }}</strong>
                             </div>
@@ -194,15 +240,21 @@ function urgencyBadge(u) {
 
                 <!-- Détail des prestations -->
                 <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
-                    <div class="card-header bg-white py-3 px-4 border-bottom d-flex justify-content-between align-items-center">
-                        <h2 class="h6 fw-bold mb-0"><i class="bi bi-list-check text-primary me-2"></i>Détail des prestations &amp; pièces</h2>
-                        <span class="small text-muted">{{ quote.items.length }} ligne(s)</span>
+                    <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <div>
+                            <h2 class="h6 fw-bold mb-0"><i class="bi bi-list-check text-primary me-2"></i>Détail des prestations &amp; pièces</h2>
+                            <div v-if="quote.can_respond" class="text-muted" style="font-size: 0.76rem;">
+                                Vous pouvez décocher les lignes <strong>Recommandées</strong> ou <strong>Optionnelles</strong> ; les lignes <strong>Urgentes</strong> restent incluses.
+                            </div>
+                        </div>
+                        <span class="small text-muted">{{ liveTotals.acceptedCount }} / {{ liveTotals.totalCount }} retenue(s)</span>
                     </div>
                     <div class="table-responsive">
                         <table class="table align-middle mb-0 small">
                             <thead class="table-light">
                                 <tr>
-                                    <th class="ps-4">Désignation</th>
+                                    <th class="ps-4" style="width: 46px;">Choix</th>
+                                    <th>Désignation</th>
                                     <th>Type / Priorité</th>
                                     <th class="text-center">Qté</th>
                                     <th class="text-end">P.U.</th>
@@ -210,8 +262,32 @@ function urgencyBadge(u) {
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="item in quote.items" :key="item.id">
-                                    <td class="ps-4 fw-semibold text-dark">{{ item.description }}</td>
+                                <tr
+                                    v-for="item in quote.items"
+                                    :key="item.id"
+                                    :class="
+                                        (quote.can_respond ? !isItemSelected(item.id) : item.is_accepted === false)
+                                            ? 'opacity-50 text-decoration-line-through bg-light'
+                                            : ''
+                                    "
+                                >
+                                    <td class="ps-4">
+                                        <input
+                                            v-if="quote.can_respond"
+                                            type="checkbox"
+                                            class="form-check-input"
+                                            :checked="item.urgency === 'urgent' || isItemSelected(item.id)"
+                                            :disabled="item.urgency === 'urgent'"
+                                            :title="item.urgency === 'urgent' ? 'Prestation urgente obligatoire' : 'Inclure ou retirer cette ligne'"
+                                            @change="toggleItemSelection(item)"
+                                        />
+                                        <i
+                                            v-else
+                                            class="bi"
+                                            :class="item.is_accepted !== false ? 'bi-check-circle-fill text-success' : 'bi-dash-circle text-muted'"
+                                        ></i>
+                                    </td>
+                                    <td class="fw-semibold text-dark">{{ item.description }}</td>
                                     <td>
                                         <span class="badge bg-light text-dark border me-1">
                                             {{ item.type === 'piece' ? 'Pièce' : 'Main d\'œuvre' }}
@@ -234,20 +310,20 @@ function urgencyBadge(u) {
                             <div class="col-md-5 vstack gap-1 small">
                                 <div class="d-flex justify-content-between">
                                     <span class="text-muted">Sous-total HT</span>
-                                    <span class="fw-semibold">{{ formatMoney(quote.subtotal_ht) }}</span>
+                                    <span class="fw-semibold">{{ formatMoney(liveTotals.subtotal) }}</span>
                                 </div>
-                                <div v-if="quote.discount_amount > 0" class="d-flex justify-content-between text-success">
+                                <div v-if="liveTotals.discount > 0" class="d-flex justify-content-between text-success">
                                     <span>Remise accordée</span>
-                                    <span class="fw-semibold">- {{ formatMoney(quote.discount_amount) }}</span>
+                                    <span class="fw-semibold">- {{ formatMoney(liveTotals.discount) }}</span>
                                 </div>
                                 <div class="d-flex justify-content-between">
                                     <span class="text-muted">TVA ({{ quote.vat_rate }}%)</span>
-                                    <span class="fw-semibold">{{ formatMoney(quote.vat_amount) }}</span>
+                                    <span class="fw-semibold">{{ formatMoney(liveTotals.vat) }}</span>
                                 </div>
                                 <hr class="my-2" />
                                 <div class="d-flex justify-content-between fs-6 fw-bold text-dark">
                                     <span>Net à payer TTC</span>
-                                    <span class="text-primary">{{ formatMoney(quote.total_ttc) }}</span>
+                                    <span class="text-primary">{{ formatMoney(liveTotals.ttc) }}</span>
                                 </div>
                             </div>
                         </div>
@@ -367,7 +443,7 @@ function urgencyBadge(u) {
                             >
                                 <span v-if="responseForm.processing" class="spinner-border spinner-border-sm me-2"></span>
                                 <i v-else class="bi bi-check2-circle me-2"></i>
-                                Confirmer « Bon pour accord » ({{ formatMoney(quote.total_ttc) }})
+                                Confirmer « Bon pour accord »{{ liveTotals.isPartial ? ' (validation partielle)' : '' }} — {{ formatMoney(liveTotals.ttc) }}
                             </button>
                         </form>
 
