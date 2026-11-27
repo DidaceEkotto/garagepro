@@ -9,6 +9,7 @@ use App\Http\Controllers\CustomerPortalController;
 use App\Http\Controllers\DemoController;
 use App\Http\Controllers\MarketplaceController;
 use App\Http\Controllers\PublicAppointmentController;
+use App\Http\Controllers\PublicQuoteController;
 use App\Http\Controllers\PublicTrackingController;
 use App\Http\Controllers\Tenant\AccountingController;
 use App\Http\Controllers\Tenant\AffiliationController;
@@ -130,6 +131,10 @@ Route::post('/pv-visite/{token}/demander-devis', [TechnicalInspectionController:
     ->name('public.technical_pv.request_quote');
 Route::get('/suivi/{token}', [PublicTrackingController::class, 'repairOrderTracking'])->name('public.repair_order.tracking');
 Route::post('/suivi/{token}/devis/{quoteId}/repondre', [PublicTrackingController::class, 'respondQuote'])->name('public.repair_order.quote_respond');
+Route::get('/devis-public/{token}', [PublicQuoteController::class, 'show'])->name('public.quote.show');
+Route::post('/devis-public/{token}/repondre', [PublicQuoteController::class, 'respond'])
+    ->middleware('throttle:20,1')
+    ->name('public.quote.respond');
 Route::get('/rdv/{token}', [PublicAppointmentController::class, 'show'])->name('public.appointment.show');
 Route::post('/rdv/{token}', [PublicAppointmentController::class, 'submit'])
     ->middleware('throttle:10,1')
@@ -298,6 +303,7 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
         Route::get('/devis', [QuoteController::class, 'index'])->name('tenant.quotes.index');
         Route::post('/devis', [QuoteController::class, 'store'])->name('tenant.quotes.store');
         Route::post('/devis/{quote}/valider', [QuoteController::class, 'accept'])->name('tenant.quotes.accept');
+        Route::put('/devis/{quote}/reajuster', [QuoteController::class, 'revise'])->name('tenant.quotes.revise');
         Route::post('/devis/{quote}/nouvelle-version', [QuoteController::class, 'newVersion'])->name('tenant.quotes.new_version');
         Route::post('/devis/{quote}/rappeler', [QuoteController::class, 'remind'])->name('tenant.quotes.remind');
         Route::get('/devis/{quote}/pdf', [QuoteController::class, 'pdf'])

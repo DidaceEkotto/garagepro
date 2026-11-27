@@ -22,7 +22,9 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -36,6 +38,8 @@ class QuoteController extends Controller
             ->latest()
             ->paginate(20);
 
+        $quotes->getCollection()->each(fn (Quote $q) => $q->ensurePublicToken());
+
         return Inertia::render('Tenant/Quotes/Index', [
             'quotes' => $quotes,
             'agencies' => Agency::where('is_active', true)->orderBy('name')->get(['id', 'name']),
@@ -46,10 +50,57 @@ class QuoteController extends Controller
         ]);
     }
 
+    private function sendQuoteWhatsappLink(Quote $quote, ?\App\Models\Tenant $tenant, GreenApiService $greenApi, bool $isRevision = false): bool
+    {
+        $quote->loadMissing(['customer', 'vehicle']);
+        $customer = $quote->customer;
+        $phone = trim((string) ($customer?->whatsapp_phone ?: ($customer?->phone ?? '')));
+
+        if ($phone === '' || ! $greenApi->isConfigured()) {
+            return false;
+        }
+
+        $garageName = $tenant?->name ?? config('app.name', 'MboaCar');
+        $clientName = trim(($customer->first_name ? $customer->first_name.' ' : '').$customer->name);
+        $plate = $quote->vehicle?->license_plate ? " ({$quote->vehicle->license_plate})" : '';
+        $totalFormatted = number_format((int) $quote->total_ttc, 0, ',', ' ');
+        $publicUrl = $quote->publicUrl();
+
+        $intro = $isRevision
+            ? "🔄 Bonjour {$clientName}, votre devis {$quote->quote_number} a été réajusté (Version v{$quote->version}) par {$garageName} !"
+            : "📋 Bonjour {$clientName}, votre devis {$quote->quote_number} est prêt chez {$garageName} !";
+
+        $message = "{$intro}\n"
+            ."🚗 Véhicule : {$quote->vehicle?->brand} {$quote->vehicle?->model}{$plate}\n"
+            ."💰 Montant TTC : {$totalFormatted} FCFA\n\n"
+            ."👉 Cliquez sur ce lien sécurisé pour consulter le détail, signer électroniquement pour valider ou demander un réajustement :\n"
+            ."{$publicUrl}";
+
+        try {
+            $res = $greenApi->sendMessage($phone, $message);
+            if ($res['ok'] ?? false) {
+                $quote->update([
+                    'status' => Quote::STATUS_SENT,
+                    'sent_at' => now(),
+                ]);
+
+                return true;
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Quote WhatsApp send failed (non-blocking)', [
+                'quote_id' => $quote->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return false;
+    }
+
     public function store(
         StoreQuoteRequest $request,
         TenantContext $tenantContext,
-        NumberSequenceService $sequences
+        NumberSequenceService $sequences,
+        GreenApiService $greenApi
     ): RedirectResponse {
         $data = $request->validated();
         $tenant = $tenantContext->getTenant();
@@ -63,7 +114,8 @@ class QuoteController extends Controller
                 'repair_order_id' => $data['repair_order_id'] ?? null,
                 'quote_number' => $sequences->nextQuoteNumber($tenant->id),
                 'version' => 1,
-                'status' => Quote::STATUS_DRAFT,
+                'status' => Quote::STATUS_SENT,
+                'sent_at' => now(),
                 'valid_until' => $data['valid_until'] ?? now()->addDays(15),
                 'vat_rate' => $tenant->vat_rate,
                 'discount_amount' => $data['discount_amount'] ?? 0,
@@ -91,9 +143,93 @@ class QuoteController extends Controller
             return $quote;
         });
 
+        $whatsappSent = $this->sendQuoteWhatsappLink($quote, $tenant, $greenApi, false);
+
         AuditLog::record('quote.created', subject: $quote, actor: $request->user('web'), tenantId: $tenant->id, request: $request);
 
-        return back()->with('success', "Devis {$quote->quote_number} créé.");
+        return back()->with(
+            'success',
+            $whatsappSent
+                ? "Devis {$quote->quote_number} créé et lien de validation envoyé automatiquement sur WhatsApp au client !"
+                : "Devis {$quote->quote_number} créé. Vous pouvez partager son lien de validation au client."
+        );
+    }
+
+    /**
+     * Réajuste un devis (notamment après un refus client), incrémente la version
+     * et renvoie automatiquement le nouveau lien WhatsApp au client.
+     */
+    public function revise(
+        Request $request,
+        Quote $quote,
+        TenantContext $tenantContext,
+        GreenApiService $greenApi
+    ): RedirectResponse {
+        $this->authorize('update', $quote);
+
+        if (in_array($quote->status, [Quote::STATUS_ACCEPTED, Quote::STATUS_PARTIALLY_ACCEPTED], true)) {
+            return back()->with('error', 'Ce devis a déjà été validé et signé par le client.');
+        }
+
+        $validated = $request->validate([
+            'discount_amount' => ['nullable', 'integer', 'min:0'],
+            'deposit_required' => ['nullable', 'integer', 'min:0'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.type' => ['required', Rule::in(['main_oeuvre', 'piece', 'consommable', 'sous_traitance'])],
+            'items.*.part_condition' => ['nullable', 'string', 'max:40'],
+            'items.*.urgency' => ['required', Rule::in(['urgent', 'recommande', 'optionnel'])],
+            'items.*.description' => ['required', 'string', 'max:255'],
+            'items.*.quantity' => ['required', 'integer', 'min:1'],
+            'items.*.unit_price' => ['required', 'integer', 'min:0'],
+        ]);
+
+        $tenant = $tenantContext->getTenant();
+
+        DB::transaction(function () use ($quote, $validated, $tenant): void {
+            $quote->items()->delete();
+
+            foreach ($validated['items'] as $item) {
+                QuoteItem::create([
+                    'tenant_id' => $tenant->id,
+                    'quote_id' => $quote->id,
+                    'type' => $item['type'],
+                    'part_condition' => $item['part_condition'] ?? null,
+                    'urgency' => $item['urgency'],
+                    'description' => $item['description'],
+                    'quantity' => $item['quantity'],
+                    'unit_price' => $item['unit_price'],
+                    'total_price' => (int) $item['quantity'] * (int) $item['unit_price'],
+                    'is_accepted' => true,
+                ]);
+            }
+
+            $quote->update([
+                'version' => ((int) $quote->version) + 1,
+                'status' => Quote::STATUS_SENT,
+                'sent_at' => now(),
+                'discount_amount' => (int) ($validated['discount_amount'] ?? 0),
+                'deposit_required' => (int) ($validated['deposit_required'] ?? 0),
+                'notes' => $validated['notes'] ?? null,
+                'rejection_reason' => null,
+                'rejected_at' => null,
+                'valid_until' => now()->addDays(15),
+            ]);
+
+            $quote->recalculateTotals();
+        });
+
+        $quote->refresh();
+        $whatsappSent = $this->sendQuoteWhatsappLink($quote, $tenant, $greenApi, true);
+
+        AuditLog::record('quote.revised', subject: $quote, actor: $request->user('web'), tenantId: $tenant->id, request: $request);
+
+        return back()->with(
+            'success',
+            $whatsappSent
+                ? "Devis {$quote->quote_number} réajusté en v{$quote->version} et renvoyé par WhatsApp au client !"
+                : "Devis {$quote->quote_number} réajusté en v{$quote->version} et prêt à être validé."
+        );
     }
 
     /**
@@ -256,7 +392,8 @@ class QuoteController extends Controller
 
         $totalFormatted = number_format((int) $quote->total_ttc, 0, ',', ' ');
         $plate = $quote->vehicle?->license_plate ? " ({$quote->vehicle->license_plate})" : '';
-        $defaultMessage = "Bonjour {$customer->name}, nous vous rappelons que votre devis {$quote->quote_number} (v{$quote->version}) d'un montant de {$totalFormatted} FCFA pour votre véhicule{$plate} est disponible chez {$garageName}. Merci de nous confirmer votre accord.";
+        $publicUrl = $quote->publicUrl();
+        $defaultMessage = "Bonjour {$customer->name}, nous vous rappelons que votre devis {$quote->quote_number} (v{$quote->version}) d'un montant de {$totalFormatted} FCFA pour votre véhicule{$plate} est disponible chez {$garageName}. Cliquez ici pour le consulter et le valider : {$publicUrl}";
         $messageBody = trim((string) ($data['message'] ?? '')) !== '' ? trim((string) $data['message']) : $defaultMessage;
 
         if ($chosenChannel === 'email') {

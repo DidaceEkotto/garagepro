@@ -151,6 +151,90 @@ function submitQuoteRemind() {
         },
     });
 }
+
+// Réajustement & Renvoi WhatsApp (boucle illimitée jusqu'à validation client)
+const revisingQuote = ref(null);
+const copiedQuoteId = ref(null);
+
+const reviseForm = useForm({
+    discount_amount: 0,
+    deposit_required: 0,
+    notes: '',
+    items: [],
+});
+
+const reviseTotalHt = computed(() =>
+    reviseForm.items.reduce((acc, item) => acc + (Number(item.quantity) || 0) * (Number(item.unit_price) || 0), 0)
+);
+
+async function openReviseModal(q) {
+    revisingQuote.value = q;
+    reviseForm.clearErrors();
+    reviseForm.discount_amount = q.discount_amount ?? 0;
+    reviseForm.deposit_required = q.deposit_required ?? 0;
+    reviseForm.notes = q.notes ?? '';
+    reviseForm.items = (q.items || []).length
+        ? q.items.map((it) => ({
+              type: it.type || 'main_oeuvre',
+              part_condition: it.part_condition || null,
+              urgency: it.urgency || 'urgent',
+              description: it.description || '',
+              quantity: it.quantity || 1,
+              unit_price: it.unit_price || 0,
+          }))
+        : [{ type: 'main_oeuvre', part_condition: null, urgency: 'urgent', description: '', quantity: 1, unit_price: 0 }];
+    await nextTick();
+    window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalReviseQuote'))?.show();
+}
+
+function addReviseItem() {
+    reviseForm.items.push({ type: 'piece', part_condition: 'neuve', urgency: 'urgent', description: '', quantity: 1, unit_price: 0 });
+}
+
+function removeReviseItem(idx) {
+    if (reviseForm.items.length > 1) reviseForm.items.splice(idx, 1);
+}
+
+function submitReviseQuote() {
+    if (!revisingQuote.value) return;
+    reviseForm.put(`/devis/${revisingQuote.value.id}/reajuster`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            revisingQuote.value = null;
+            window.bootstrap?.Modal.getInstance(document.getElementById('modalReviseQuote'))?.hide();
+        },
+    });
+}
+
+async function copyPublicLink(q) {
+    if (!q.public_token) return;
+    const url = `${window.location.origin}/devis-public/${q.public_token}`;
+    try {
+        await navigator.clipboard.writeText(url);
+        copiedQuoteId.value = q.id;
+        setTimeout(() => {
+            if (copiedQuoteId.value === q.id) copiedQuoteId.value = null;
+        }, 2500);
+    } catch {
+        window.prompt('Lien de validation client :', url);
+    }
+}
+
+function quoteStatusMeta(status) {
+    if (status === 'accepte' || status === 'accepte_partiel') {
+        return { label: 'Validé', cls: 'bg-success text-white' };
+    }
+    if (status === 'refuse') {
+        return { label: 'Refusé par le client', cls: 'bg-danger text-white' };
+    }
+    if (status === 'envoye') {
+        return { label: 'Envoyé (en attente)', cls: 'bg-warning text-dark' };
+    }
+    if (status === 'expire') {
+        return { label: 'Expiré', cls: 'bg-secondary text-white' };
+    }
+    return { label: 'Brouillon', cls: 'bg-light text-dark border' };
+}
 </script>
 
 <template>
@@ -186,14 +270,42 @@ function submitQuoteRemind() {
                                     <div class="fw-semibold">{{ q.customer?.name }}</div>
                                     <div class="small text-muted">{{ q.vehicle?.license_plate }}</div>
                                 </td>
-                                <td><span class="badge bg-info text-dark">{{ q.status }}</span></td>
+                                <td>
+                                    <span class="badge" :class="quoteStatusMeta(q.status).cls">
+                                        {{ quoteStatusMeta(q.status).label }}
+                                    </span>
+                                    <div v-if="q.signed_at" class="small text-success mt-1">
+                                        <i class="bi bi-pen-fill me-1"></i>Signé par {{ q.signed_by_name || q.customer?.name }}
+                                    </div>
+                                    <div v-if="q.status === 'refuse' && q.rejection_reason" class="alert alert-danger py-1 px-2 mt-1 mb-0 small" style="max-width: 280px;">
+                                        <strong>Motif :</strong> {{ q.rejection_reason }}
+                                    </div>
+                                </td>
                                 <td class="text-end">{{ new Intl.NumberFormat('fr-FR').format(q.total_ttc) }} FCFA</td>
                                 <td class="text-end text-nowrap">
+                                    <button
+                                        v-if="q.public_token"
+                                        type="button"
+                                        class="btn btn-outline-secondary btn-sm me-1"
+                                        :title="`Copier le lien de validation client`"
+                                        @click="copyPublicLink(q)"
+                                    >
+                                        <i class="bi" :class="copiedQuoteId === q.id ? 'bi-check-lg text-success' : 'bi-link-45deg'"></i>
+                                    </button>
+                                    <button
+                                        v-if="q.status === 'refuse' || q.status === 'envoye' || q.status === 'brouillon'"
+                                        type="button"
+                                        class="btn btn-sm me-1"
+                                        :class="q.status === 'refuse' ? 'btn-danger fw-semibold' : 'btn-outline-primary'"
+                                        title="Modifier les prix/lignes et renvoyer automatiquement sur WhatsApp"
+                                        @click="openReviseModal(q)"
+                                    >
+                                        <i class="bi bi-sliders me-1"></i>Réajuster &amp; Renvoyer
+                                    </button>
                                     <button type="button" class="btn btn-outline-warning btn-sm me-1 text-dark" title="Envoyer un rappel par E-mail ou WhatsApp" @click="openRemindModal(q)">
                                         <i class="bi bi-bell me-1"></i>Rappel
                                     </button>
                                     <button v-if="q.status === 'brouillon' || q.status === 'envoye'" type="button" class="btn btn-outline-success btn-sm me-1" @click="acceptQuote(q.id)">Valider → OR</button>
-                                    <button type="button" class="btn btn-outline-primary btn-sm me-1" @click="newVersion(q.id)">+Version</button>
                                     <a :href="`/devis/${q.id}/pdf`" class="btn btn-outline-dark btn-sm">PDF</a>
                                 </td>
                             </tr>
@@ -353,6 +465,86 @@ function submitQuoteRemind() {
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
                     <button type="submit" class="btn btn-primary px-4" :disabled="remindForm.processing || !remindHasAnyChannel">
                         <i class="bi bi-send me-1"></i>Envoyer le rappel
+                    </button>
+                </div>
+            </form>
+        </StaticModal>
+        <!-- Modal Réajuster & Renvoyer le devis sur WhatsApp -->
+        <StaticModal id="modalReviseQuote" :title="revisingQuote ? `Réajuster ${revisingQuote.quote_number} → v${(revisingQuote.version || 1) + 1}` : 'Réajuster le devis'" size="modal-lg">
+            <form v-if="revisingQuote" @submit.prevent="submitReviseQuote">
+                <div v-if="revisingQuote.rejection_reason" class="alert alert-danger small mb-3">
+                    <strong><i class="bi bi-chat-left-quote me-1"></i>Motif du refus client :</strong>
+                    « {{ revisingQuote.rejection_reason }} »
+                </div>
+
+                <div class="mb-2 d-flex justify-content-between align-items-center">
+                    <span class="form-label small fw-bold mb-0">Lignes du devis réajusté</span>
+                    <button type="button" class="btn btn-outline-primary btn-sm" @click="addReviseItem">+ Ajouter une ligne</button>
+                </div>
+
+                <div v-for="(item, idx) in reviseForm.items" :key="idx" class="border rounded p-2 mb-2 bg-light">
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-3">
+                            <select v-model="item.type" class="form-select form-select-sm no-select2">
+                                <option value="main_oeuvre">Main-d'œuvre</option>
+                                <option value="piece">Pièce</option>
+                                <option value="consommable">Consommable</option>
+                                <option value="sous_traitance">Sous-traitance</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select v-model="item.urgency" class="form-select form-select-sm no-select2">
+                                <option value="urgent">Urgent</option>
+                                <option value="recommande">Recommandé</option>
+                                <option value="optionnel">Optionnel</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <input v-model="item.description" type="text" class="form-control form-control-sm" placeholder="Description..." required />
+                        </div>
+                    </div>
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-3">
+                            <input v-model.number="item.quantity" type="number" min="1" class="form-control form-control-sm" placeholder="Qté" required />
+                        </div>
+                        <div class="col-md-5">
+                            <input v-model.number="item.unit_price" type="number" min="0" class="form-control form-control-sm" placeholder="P.U. (FCFA)" required />
+                        </div>
+                        <div class="col-md-3 text-end small fw-bold">
+                            {{ new Intl.NumberFormat('fr-FR').format((item.quantity || 0) * (item.unit_price || 0)) }} FCFA
+                        </div>
+                        <div class="col-md-1 text-end">
+                            <button type="button" class="btn btn-outline-danger btn-sm" @click="removeReviseItem(idx)">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-2 my-3">
+                    <div class="col-md-4">
+                        <label class="form-label small">Remise (FCFA)</label>
+                        <input v-model.number="reviseForm.discount_amount" type="number" min="0" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Acompte demandé (FCFA)</label>
+                        <input v-model.number="reviseForm.deposit_required" type="number" min="0" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-md-4 text-end d-flex flex-column justify-content-end">
+                        <div class="small text-muted">Nouveau sous-total HT</div>
+                        <div class="fw-bold text-primary">{{ new Intl.NumberFormat('fr-FR').format(reviseTotalHt) }} FCFA</div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small">Note pour le client</label>
+                    <textarea v-model="reviseForm.notes" rows="2" class="form-control form-control-sm" placeholder="Ex : Tarif ajusté selon votre budget..."></textarea>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+                    <button type="submit" class="btn btn-success btn-sm fw-bold px-3" :disabled="reviseForm.processing">
+                        <i class="bi bi-whatsapp me-1"></i>Enregistrer v{{ (revisingQuote.version || 1) + 1 }} &amp; Renvoyer sur WhatsApp
                     </button>
                 </div>
             </form>

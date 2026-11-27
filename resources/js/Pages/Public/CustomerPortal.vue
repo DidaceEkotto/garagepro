@@ -13,6 +13,7 @@ const props = defineProps({
     vehicles: { type: Array, default: () => [] },
     appointments: { type: Array, default: () => [] },
     repairOrders: { type: Array, default: () => [] },
+    quotes: { type: Array, default: () => [] },
     invoices: { type: Array, default: () => [] },
 });
 
@@ -336,6 +337,7 @@ function tenantTypeMeta(type) {
 
 const tabs = computed(() => [
     { id: 'vehicles', label: 'Véhicules', icon: 'bi-car-front-fill', count: props.vehicles.length },
+    { id: 'quotes', label: 'Mes Devis', icon: 'bi-file-earmark-check-fill', count: props.quotes.length },
     { id: 'orders', label: 'Réparations', icon: 'bi-wrench-adjustable', count: props.repairOrders.length },
     { id: 'appointments', label: 'Rendez-vous', icon: 'bi-calendar2-check-fill', count: props.appointments.length },
     { id: 'invoices', label: 'Factures', icon: 'bi-receipt-cutoff', count: props.invoices.length },
@@ -689,6 +691,71 @@ const tabs = computed(() => [
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </section>
+
+                    <!-- TAB: MES DEVIS (Validation / Signature à distance) -->
+                    <section v-if="activeTab === 'quotes'" class="cp-panel p-0 overflow-hidden">
+                        <div v-if="!quotes.length" class="cp-empty border-0 shadow-none">
+                            <i class="bi bi-file-earmark-text"></i>
+                            <h3>Aucun devis reçu</h3>
+                            <p>Vos devis garages apparaîtront ici dès leur émission. Vous pourrez les consulter, les signer ou demander un réajustement en ligne.</p>
+                        </div>
+
+                        <div v-else class="table-responsive">
+                            <table class="table cp-table mb-0 align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>N° Devis</th>
+                                        <th>Garage</th>
+                                        <th>Véhicule</th>
+                                        <th>Montant TTC</th>
+                                        <th>Statut</th>
+                                        <th class="text-end">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="q in quotes" :key="q.id">
+                                        <td>
+                                            <span class="fw-bold text-dark">{{ q.quote_number }}</span>
+                                            <span class="badge bg-light text-dark border ms-1">v{{ q.version }}</span>
+                                        </td>
+                                        <td>{{ q.garage_name }}</td>
+                                        <td><span class="cp-plate-sm">{{ q.vehicle_plate ?? '—' }}</span></td>
+                                        <td class="fw-bold text-dark">{{ formatMoney(q.total_ttc) }}</td>
+                                        <td>
+                                            <span
+                                                class="cp-badge"
+                                                :class="
+                                                    q.status === 'accepte' || q.status === 'accepte_partiel'
+                                                        ? 'cp-badge-green'
+                                                        : q.status === 'refuse'
+                                                            ? 'cp-badge-red'
+                                                            : 'cp-badge-amber'
+                                                "
+                                            >
+                                                {{
+                                                    q.status === 'accepte' || q.status === 'accepte_partiel'
+                                                        ? 'Validé & Signé'
+                                                        : q.status === 'refuse'
+                                                            ? 'Refusé (réajustement)'
+                                                            : 'En attente de validation'
+                                                }}
+                                            </span>
+                                        </td>
+                                        <td class="text-end">
+                                            <a
+                                                :href="q.public_url"
+                                                target="_blank"
+                                                class="cp-btn-outline-sm"
+                                            >
+                                                <i class="bi bi-pen me-1"></i>
+                                                {{ q.status === 'envoye' || q.status === 'brouillon' ? 'Consulter & Valider' : 'Voir le devis' }}
+                                            </a>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </section>
 

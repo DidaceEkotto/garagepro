@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 /**
  * Devis multi-versions avec niveaux (urgent, recommandé, optionnel) et montants en FCFA.
@@ -30,8 +31,10 @@ class Quote extends Model
         'repair_order_id',
         'parent_quote_id',
         'quote_number',
+        'public_token',
         'version',
         'status',
+        'sent_at',
         'valid_until',
         'vat_rate',
         'discount_amount',
@@ -41,6 +44,10 @@ class Quote extends Model
         'deposit_required',
         'client_signature_path',
         'signed_at',
+        'signed_ip',
+        'signed_by_name',
+        'rejection_reason',
+        'rejected_at',
         'notes',
     ];
 
@@ -48,6 +55,7 @@ class Quote extends Model
     {
         return [
             'version' => 'integer',
+            'sent_at' => 'datetime',
             'valid_until' => 'date',
             'vat_rate' => 'decimal:2',
             'discount_amount' => 'integer',
@@ -56,7 +64,41 @@ class Quote extends Model
             'total_ttc' => 'integer',
             'deposit_required' => 'integer',
             'signed_at' => 'datetime',
+            'rejected_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (Quote $quote) {
+            if (empty($quote->public_token)) {
+                $quote->public_token = Str::random(32);
+            }
+        });
+    }
+
+    public function ensurePublicToken(): string
+    {
+        if (empty($this->public_token)) {
+            $this->update(['public_token' => Str::random(32)]);
+        }
+
+        return $this->public_token;
+    }
+
+    public function publicUrl(): string
+    {
+        return route('public.quote.show', ['token' => $this->ensurePublicToken()]);
+    }
+
+    public function signatureUrl(): ?string
+    {
+        return $this->client_signature_path ? asset('storage/'.$this->client_signature_path) : null;
+    }
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
     }
 
     public function agency(): BelongsTo

@@ -6,6 +6,7 @@ use App\Mail\CustomerProfileUpdatedMail;
 use App\Models\Country;
 use App\Models\Customer;
 use App\Models\GlobalCustomer;
+use App\Models\Quote;
 use App\Models\Tenant;
 use App\Services\GlobalCustomerService;
 use App\Services\GreenApiService;
@@ -130,6 +131,33 @@ class CustomerPortalController extends Controller
             ]);
         })->values();
 
+        $customerIds = $linkedCustomers->pluck('id')->all();
+        $quotes = Quote::withoutTenantScope()
+            ->with(['tenant:id,name', 'vehicle:id,license_plate'])
+            ->whereIn('customer_id', $customerIds)
+            ->latest('id')
+            ->take(25)
+            ->get()
+            ->map(function (Quote $q) {
+                $token = $q->ensurePublicToken();
+
+                return [
+                    'id' => $q->id,
+                    'garage_name' => $q->tenant?->name ?? 'Garage',
+                    'quote_number' => $q->quote_number,
+                    'version' => (int) $q->version,
+                    'vehicle_plate' => $q->vehicle?->license_plate,
+                    'total_ttc' => (int) $q->total_ttc,
+                    'status' => $q->status,
+                    'public_token' => $token,
+                    'public_url' => route('public.quote.show', ['token' => $token]),
+                    'valid_until' => $q->valid_until?->format('d/m/Y'),
+                    'signed_at' => $q->signed_at?->format('d/m/Y H:i'),
+                    'rejection_reason' => $q->rejection_reason,
+                ];
+            })
+            ->values();
+
         return Inertia::render('Public/CustomerPortal', [
             'authenticated' => true,
             'countries' => $countries,
@@ -153,6 +181,7 @@ class CustomerPortalController extends Controller
             'vehicles' => $vehicles,
             'appointments' => $appointments,
             'repairOrders' => $repairOrders,
+            'quotes' => $quotes,
             'invoices' => $invoices,
         ]);
     }
