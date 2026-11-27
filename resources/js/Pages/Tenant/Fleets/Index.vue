@@ -114,17 +114,27 @@ function formatMoney(val) {
                                         <th>Marque / Modèle</th>
                                         <th>Kilométrage</th>
                                         <th class="text-end">Coût cumulé facturé</th>
+                                        <th class="text-end">Alerte Coût</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr v-if="!f.vehicles?.length">
-                                        <td colspan="4" class="text-center text-muted py-2">Aucun véhicule rattaché.</td>
+                                        <td colspan="5" class="text-center text-muted py-2">Aucun véhicule rattaché.</td>
                                     </tr>
-                                    <tr v-for="v in f.vehicles" :key="v.id">
+                                    <tr v-for="v in f.vehicles" :key="v.id" :class="{ 'table-danger': v.is_cost_alert }">
                                         <td class="fw-bold">{{ v.license_plate }}</td>
                                         <td>{{ v.brand }} {{ v.model }}</td>
                                         <td>{{ v.mileage ? `${v.mileage} km` : '-' }}</td>
                                         <td class="text-end fw-semibold">{{ formatMoney(v.total_cost) }}</td>
+                                        <td class="text-end">
+                                            <span v-if="v.is_cost_alert" class="badge bg-danger me-1">
+                                                <i class="bi bi-exclamation-triangle-fill me-1"></i>Seuil dépassé ({{ formatMoney(v.cost_alert_threshold) }})
+                                            </span>
+                                            <span v-else-if="v.cost_alert_threshold > 0" class="badge bg-success-subtle text-success border">
+                                                Seuil : {{ formatMoney(v.cost_alert_threshold) }}
+                                            </span>
+                                            <span v-else class="text-muted">-</span>
+                                        </td>
                                     </tr>
                                 </tbody>
                             </table>

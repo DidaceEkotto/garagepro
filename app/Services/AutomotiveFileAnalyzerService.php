@@ -530,4 +530,141 @@ class AutomotiveFileAnalyzerService
 
         return implode("\n", $lines);
     }
+
+    /**
+     * Comparateur binaire ECU local .ori vs .mod (0 token consommé).
+     */
+    public function compareEcuPair(UploadedFile $ori, UploadedFile $mod): array
+    {
+        $v1 = $this->validateFile($ori);
+        if (! $v1['ok']) {
+            return ['ok' => false, 'error' => 'Fichier origine (.ori) refusé : '.$v1['error']];
+        }
+
+        $v2 = $this->validateFile($mod);
+        if (! $v2['ok']) {
+            return ['ok' => false, 'error' => 'Fichier modifié (.mod) refusé : '.$v2['error']];
+        }
+
+        $p1 = $ori->getRealPath();
+        $p2 = $mod->getRealPath();
+        if (! $p1 || ! $p2 || ! is_readable($p1) || ! is_readable($p2)) {
+            return ['ok' => false, 'error' => 'Impossible de lire les fichiers ECU.'];
+        }
+
+        $size1 = (int) filesize($p1);
+        $size2 = (int) filesize($p2);
+        $maxCompare = min($size1, $size2, 8 * 1024 * 1024);
+
+        $oriSha = (string) hash_file('sha256', $p1);
+        $modSha = (string) hash_file('sha256', $p2);
+        $oriCrc = strtoupper((string) hash_file('crc32b', $p1));
+        $modCrc = strtoupper((string) hash_file('crc32b', $p2));
+
+        $fh1 = fopen($p1, 'rb');
+        $fh2 = fopen($p2, 'rb');
+        if (! $fh1 || ! $fh2) {
+            if ($fh1) {
+                fclose($fh1);
+            }
+            if ($fh2) {
+                fclose($fh2);
+            }
+
+            return ['ok' => false, 'error' => 'Erreur d\'ouverture binaire des fichiers ECU.'];
+        }
+
+        $chunkSize = 65536;
+        $offset = 0;
+        $diffBytes = 0;
+        $regions = [];
+        $inRegion = false;
+        $regionStart = 0;
+        $regionEnd = 0;
+
+        while ($offset < $maxCompare) {
+            $toRead = min($chunkSize, $maxCompare - $offset);
+            $b1 = fread($fh1, $toRead);
+            $b2 = fread($fh2, $toRead);
+            if ($b1 === false || $b2 === false || $b1 === '') {
+                break;
+            }
+            $len = min(strlen($b1), strlen($b2));
+            if ($b1 !== $b2) {
+                for ($i = 0; $i < $len; $i++) {
+                    if ($b1[$i] !== $b2[$i]) {
+                        $diffBytes++;
+                        $addr = $offset + $i;
+                        if (! $inRegion) {
+                            $inRegion = true;
+                            $regionStart = $addr;
+                            $regionEnd = $addr;
+                        } elseif ($addr - $regionEnd <= 16) {
+                            $regionEnd = $addr;
+                        } else {
+                            if (count($regions) < 25) {
+                                $regions[] = [
+                                    'start' => sprintf('0x%06X', $regionStart),
+                                    'end' => sprintf('0x%06X', $regionEnd),
+                                    'length' => $regionEnd - $regionStart + 1,
+                                ];
+                            }
+                            $regionStart = $addr;
+                            $regionEnd = $addr;
+                        }
+                    }
+                }
+            }
+            $offset += $len;
+        }
+
+        if ($inRegion && count($regions) < 25) {
+            $regions[] = [
+                'start' => sprintf('0x%06X', $regionStart),
+                'end' => sprintf('0x%06X', $regionEnd),
+                'length' => $regionEnd - $regionStart + 1,
+            ];
+        }
+
+        fclose($fh1);
+        fclose($fh2);
+
+        $diffBytes += abs($size1 - $size2);
+        $baseSize = max(1, max($size1, $size2));
+        $diffPercent = round(($diffBytes / $baseSize) * 100, 4);
+
+        $lines = [
+            '[COMPARATEUR ECU .ORI vs .MOD — PRÉ-ANALYSE LOCALE 0 TOKEN]',
+            "Origine : {$ori->getClientOriginalName()} (".round($size1 / 1024, 1)." Ko | CRC32: {$oriCrc} | SHA256: ".substr($oriSha, 0, 12).')',
+            "Modifié : {$mod->getClientOriginalName()} (".round($size2 / 1024, 1)." Ko | CRC32: {$modCrc} | SHA256: ".substr($modSha, 0, 12).')',
+            $size1 !== $size2 ? "ATTENTION : Tailles différentes ({$size1} vs {$size2} octets) — risque d'incompatibilité flashage !" : 'Tailles identiques (cohérent pour flashage).',
+            "Octets modifiés : {$diffBytes} / {$baseSize} ({$diffPercent}%)",
+            'Zones mémoire modifiées détectées ('.count($regions).' blocs principaux) :',
+        ];
+
+        foreach ($regions as $idx => $r) {
+            $lines[] = '  #'.($idx + 1)." {$r['start']} .. {$r['end']} ({$r['length']} octets)";
+        }
+
+        if ($diffBytes === 0) {
+            $lines[] = 'Les deux fichiers sont strictement identiques (0 octet modifié).';
+        }
+
+        return [
+            'ok' => true,
+            'ori_name' => $ori->getClientOriginalName(),
+            'mod_name' => $mod->getClientOriginalName(),
+            'ori_size' => $size1,
+            'mod_size' => $size2,
+            'ori_crc32' => $oriCrc,
+            'mod_crc32' => $modCrc,
+            'ori_sha256' => substr($oriSha, 0, 16),
+            'mod_sha256' => substr($modSha, 0, 16),
+            'diff_bytes' => $diffBytes,
+            'diff_percent' => $diffPercent,
+            'regions_count' => count($regions),
+            'regions' => $regions,
+            'summary' => Str::limit(implode("\n", $lines), self::MAX_SUMMARY_CHARS, "\n…"),
+        ];
+    }
 }

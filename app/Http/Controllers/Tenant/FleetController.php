@@ -23,7 +23,7 @@ class FleetController extends Controller
         $allCustomers = Customer::orderBy('name')->get(['id', 'name', 'company_name', 'phone', 'type', 'credit_limit', 'fleet_manager_name', 'fleet_notes']);
 
         $fleets = Customer::with([
-            'vehicles:id,customer_id,license_plate,brand,model,mileage',
+            'vehicles:id,customer_id,license_plate,brand,model,mileage,cost_alert_threshold',
             'invoices:id,customer_id,vehicle_id,total_ttc,paid_amount,status,is_deferred_monthly,issued_at',
             'repairOrders:id,customer_id,vehicle_id,order_number,status,created_at',
         ])
@@ -49,6 +49,8 @@ class FleetController extends Controller
                         ->where('status', '!=', Invoice::STATUS_CANCELLED)
                         ->sum('total_ttc');
 
+                    $threshold = (int) ($v->cost_alert_threshold ?? 0);
+
                     return [
                         'id' => $v->id,
                         'license_plate' => $v->license_plate,
@@ -56,6 +58,8 @@ class FleetController extends Controller
                         'model' => $v->model,
                         'mileage' => $v->mileage,
                         'total_cost' => $cost,
+                        'cost_alert_threshold' => $threshold,
+                        'is_cost_alert' => $threshold > 0 && $cost >= $threshold,
                     ];
                 });
 
@@ -100,6 +104,17 @@ class FleetController extends Controller
         ]);
 
         return back()->with('success', 'Paramètres de flotte B2B mis à jour.');
+    }
+
+    public function updateVehicleThreshold(Request $request, \App\Models\Vehicle $vehicle): RedirectResponse
+    {
+        $validated = $request->validate([
+            'cost_alert_threshold' => ['required', 'integer', 'min:0'],
+        ]);
+
+        $vehicle->update(['cost_alert_threshold' => (int) $validated['cost_alert_threshold']]);
+
+        return back()->with('success', "Seuil d'alerte coût mis à jour pour {$vehicle->license_plate}.");
     }
 
     public function generateMonthlyInvoice(

@@ -45,6 +45,9 @@ class Invoice extends Model
         'paid_amount',
         'issued_at',
         'due_at',
+        'overdue_reminder_stage',
+        'last_reminder_sent_at',
+        'installment_plan',
         'notes',
     ];
 
@@ -61,6 +64,9 @@ class Invoice extends Model
             'paid_amount' => 'integer',
             'issued_at' => 'datetime',
             'due_at' => 'date',
+            'overdue_reminder_stage' => 'integer',
+            'last_reminder_sent_at' => 'datetime',
+            'installment_plan' => 'array',
         ];
     }
 

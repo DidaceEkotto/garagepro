@@ -20,15 +20,82 @@ class WorkshopController extends Controller
         $this->authorize('viewAny', RepairOrder::class);
 
         $user = $request->user('web');
-        $orders = RepairOrder::with(['customer', 'vehicle', 'tasks'])
+        $orders = RepairOrder::with(['customer', 'vehicle', 'tasks.mechanic:id,name'])
             ->when(! $user->can('repair_orders.view'), fn ($q) => $q->where('assigned_mechanic_id', $user->id))
             ->whereNotIn('status', [RepairOrder::STATUS_DELIVERED])
             ->latest()
             ->paginate(20);
 
+        // Rendement & primes mécaniciens sur les 30 derniers jours
+        $recentTasks = RepairTask::with('mechanic:id,name')
+            ->where('updated_at', '>=', now()->subDays(30))
+            ->whereNotNull('assigned_mechanic_id')
+            ->get();
+
+        $mechanicProductivity = $recentTasks->groupBy('assigned_mechanic_id')->map(function ($tasks) {
+            $mechanic = $tasks->first()->mechanic;
+            $estimatedMin = (int) $tasks->sum('estimated_minutes');
+            $actualMin = (int) $tasks->sum('actual_minutes');
+            $efficiencyPct = $actualMin > 0 ? round(($estimatedMin / $actualMin) * 100, 1) : 0.0;
+            // Prime calculée : 1 500 FCFA / heure facturée + bonus 20% si rendement >= 100%
+            $baseCommission = (int) round(($estimatedMin / 60) * 1500);
+            $bonus = $efficiencyPct >= 100 ? (int) round($baseCommission * 0.2) : 0;
+            $explicitCommissions = (int) $tasks->sum('commission_amount');
+
+            return [
+                'mechanic_id' => $mechanic?->id,
+                'mechanic_name' => $mechanic?->name ?? 'Mécanicien',
+                'tasks_count' => $tasks->count(),
+                'completed_count' => $tasks->where('status', 'termine')->count(),
+                'estimated_hours' => round($estimatedMin / 60, 2),
+                'actual_hours' => round($actualMin / 60, 2),
+                'efficiency_pct' => $efficiencyPct,
+                'estimated_commission' => $explicitCommissions > 0 ? $explicitCommissions : ($baseCommission + $bonus),
+            ];
+        })->values();
+
         return Inertia::render('Tenant/Workshop/MyOrders', [
             'orders' => $orders,
+            'mechanicProductivity' => $mechanicProductivity,
         ]);
+    }
+
+    public function startTimer(Request $request, RepairTask $task): RedirectResponse
+    {
+        if (! $task->timer_started_at) {
+            $task->update([
+                'timer_started_at' => now(),
+                'status' => 'en_cours',
+            ]);
+        }
+
+        return back()->with('success', "Chrono démarré sur « {$task->title} ».");
+    }
+
+    public function pauseTimer(Request $request, RepairTask $task): RedirectResponse
+    {
+        $validated = $request->validate([
+            'finish' => ['nullable', 'boolean'],
+            'offline_elapsed_minutes' => ['nullable', 'integer', 'min:0', 'max:1440'],
+        ]);
+
+        $elapsed = 0;
+        if (isset($validated['offline_elapsed_minutes']) && (int) $validated['offline_elapsed_minutes'] > 0) {
+            $elapsed = (int) $validated['offline_elapsed_minutes'];
+        } elseif ($task->timer_started_at) {
+            $elapsed = max(1, (int) ceil($task->timer_started_at->diffInSeconds(now()) / 60));
+        }
+
+        $finish = (bool) ($validated['finish'] ?? false);
+        $task->update([
+            'actual_minutes' => (int) $task->actual_minutes + $elapsed,
+            'timer_started_at' => null,
+            'status' => $finish ? 'termine' : 'en_pause',
+        ]);
+
+        return back()->with('success', $finish
+            ? "Tâche terminée (+{$elapsed} min pointées)."
+            : "Chrono mis en pause (+{$elapsed} min enregistrées).");
     }
 
     public function updateStatus(Request $request, RepairOrder $repairOrder): RedirectResponse

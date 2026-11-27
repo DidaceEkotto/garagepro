@@ -1,15 +1,21 @@
 <script setup>
 import StaticModal from '@/Components/StaticModal.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
     cases: Object,
     loyaltyCards: Array,
+    clientReviews: { type: Array, default: () => [] },
+    averageRating: { type: Number, default: 0 },
     agencies: Array,
     customers: Array,
     vehicles: Array,
 });
+
+function dispatchReviews() {
+    router.post('/apres-vente/enquetes-j1', {}, { preserveScroll: true });
+}
 
 const caseForm = useForm({
     agency_id: props.agencies?.[0]?.id ?? '',
@@ -48,7 +54,10 @@ function awardPoints() {
                 <h1 class="h4 fw-bold mb-0">Après-vente, Garanties &amp; Fidélité</h1>
                 <p class="text-muted small mb-0">Suivi des réclamations, retours sous garantie, enquêtes et cartes de fidélité</p>
             </div>
-            <div class="d-flex gap-2">
+            <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-success btn-sm" @click="dispatchReviews">
+                    <i class="bi bi-star-fill me-1"></i>Envoyer enquêtes J+1 WhatsApp
+                </button>
                 <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAwardLoyalty">
                     <i class="bi bi-award me-1"></i>Créditer points
                 </button>
@@ -98,6 +107,58 @@ function awardPoints() {
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Avis clients & satisfaction post-intervention (J+1) -->
+        <div class="card border-0 shadow-sm mt-4">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="h6 fw-bold mb-0"><i class="bi bi-star-half text-warning me-2"></i>Avis Clients Post-Intervention (24h après clôture OR)</h2>
+                    <p class="text-muted small mb-0">Lien rapide 1 à 5 étoiles sur WhatsApp • Les notes ≥ 4/5 invitent à publier un avis public</p>
+                </div>
+                <span v-if="averageRating > 0" class="badge bg-warning text-dark fs-6">
+                    ★ {{ averageRating }} / 5
+                </span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle mb-0 small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Client</th>
+                                <th>OR</th>
+                                <th>Note</th>
+                                <th>Commentaire</th>
+                                <th>Public</th>
+                                <th class="text-end">Lien</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="rev in clientReviews" :key="rev.id">
+                                <td class="fw-semibold">{{ rev.customer?.name }}</td>
+                                <td>{{ rev.repair_order?.order_number }}</td>
+                                <td>
+                                    <span v-if="rev.rating" class="badge" :class="rev.rating >= 4 ? 'bg-success' : 'bg-warning text-dark'">
+                                        {{ rev.rating }} / 5 ★
+                                    </span>
+                                    <span v-else class="text-muted">En attente</span>
+                                </td>
+                                <td class="text-muted">{{ rev.comment || '-' }}</td>
+                                <td>
+                                    <span v-if="rev.published_publicly" class="badge bg-primary">Publié</span>
+                                    <span v-else class="text-muted">-</span>
+                                </td>
+                                <td class="text-end">
+                                    <a :href="`/avis/${rev.token}`" target="_blank" class="btn btn-outline-secondary btn-sm py-0 px-2">Ouvrir</a>
+                                </td>
+                            </tr>
+                            <tr v-if="!clientReviews.length">
+                                <td colspan="6" class="text-center text-muted py-3">Aucune enquête satisfaction envoyée pour le moment.</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>

@@ -838,4 +838,90 @@ class AiDiagnosticController extends Controller
             'data' => base64_encode($jpegBytes),
         ];
     }
+
+    /**
+     * Comparateur ECU .ori vs .mod (0 token en local + interprétation risques IA optionnelle).
+     */
+    public function compareEcu(
+        Request $request,
+        TenantContext $tenantContext,
+        AutomotiveFileAnalyzerService $fileAnalyzer,
+        GeminiDiagnosticService $gemini
+    ): RedirectResponse {
+        $validated = $request->validate([
+            'ori_file' => ['required', 'file', 'max:15360'],
+            'mod_file' => ['required', 'file', 'max:15360'],
+            'ask_ai' => ['nullable', 'boolean'],
+            'conversation_id' => ['nullable', 'integer'],
+            'vehicle_id' => ['nullable', 'integer'],
+        ]);
+
+        $diff = $fileAnalyzer->compareEcuPair($request->file('ori_file'), $request->file('mod_file'));
+        if (! $diff['ok']) {
+            return back()->withErrors(['files' => $diff['error']]);
+        }
+
+        $tenant = $tenantContext->getTenant();
+        $user = $request->user('web');
+
+        $conversation = null;
+        if (! empty($validated['conversation_id'])) {
+            $conversation = AiDiagnosticConversation::where('tenant_id', $tenant->id)
+                ->where('id', $validated['conversation_id'])
+                ->first();
+        }
+        if (! $conversation) {
+            $conversation = AiDiagnosticConversation::create([
+                'tenant_id' => $tenant->id,
+                'user_id' => $user->id,
+                'vehicle_id' => $validated['vehicle_id'] ?? null,
+                'title' => "Comparaison ECU {$diff['ori_name']} vs {$diff['mod_name']}",
+                'last_message_at' => now(),
+            ]);
+        }
+
+        AiDiagnosticMessage::create([
+            'tenant_id' => $tenant->id,
+            'conversation_id' => $conversation->id,
+            'user_id' => $user->id,
+            'role' => AiDiagnosticMessage::ROLE_USER,
+            'content' => "Comparaison binaire ECU : {$diff['ori_name']} vs {$diff['mod_name']}",
+            'attachments' => [
+                ['type' => 'file', 'name' => $diff['ori_name'], 'ext' => 'ori', 'category' => 'ECU', 'size_kb' => round($diff['ori_size'] / 1024, 1)],
+                ['type' => 'file', 'name' => $diff['mod_name'], 'ext' => 'mod', 'category' => 'ECU', 'size_kb' => round($diff['mod_size'] / 1024, 1)],
+            ],
+        ]);
+
+        $replyText = $diff['summary'];
+        $modelUsed = 'mboacar-ecu-diff';
+        $tokens = 0;
+
+        if ($request->boolean('ask_ai', true) && $gemini->isConfigured()) {
+            $aiRes = $gemini->diagnose(
+                "Interprète ce rapport de comparaison ECU .ori vs .mod, évalue les risques (checksum, cartographies modifiées, compatibilité taille) et donne des précautions de flashage :\n\n".$diff['summary'],
+                [],
+                $conversation->vehicle
+            );
+            if ($aiRes['ok'] && ! empty($aiRes['reply'])) {
+                $replyText = $diff['summary']."\n\n---\n**Interprétation IA Auto :**\n".$aiRes['reply'];
+                $modelUsed = $aiRes['model'] ?? 'gemini';
+                $tokens = (int) ($aiRes['tokens'] ?? 0);
+            }
+        }
+
+        AiDiagnosticMessage::create([
+            'tenant_id' => $tenant->id,
+            'conversation_id' => $conversation->id,
+            'role' => AiDiagnosticMessage::ROLE_ASSISTANT,
+            'content' => $replyText,
+            'model' => $modelUsed,
+            'tokens_used' => $tokens,
+            'is_off_topic' => false,
+        ]);
+
+        $conversation->update(['last_message_at' => now()]);
+
+        return redirect()->route('tenant.ai_diagnostic.index', ['conversation' => $conversation->id])
+            ->with('success', "Comparaison ECU terminée ({$diff['diff_bytes']} octets modifiés, {$diff['diff_percent']}%).");
+    }
 }

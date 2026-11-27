@@ -26,6 +26,45 @@ const selectableCustomers = computed(() => [
 
 const query = ref(props.search ?? '');
 const editingVehicle = ref(null);
+const ocrInputRef = ref(null);
+const ocrLoading = ref(false);
+const ocrMessage = ref('');
+
+async function onOcrPhotoSelected(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    ocrLoading.value = true;
+    ocrMessage.value = '';
+    try {
+        const fd = new FormData();
+        fd.append('photo', file);
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        const res = await fetch('/vehicules/ocr', {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': token, Accept: 'application/json' },
+            body: fd,
+        });
+        const json = await res.json();
+        if (!res.ok || !json.ok) {
+            ocrMessage.value = json.error || 'Lecture OCR impossible.';
+        } else {
+            const d = json.data || {};
+            if (d.license_plate) form.license_plate = d.license_plate;
+            if (d.brand) form.brand = d.brand;
+            if (d.model) form.model = d.model;
+            if (d.year) form.year = d.year;
+            if (d.vin) form.vin = d.vin;
+            if (d.fuel_type) form.fuel_type = d.fuel_type;
+            if (d.color) form.color = d.color;
+            ocrMessage.value = 'Fiche véhicule pré-remplie automatiquement par OCR IA ! Vérifiez les champs avant d\'enregistrer.';
+        }
+    } catch {
+        ocrMessage.value = 'Erreur lors du scan OCR.';
+    } finally {
+        ocrLoading.value = false;
+        if (ocrInputRef.value) ocrInputRef.value.value = '';
+    }
+}
 
 const editForm = useForm({
     customer_id: '',
@@ -293,6 +332,21 @@ async function createVehicle() {
                         </option>
                     </select>
                     <div v-if="form.errors.customer_id" class="text-danger small mt-1">{{ form.errors.customer_id }}</div>
+                </div>
+
+                <div class="alert alert-light border d-flex flex-wrap justify-content-between align-items-center gap-2 py-2 mb-3">
+                    <div class="small">
+                        <i class="bi bi-upc-scan text-primary me-1"></i>
+                        <strong>Pré-remplissage OCR :</strong> scannez une photo de carte grise, plaque ou VIN.
+                    </div>
+                    <div>
+                        <input ref="ocrInputRef" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" class="d-none" @change="onOcrPhotoSelected" />
+                        <button type="button" class="btn btn-outline-primary btn-sm" :disabled="ocrLoading" @click="ocrInputRef?.click()">
+                            <span v-if="ocrLoading" class="spinner-border spinner-border-sm me-1"></span>
+                            <i v-else class="bi bi-camera me-1"></i>Scanner Carte Grise / Plaque
+                        </button>
+                    </div>
+                    <div v-if="ocrMessage" class="w-100 small text-primary mt-1">{{ ocrMessage }}</div>
                 </div>
 
                 <div class="row g-2 mb-3">

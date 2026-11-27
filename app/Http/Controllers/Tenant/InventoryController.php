@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Agency;
 use App\Models\Employee;
 use App\Models\Part;
+use App\Models\Product;
 use App\Models\RepairOrder;
 use App\Models\StockMovement;
 use App\Models\Supplier;
@@ -24,11 +25,54 @@ class InventoryController extends Controller
         $this->authorize('viewAny', Part::class);
 
         $parts = Part::with('agency')->orderBy('name')->paginate(25);
+        $lowStockParts = Part::whereColumn('quantity_on_hand', '<=', 'min_threshold')
+            ->orderBy('quantity_on_hand')
+            ->take(15)
+            ->get(['id', 'sku', 'name', 'quantity_on_hand', 'min_threshold', 'purchase_price']);
+
         $lowStockCount = Part::whereColumn('quantity_on_hand', '<=', 'min_threshold')->count();
+
+        // Suggestions de réapprovisionnement 1-clic sur la Marketplace partenaire
+        $lowStockRestockSuggestions = $lowStockParts->map(function (Part $part) {
+            $keywords = collect(preg_split('/[\s\-\/]+/', mb_strtolower($part->name)))
+                ->filter(fn ($w) => mb_strlen($w) >= 3)
+                ->take(3)
+                ->values();
+
+            $matches = Product::withoutGlobalScopes()
+                ->with('tenant:id,name')
+                ->where('is_published', true)
+                ->where('stock_quantity', '>', 0)
+                ->where(function ($q) use ($part, $keywords) {
+                    $q->where('sku', 'like', "%{$part->sku}%");
+                    foreach ($keywords as $kw) {
+                        $q->orWhere('title', 'like', "%{$kw}%");
+                    }
+                })
+                ->orderBy('price')
+                ->take(3)
+                ->get(['id', 'tenant_id', 'title', 'sku', 'price', 'stock_quantity']);
+
+            return [
+                'part_id' => $part->id,
+                'sku' => $part->sku,
+                'name' => $part->name,
+                'quantity_on_hand' => $part->quantity_on_hand,
+                'min_threshold' => $part->min_threshold,
+                'offers' => $matches->map(fn ($p) => [
+                    'product_id' => $p->id,
+                    'name' => $p->title,
+                    'price' => $p->price,
+                    'stock' => $p->stock_quantity,
+                    'seller_name' => $p->tenant?->name ?? 'Vendeur Marketplace',
+                ])->values(),
+            ];
+        })->values();
 
         return Inertia::render('Tenant/Inventory/Index', [
             'parts' => $parts,
             'lowStockCount' => $lowStockCount,
+            'lowStockRestockSuggestions' => $lowStockRestockSuggestions,
             'agencies' => Agency::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'suppliers' => Supplier::orderBy('name')->get(['id', 'name', 'phone', 'city']),
             'repairOrders' => RepairOrder::whereNotIn('status', [RepairOrder::STATUS_DELIVERED])->orderByDesc('id')->get(['id', 'order_number']),

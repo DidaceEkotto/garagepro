@@ -2,13 +2,69 @@
 import StaticModal from '@/Components/StaticModal.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
     stats: Object,
     monthlyComparison: { type: Array, default: () => [] },
     expenses: { type: Array, default: () => [] },
     agencies: { type: Array, default: () => [] },
+    liveCashSessions: { type: Array, default: () => [] },
+    cashClosuresHistory: { type: Array, default: () => [] },
+    repairOrderMargins: { type: Array, default: () => [] },
+});
+
+const selectedSession = ref(null);
+
+const openCashForm = useForm({
+    agency_id: props.agencies?.[0]?.id ?? '',
+    closure_date: new Date().toISOString().slice(0, 10),
+    opening_float: 0,
+    notes: '',
+});
+
+const closeCashForm = useForm({
+    agency_id: props.agencies?.[0]?.id ?? '',
+    closure_date: new Date().toISOString().slice(0, 10),
+    opening_float: 0,
+    counted_cash: 0,
+    notes: '',
+});
+
+function startOpenCash(session) {
+    selectedSession.value = session;
+    openCashForm.agency_id = session.agency_id;
+    openCashForm.closure_date = session.closure_date;
+    openCashForm.opening_float = session.opening_float || 0;
+    openCashForm.notes = '';
+    window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalOpenCash'))?.show();
+}
+
+function submitOpenCash() {
+    openCashForm.post('/caisse/ouvrir', {
+        onSuccess: () => window.bootstrap?.Modal.getInstance(document.getElementById('modalOpenCash'))?.hide(),
+    });
+}
+
+function startCloseCash(session) {
+    selectedSession.value = session;
+    closeCashForm.agency_id = session.agency_id;
+    closeCashForm.closure_date = session.closure_date;
+    closeCashForm.opening_float = session.opening_float || 0;
+    closeCashForm.counted_cash = session.expected_cash || 0;
+    closeCashForm.notes = session.notes || '';
+    window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalCloseCashZ'))?.show();
+}
+
+function submitCloseCash() {
+    closeCashForm.post('/caisse/cloture', {
+        onSuccess: () => window.bootstrap?.Modal.getInstance(document.getElementById('modalCloseCashZ'))?.hide(),
+    });
+}
+
+const liveDiscrepancy = computed(() => {
+    if (!selectedSession.value) return 0;
+    return Number(closeCashForm.counted_cash || 0) - Number(selectedSession.value.expected_cash || 0);
 });
 
 const expenseForm = useForm({
@@ -246,6 +302,174 @@ function submitExpense() {
                 <div class="d-flex justify-content-end gap-2">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
                     <button type="submit" class="btn btn-primary px-4" :disabled="expenseForm.processing">Enregistrer</button>
+                </div>
+            </form>
+        </StaticModal>
+
+        <!-- Section Caisse Journalière Z (Ouverture / Fermeture & Détection d'écart) -->
+        <div class="card border-0 shadow-sm mt-4 mb-4">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <h2 class="h6 fw-bold mb-0"><i class="bi bi-safe2-fill text-primary me-2"></i>Caisse Journalière &amp; Clôture Z par Agence</h2>
+                    <p class="text-muted small mb-0">Espèces, Mobile Money, Carte, Virement, sorties espèces et détection automatique d'écart de caisse</p>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div v-for="sess in liveCashSessions" :key="sess.agency_id" class="col-md-6">
+                        <div class="border rounded-3 p-3 h-100 bg-light bg-opacity-50">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="fw-bold">{{ sess.agency_name }}</span>
+                                <span v-if="sess.status === 'open'" class="badge bg-success">Caisse Ouverte ({{ sess.opened_at }})</span>
+                                <span v-else-if="sess.status === 'closed'" class="badge bg-dark">Clôturée Z ({{ sess.closed_at }})</span>
+                                <span v-else class="badge bg-secondary">Non ouverte</span>
+                            </div>
+                            <div class="row g-2 small mb-3">
+                                <div class="col-6">Fond d'ouverture : <strong>{{ fmt(sess.opening_float) }}</strong></div>
+                                <div class="col-6">Espèces encaissées : <strong class="text-success">{{ fmt(sess.cash_total) }}</strong></div>
+                                <div class="col-6">Mobile Money : <strong>{{ fmt(sess.mobile_money_total) }}</strong></div>
+                                <div class="col-6">Carte / Chèque : <strong>{{ fmt(sess.card_bank_total) }}</strong></div>
+                                <div class="col-6">Virement : <strong>{{ fmt(sess.virement_total) }}</strong></div>
+                                <div class="col-6">Dépenses jour : <strong class="text-danger">-{{ fmt(sess.expenses_cash_total) }}</strong></div>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center pt-2 border-top flex-wrap gap-2">
+                                <div class="small">
+                                    Espèces attendues : <strong>{{ fmt(sess.expected_cash) }}</strong>
+                                    <span v-if="sess.status === 'closed'" class="ms-2 badge" :class="sess.cash_discrepancy === 0 ? 'bg-success' : 'bg-danger'">
+                                        Écart : {{ sess.cash_discrepancy > 0 ? '+' : '' }}{{ fmt(sess.cash_discrepancy) }}
+                                    </span>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button v-if="sess.status === 'not_opened'" type="button" class="btn btn-outline-primary btn-sm" @click="startOpenCash(sess)">
+                                        <i class="bi bi-unlock me-1"></i>Ouvrir la caisse
+                                    </button>
+                                    <button v-if="sess.status !== 'closed'" type="button" class="btn btn-primary btn-sm" @click="startCloseCash(sess)">
+                                        <i class="bi bi-lock-fill me-1"></i>Clôturer (Z)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="cashClosuresHistory.length" class="table-responsive mt-3">
+                    <table class="table table-sm table-hover align-middle mb-0 small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Date</th>
+                                <th>Agence</th>
+                                <th class="text-end">Espèces</th>
+                                <th class="text-end">Mobile Money</th>
+                                <th class="text-end">Carte / Vir.</th>
+                                <th class="text-end">Attendu / Compté</th>
+                                <th class="text-end">Écart</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="c in cashClosuresHistory" :key="c.id">
+                                <td>{{ String(c.closure_date || '').slice(0, 10) }}</td>
+                                <td>{{ c.agency?.name }}</td>
+                                <td class="text-end">{{ fmt(c.cash_total) }}</td>
+                                <td class="text-end">{{ fmt(c.mobile_money_total) }}</td>
+                                <td class="text-end">{{ fmt((c.card_bank_total || 0) + (c.virement_total || 0)) }}</td>
+                                <td class="text-end">{{ fmt(c.expected_cash) }} / {{ fmt(c.counted_cash ?? c.expected_cash) }}</td>
+                                <td class="text-end">
+                                    <span class="badge" :class="(c.cash_discrepancy || 0) === 0 ? 'bg-success' : 'bg-danger'">
+                                        {{ (c.cash_discrepancy || 0) > 0 ? '+' : '' }}{{ fmt(c.cash_discrepancy || 0) }}
+                                    </span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Marge nette réelle par Ordre de Réparation -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white py-3">
+                <h2 class="h6 fw-bold mb-0"><i class="bi bi-cash-coin text-success me-2"></i>Marge Nette Réelle par Ordre de Réparation</h2>
+                <p class="text-muted small mb-0">CA facturé (pièces + main-d'œuvre) moins coût réel d'achat pièces sorties et sous-traitance</p>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>OR</th>
+                                <th>Client &amp; Véhicule</th>
+                                <th class="text-end">CA Facturé HT</th>
+                                <th class="text-end">Coût Pièces + ST</th>
+                                <th class="text-end">Marge Nette</th>
+                                <th class="text-end">Taux</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="ro in repairOrderMargins" :key="ro.id">
+                                <td class="fw-bold">{{ ro.order_number }}</td>
+                                <td>
+                                    <div>{{ ro.customer_name }}</div>
+                                    <div class="text-muted" style="font-size: 0.72rem;">{{ ro.vehicle_label }}</div>
+                                </td>
+                                <td class="text-end">{{ fmt(ro.billed_revenue) }}</td>
+                                <td class="text-end text-danger">-{{ fmt(ro.parts_cost + ro.subcontract_cost) }}</td>
+                                <td class="text-end fw-bold" :class="ro.net_margin >= 0 ? 'text-success' : 'text-danger'">
+                                    {{ fmt(ro.net_margin) }}
+                                </td>
+                                <td class="text-end">
+                                    <span class="badge" :class="ro.margin_rate >= 30 ? 'bg-success' : (ro.margin_rate >= 15 ? 'bg-warning text-dark' : 'bg-danger')">
+                                        {{ ro.margin_rate }}%
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr v-if="!repairOrderMargins.length">
+                                <td colspan="6" class="text-center text-muted py-4">Aucun ordre de réparation facturé pour le moment.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <StaticModal id="modalOpenCash" title="Ouvrir la caisse journalière">
+            <form @submit.prevent="submitOpenCash">
+                <div class="mb-3">
+                    <label class="form-label small">Fond de caisse espèces à l'ouverture (FCFA)</label>
+                    <input v-model.number="openCashForm.opening_float" type="number" min="0" class="form-control" required />
+                </div>
+                <div class="mb-4">
+                    <label class="form-label small">Note d'ouverture (optionnel)</label>
+                    <input v-model="openCashForm.notes" type="text" class="form-control" placeholder="Ex: Billetage vérifié" />
+                </div>
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="submit" class="btn btn-primary px-4" :disabled="openCashForm.processing">Ouvrir la caisse</button>
+                </div>
+            </form>
+        </StaticModal>
+
+        <StaticModal id="modalCloseCashZ" title="Clôture de caisse journalière (Z)">
+            <form @submit.prevent="submitCloseCash">
+                <div v-if="selectedSession" class="alert alert-light border small mb-3">
+                    <div>Espèces attendues en tiroir : <strong>{{ fmt(selectedSession.expected_cash) }}</strong></div>
+                    <div class="mt-1">
+                        Écart calculé :
+                        <strong :class="liveDiscrepancy === 0 ? 'text-success' : 'text-danger'">
+                            {{ liveDiscrepancy > 0 ? '+' : '' }}{{ fmt(liveDiscrepancy) }}
+                        </strong>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small">Espèces réellement comptées dans le tiroir (FCFA)</label>
+                    <input v-model.number="closeCashForm.counted_cash" type="number" min="0" class="form-control" required />
+                </div>
+                <div class="mb-4">
+                    <label class="form-label small">Observation / Justification d'écart</label>
+                    <textarea v-model="closeCashForm.notes" rows="2" class="form-control" placeholder="Ex: RAS ou justification d'écart..."></textarea>
+                </div>
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="submit" class="btn btn-primary px-4" :disabled="closeCashForm.processing">Valider la clôture Z</button>
                 </div>
             </form>
         </StaticModal>

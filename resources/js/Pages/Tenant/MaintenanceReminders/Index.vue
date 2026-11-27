@@ -8,6 +8,7 @@ import { computed, nextTick, ref } from 'vue';
 
 const props = defineProps({
     vehicles: { type: Array, default: () => [] },
+    dueCount: { type: Number, default: 0 },
 });
 
 const { confirm } = useConfirm();
@@ -19,7 +20,13 @@ const form = useForm({
     next_service_mileage: '',
     technical_inspection_expires_at: '',
     insurance_expires_at: '',
+    next_belt_brake_date: '',
+    next_belt_brake_mileage: '',
 });
+
+function runAutoReminders() {
+    router.post('/rappels-entretien/lancer-auto', {}, { preserveScroll: true });
+}
 
 const filteredVehicles = computed(() => {
     const q = searchQuery.value.trim().toLowerCase();
@@ -47,6 +54,8 @@ async function openEditModal(v) {
     form.next_service_mileage = v.next_service_mileage ?? '';
     form.technical_inspection_expires_at = v.technical_inspection_expires_at ?? '';
     form.insurance_expires_at = v.insurance_expires_at ?? '';
+    form.next_belt_brake_date = v.next_belt_brake_date ?? '';
+    form.next_belt_brake_mileage = v.next_belt_brake_mileage ?? '';
     await nextTick();
     window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalEditMaintenanceDates'))?.show();
 }
@@ -81,9 +90,14 @@ async function sendWhatsapp(v) {
                 <h1 class="h4 fw-bold mb-0">Rappels Périodiques (Vidange, Visite Technique, Assurance)</h1>
                 <p class="text-muted small mb-0">Relances automatiques WhatsApp sous 15 jours avant échéance et relance manuelle en 1 clic</p>
             </div>
-            <div class="input-group input-group-sm" style="max-width: 280px;">
-                <span class="input-group-text"><i class="bi bi-search"></i></span>
-                <input v-model="searchQuery" type="text" class="form-control" placeholder="Plaque, client..." />
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <button type="button" class="btn btn-success btn-sm fw-semibold" @click="runAutoReminders">
+                    <i class="bi bi-whatsapp me-1"></i>Lancer rappels prédictifs 15j + RDV 1-clic ({{ dueCount }})
+                </button>
+                <div class="input-group input-group-sm" style="max-width: 240px;">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input v-model="searchQuery" type="text" class="form-control" placeholder="Plaque, client..." />
+                </div>
             </div>
         </div>
 

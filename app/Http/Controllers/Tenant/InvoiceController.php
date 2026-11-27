@@ -11,6 +11,7 @@ use App\Models\InvoiceItem;
 use App\Models\RepairOrder;
 use App\Services\AccountingService;
 use App\Services\NumberSequenceService;
+use App\Services\OverdueInvoiceReminderService;
 use App\Services\TenantContext;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
@@ -24,9 +25,13 @@ use Inertia\Response;
 
 class InvoiceController extends Controller
 {
-    public function index(): Response
+    public function index(TenantContext $tenantContext, OverdueInvoiceReminderService $overdueReminderService): Response
     {
         $this->authorize('viewAny', Invoice::class);
+
+        if ($tenant = $tenantContext->getTenant()) {
+            $overdueReminderService->dispatchDueForTenantThrottled($tenant);
+        }
 
         $invoices = Invoice::with([
             'customer',
@@ -37,8 +42,15 @@ class InvoiceController extends Controller
             ->latest('issued_at')
             ->paginate(20);
 
+        $overdueCount = Invoice::whereIn('status', [Invoice::STATUS_ISSUED, Invoice::STATUS_PARTIAL])
+            ->where('type', Invoice::TYPE_INVOICE)
+            ->whereNotNull('due_at')
+            ->where('due_at', '<', now()->startOfDay())
+            ->count();
+
         return Inertia::render('Tenant/Invoices/Index', [
             'invoices' => $invoices,
+            'overdueCount' => $overdueCount,
             'agencies' => Agency::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'repairOrders' => RepairOrder::with(['customer', 'vehicle'])->whereNotIn('status', [RepairOrder::STATUS_DELIVERED])->orderByDesc('id')->get(),
         ]);
@@ -200,5 +212,48 @@ class InvoiceController extends Controller
         AuditLog::record('invoice.reminded', subject: $invoice, actor: $request->user('web'), tenantId: $tenantContext->id(), request: $request);
 
         return back()->with('success', "Relance envoyée à {$customer->name} ({$customer->email}) pour la facture {$invoice->invoice_number}.");
+    }
+
+    public function runOverdueReminders(
+        Request $request,
+        TenantContext $tenantContext,
+        OverdueInvoiceReminderService $overdueReminderService
+    ): RedirectResponse {
+        $this->authorize('viewAny', Invoice::class);
+        $tenant = $tenantContext->getTenant();
+        $sent = $tenant ? $overdueReminderService->dispatchDueForTenant($tenant, 30) : 0;
+
+        return back()->with(
+            $sent > 0 ? 'success' : 'info',
+            $sent > 0
+                ? "{$sent} relance(s) automatique(s) d'impayés (J+3 / J+7 / J+15) envoyée(s) par WhatsApp/E-mail."
+                : 'Aucune nouvelle facture échue à relancer pour le moment (les paliers J+3, J+7 et J+15 sont à jour).'
+        );
+    }
+
+    public function saveInstallmentPlan(Request $request, Invoice $invoice, TenantContext $tenantContext): RedirectResponse
+    {
+        $this->authorize('view', $invoice);
+
+        $validated = $request->validate([
+            'installments' => ['required', 'array', 'min:1', 'max:12'],
+            'installments.*.label' => ['required', 'string', 'max:80'],
+            'installments.*.amount' => ['required', 'integer', 'min:100'],
+            'installments.*.due_date' => ['required', 'date'],
+            'installments.*.paid' => ['nullable', 'boolean'],
+        ]);
+
+        $plan = collect($validated['installments'])->map(fn (array $row) => [
+            'label' => $row['label'],
+            'amount' => (int) $row['amount'],
+            'due_date' => $row['due_date'],
+            'paid' => (bool) ($row['paid'] ?? false),
+        ])->values()->all();
+
+        $invoice->update(['installment_plan' => $plan]);
+
+        AuditLog::record('invoice.installment_plan_updated', subject: $invoice, actor: $request->user('web'), tenantId: $tenantContext->id(), request: $request);
+
+        return back()->with('success', "Échéancier enregistré pour la facture {$invoice->invoice_number}.");
     }
 }

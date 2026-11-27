@@ -66,6 +66,32 @@ function closeAttachMenu() {
     attachMenuOpen.value = false;
 }
 
+const ecuDiffForm = useForm({
+    ori_file: null,
+    mod_file: null,
+    ask_ai: true,
+    conversation_id: props.activeConversation?.id ?? null,
+    vehicle_id: props.prefillRepairOrder?.vehicle_id ?? props.activeConversation?.vehicle_id ?? '',
+});
+
+function openEcuDiffModal() {
+    closeAttachMenu();
+    ecuDiffForm.conversation_id = form.conversation_id;
+    ecuDiffForm.vehicle_id = form.vehicle_id;
+    window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalCompareEcu'))?.show();
+}
+
+function submitEcuDiff() {
+    if (!ecuDiffForm.ori_file || !ecuDiffForm.mod_file) return;
+    ecuDiffForm.post('/assistant-ia/comparer-ecu', {
+        forceFormData: true,
+        onSuccess: () => {
+            ecuDiffForm.reset('ori_file', 'mod_file');
+            window.bootstrap?.Modal.getInstance(document.getElementById('modalCompareEcu'))?.hide();
+        },
+    });
+}
+
 function triggerAttach(kind) {
     closeAttachMenu();
     if (kind === 'doc') docFileInputRef.value?.click();
@@ -984,6 +1010,13 @@ function formatDateTime(iso) {
                                                 <span class="ai-attach-sub">.csv, .log, .dbc, .asc, .trc, .blf, .mf4</span>
                                             </span>
                                         </button>
+                                        <button type="button" class="ai-attach-item" @click="openEcuDiffModal">
+                                            <span class="ai-attach-icon" style="color: #0ea5e9;"><i class="bi bi-file-diff-fill"></i></span>
+                                            <span class="d-flex flex-column text-start">
+                                                <span class="fw-medium">Comparer ECU (.ori vs .mod)</span>
+                                                <span class="ai-attach-sub">Diff local 0 token + risques IA</span>
+                                            </span>
+                                        </button>
                                         <div class="px-3 pt-1 pb-2 text-muted border-top mt-1" style="font-size: 0.68rem;">
                                             <i class="bi bi-shield-lock me-1"></i>Vidéos &amp; archives (.zip/.rar) bloquées
                                         </div>
@@ -1034,6 +1067,37 @@ function formatDateTime(iso) {
             </div>
         </div>
         </div>
+
+        <!-- Modale : Comparateur ECU .ori vs .mod (0 token en local + interprétation risques IA) -->
+        <StaticModal id="modalCompareEcu" title="Comparateur ECU .ori vs .mod (0 token)">
+            <form @submit.prevent="submitEcuDiff">
+                <p class="small text-muted mb-3">
+                    Déposez le fichier d'origine (<code>.ori/.bin</code>) et le fichier reprogrammé (<code>.mod/.bin</code>).
+                    Le calcul des offsets modifiés, du pourcentage de diff et des checksums CRC32/SHA-256 s'effectue localement sans consommer de tokens.
+                </p>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Fichier Origine (.ori / .bin)</label>
+                    <input type="file" accept=".ori,.bin,.ols,.hex,.s19,.srec" class="form-control" required @change="(e) => (ecuDiffForm.ori_file = e.target.files?.[0] || null)" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Fichier Modifié (.mod / .bin)</label>
+                    <input type="file" accept=".mod,.bin,.ols,.hex,.s19,.srec" class="form-control" required @change="(e) => (ecuDiffForm.mod_file = e.target.files?.[0] || null)" />
+                </div>
+                <div class="form-check mb-4">
+                    <input id="ecuAskAi" v-model="ecuDiffForm.ask_ai" type="checkbox" class="form-check-input" />
+                    <label class="form-check-label small" for="ecuAskAi">
+                        Demander aussi à MboaCar IA Auto d'interpréter les risques de flashage sur le résumé compact
+                    </label>
+                </div>
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="submit" class="btn btn-primary px-4" :disabled="ecuDiffForm.processing || !ecuDiffForm.ori_file || !ecuDiffForm.mod_file">
+                        <span v-if="ecuDiffForm.processing" class="spinner-border spinner-border-sm me-1"></span>
+                        Lancer la comparaison
+                    </button>
+                </div>
+            </form>
+        </StaticModal>
 
         <!-- Modale : Ajouter le diagnostic à un Ordre de Réparation -->
         <StaticModal id="modalApplyAiToRo" title="Ajouter le diagnostic à un Ordre de Réparation">

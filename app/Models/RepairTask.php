@@ -25,6 +25,8 @@ class RepairTask extends Model
         'priority',
         'estimated_minutes',
         'actual_minutes',
+        'timer_started_at',
+        'commission_amount',
         'scheduled_start_at',
         'scheduled_end_at',
         'status',
@@ -35,6 +37,8 @@ class RepairTask extends Model
         return [
             'estimated_minutes' => 'integer',
             'actual_minutes' => 'integer',
+            'timer_started_at' => 'datetime',
+            'commission_amount' => 'integer',
             'scheduled_start_at' => 'datetime',
             'scheduled_end_at' => 'datetime',
         ];

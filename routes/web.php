@@ -10,6 +10,7 @@ use App\Http\Controllers\DemoController;
 use App\Http\Controllers\MarketplaceController;
 use App\Http\Controllers\PublicAppointmentController;
 use App\Http\Controllers\PublicQuoteController;
+use App\Http\Controllers\PublicReviewController;
 use App\Http\Controllers\PublicTrackingController;
 use App\Http\Controllers\Tenant\AccountingController;
 use App\Http\Controllers\Tenant\AffiliationController;
@@ -139,6 +140,10 @@ Route::get('/rdv/{token}', [PublicAppointmentController::class, 'show'])->name('
 Route::post('/rdv/{token}', [PublicAppointmentController::class, 'submit'])
     ->middleware('throttle:10,1')
     ->name('public.appointment.submit');
+Route::get('/avis/{token}', [PublicReviewController::class, 'show'])->name('public.review.show');
+Route::post('/avis/{token}', [PublicReviewController::class, 'submit'])
+    ->middleware('throttle:15,1')
+    ->name('public.review.submit');
 
 // Portail Client Unique MboaCar (accès multi-garages par OTP WhatsApp)
 Route::get('/mon-espace-client', [CustomerPortalController::class, 'index'])->name('public.customer_portal');
@@ -241,6 +246,9 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
     Route::post('/assistant-ia/messages', [AiDiagnosticController::class, 'send'])
         ->middleware('throttle:30,1')
         ->name('tenant.ai_diagnostic.send');
+    Route::post('/assistant-ia/comparer-ecu', [AiDiagnosticController::class, 'compareEcu'])
+        ->middleware('throttle:15,1')
+        ->name('tenant.ai_diagnostic.compare_ecu');
     Route::post('/assistant-ia/messages/{messageId}/creer-devis', [AiDiagnosticController::class, 'createQuoteFromMessage'])
         ->name('tenant.ai_diagnostic.create_quote');
     Route::post('/assistant-ia/messages/{messageId}/appliquer-or', [AiDiagnosticController::class, 'applyToRepairOrder'])
@@ -281,6 +289,9 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
         ->middleware('throttle:search')
         ->name('tenant.vehicles.index');
     Route::post('/vehicules', [VehicleController::class, 'store'])->name('tenant.vehicles.store');
+    Route::post('/vehicules/ocr', [VehicleController::class, 'ocrScan'])
+        ->middleware('throttle:15,1')
+        ->name('tenant.vehicles.ocr');
     Route::put('/vehicules/{vehicle}', [VehicleController::class, 'update'])->name('tenant.vehicles.update');
     Route::get('/vehicules/{vehicle}', [VehicleController::class, 'show'])->name('tenant.vehicles.show');
 
@@ -300,6 +311,8 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
         Route::post('/receptions', [VehicleReceptionController::class, 'store'])->name('tenant.receptions.store');
         Route::put('/receptions/{reception}', [VehicleReceptionController::class, 'update'])->name('tenant.receptions.update');
         Route::post('/receptions/{reception}/retour-courtoisie', [VehicleReceptionController::class, 'returnCourtesy'])->name('tenant.receptions.return_courtesy');
+        Route::post('/receptions/vehicules-courtoisie', [VehicleReceptionController::class, 'storeCourtesyVehicle'])->name('tenant.receptions.courtesy.store');
+        Route::patch('/receptions/vehicules-courtoisie/{courtesyVehicle}/statut', [VehicleReceptionController::class, 'updateCourtesyStatus'])->name('tenant.receptions.courtesy.status');
 
         // Ordres de réparation, diagnostic & planification
         Route::get('/ordres-reparation', [RepairOrderController::class, 'index'])->name('tenant.repair_orders.index');
@@ -335,6 +348,8 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
         Route::get('/atelier/mes-or', [WorkshopController::class, 'myOrders'])->name('tenant.workshop.my_orders');
         Route::patch('/atelier/or/{repairOrder}/statut', [WorkshopController::class, 'updateStatus'])->name('tenant.workshop.status');
         Route::post('/atelier/taches/{task}/pointage', [WorkshopController::class, 'logTime'])->name('tenant.workshop.log_time');
+        Route::post('/atelier/taches/{task}/chrono/demarrer', [WorkshopController::class, 'startTimer'])->name('tenant.workshop.timer_start');
+        Route::post('/atelier/taches/{task}/chrono/pause', [WorkshopController::class, 'pauseTimer'])->name('tenant.workshop.timer_pause');
         Route::post('/atelier/or/{repairOrder}/controle-qualite', [WorkshopController::class, 'submitQualityCheck'])->name('tenant.workshop.quality_check');
 
         // Inspection Visuelle Numérique (DVI) & Photos WhatsApp
@@ -372,9 +387,10 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
         Route::patch('/planning-atelier/or/{repairOrder}', [WorkshopPlanningController::class, 'assignRepairOrder'])->name('tenant.planning.assign_ro');
     });
 
-    // Rappels Périodiques (Vidange, Visite Technique, Assurance — tous espaces)
+    // Rappels Périodiques (Vidange, Visite Technique, Assurance, Courroie/Plaquettes — tous espaces)
     Route::middleware('tenant.permission:clients.view|vehicles.view|receptions.manage')->group(function () {
         Route::get('/rappels-entretien', [MaintenanceReminderController::class, 'index'])->name('tenant.maintenance_reminders.index');
+        Route::post('/rappels-entretien/lancer-auto', [MaintenanceReminderController::class, 'runPredictiveReminders'])->name('tenant.maintenance_reminders.run_auto');
         Route::patch('/rappels-entretien/{vehicle}', [MaintenanceReminderController::class, 'updateDates'])->name('tenant.maintenance_reminders.update');
         Route::post('/rappels-entretien/{vehicle}/whatsapp', [MaintenanceReminderController::class, 'sendWhatsapp'])->name('tenant.maintenance_reminders.whatsapp');
     });
@@ -384,6 +400,7 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
         Route::get('/flottes', [FleetController::class, 'index'])->name('tenant.fleets.index');
         Route::post('/flottes/{customer}/parametres', [FleetController::class, 'updateSettings'])->name('tenant.fleets.settings');
         Route::post('/flottes/{customer}/facture-mensuelle', [FleetController::class, 'generateMonthlyInvoice'])->name('tenant.fleets.monthly_invoice');
+        Route::patch('/flottes/vehicules/{vehicle}/seuil-cout', [FleetController::class, 'updateVehicleThreshold'])->name('tenant.fleets.vehicle_threshold');
     });
 
     // 7. Centre de Contrôle Technique (PV Visite Technique & QR)
@@ -416,9 +433,11 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
 
     // Facturation, avoirs & PDF
     Route::get('/factures', [InvoiceController::class, 'index'])->name('tenant.invoices.index');
+    Route::post('/factures/relancer-echues', [InvoiceController::class, 'runOverdueReminders'])->name('tenant.invoices.run_overdue_reminders');
     Route::post('/ordres-reparation/{repairOrder}/facturer', [InvoiceController::class, 'storeFromRepairOrder'])->name('tenant.invoices.store_from_ro');
     Route::post('/factures/{invoice}/avoir', [InvoiceController::class, 'createCreditNote'])->name('tenant.invoices.credit_note');
     Route::post('/factures/{invoice}/relancer', [InvoiceController::class, 'remind'])->name('tenant.invoices.remind');
+    Route::post('/factures/{invoice}/echeancier', [InvoiceController::class, 'saveInstallmentPlan'])->name('tenant.invoices.installment_plan');
     Route::get('/factures/{invoice}/pdf', [InvoiceController::class, 'pdf'])
         ->middleware('throttle:pdf')
         ->name('tenant.invoices.pdf');
@@ -436,6 +455,7 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
     Route::get('/export-excel/{type}', [ExportController::class, 'excel'])
         ->middleware('tenant.permission:reports.view|invoices.view|clients.view')
         ->name('tenant.export.excel');
+    Route::post('/caisse/ouvrir', [PaymentController::class, 'openCashRegister'])->name('tenant.cash_register.open');
     Route::post('/caisse/cloture', [PaymentController::class, 'closeCashRegister'])->name('tenant.cash_register.close');
 
     // Comptabilité SYSCOHADA révisée
@@ -466,6 +486,7 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
     });
 
     Route::get('/apres-vente', [AfterSalesController::class, 'index'])->name('tenant.after_sales.index');
+    Route::post('/apres-vente/enquetes-j1', [AfterSalesController::class, 'dispatchReviews'])->name('tenant.after_sales.dispatch_reviews');
     Route::post('/apres-vente/dossiers', [AfterSalesController::class, 'storeCase'])->name('tenant.after_sales.cases.store');
     Route::post('/apres-vente/fidelite', [AfterSalesController::class, 'awardLoyaltyPoints'])->name('tenant.after_sales.loyalty');
 

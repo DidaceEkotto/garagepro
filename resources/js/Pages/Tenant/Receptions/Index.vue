@@ -1,4 +1,5 @@
 <script setup>
+import CarDamageDiagram from '@/Components/CarDamageDiagram.vue';
 import FileDropzone from '@/Components/FileDropzone.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import { useConfirm } from '@/composables/useConfirm';
@@ -16,6 +17,8 @@ const props = defineProps({
     vehicles: Array,
     appointments: Array,
     courtesyVehicles: Array,
+    allCourtesyVehicles: { type: Array, default: () => [] },
+    activeCourtesyLoans: { type: Array, default: () => [] },
 });
 
 const form = useForm({
@@ -25,13 +28,99 @@ const form = useForm({
     appointment_id: '',
     courtesy_vehicle_id: '',
     courtesy_deposit_amount: 0,
+    courtesy_departure_mileage: 0,
+    courtesy_departure_fuel: 100,
     visit_reason: 'entretien',
     mileage_in: 0,
     fuel_level: 50,
     belongings_left: '',
+    damage_markers: [],
+    client_signature_data: '',
     notes: '',
     photos: [],
 });
+
+const courtesyForm = useForm({
+    agency_id: props.agencies?.[0]?.id ?? '',
+    name: '',
+    license_plate: '',
+    current_mileage: 0,
+    deposit_amount: 50000,
+});
+
+const returningLoan = ref(null);
+const returnCourtesyForm = useForm({
+    courtesy_return_mileage: 0,
+    courtesy_return_fuel: 100,
+    courtesy_return_notes: '',
+});
+
+const sigCanvasRef = ref(null);
+let isDrawingSig = false;
+
+function startSig(e) {
+    const canvas = sigCanvasRef.value;
+    if (!canvas) return;
+    isDrawingSig = true;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    const pt = e.touches ? e.touches[0] : e;
+    ctx.beginPath();
+    ctx.moveTo(pt.clientX - rect.left, pt.clientY - rect.top);
+}
+
+function drawSig(e) {
+    if (!isDrawingSig || !sigCanvasRef.value) return;
+    const canvas = sigCanvasRef.value;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    const pt = e.touches ? e.touches[0] : e;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineTo(pt.clientX - rect.left, pt.clientY - rect.top);
+    ctx.stroke();
+    form.client_signature_data = canvas.toDataURL('image/png');
+}
+
+function stopSig() {
+    isDrawingSig = false;
+}
+
+function clearSig() {
+    const canvas = sigCanvasRef.value;
+    if (canvas) {
+        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    }
+    form.client_signature_data = '';
+}
+
+function submitCourtesyVehicle() {
+    courtesyForm.post('/receptions/vehicules-courtoisie', {
+        onSuccess: () => {
+            courtesyForm.reset('name', 'license_plate', 'current_mileage');
+            window.bootstrap?.Modal.getInstance(document.getElementById('modalAddCourtesyVehicle'))?.hide();
+        },
+    });
+}
+
+function openReturnCourtesyModal(loan) {
+    returningLoan.value = loan;
+    returnCourtesyForm.courtesy_return_mileage = loan.courtesy_departure_mileage || 0;
+    returnCourtesyForm.courtesy_return_fuel = loan.courtesy_departure_fuel ?? 100;
+    returnCourtesyForm.courtesy_return_notes = '';
+    window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalReturnCourtesy'))?.show();
+}
+
+function submitReturnCourtesy() {
+    if (!returningLoan.value) return;
+    returnCourtesyForm.post(`/receptions/${returningLoan.value.id}/retour-courtoisie`, {
+        onSuccess: () => {
+            returningLoan.value = null;
+            window.bootstrap?.Modal.getInstance(document.getElementById('modalReturnCourtesy'))?.hide();
+        },
+    });
+}
 
 const filteredVehicles = computed(() => {
     if (!form.customer_id) return props.vehicles ?? [];
@@ -277,9 +366,14 @@ function returnCourtesy(id) {
                 <h1 class="h4 fw-bold mb-0">Réception des véhicules</h1>
                 <p class="text-muted small mb-0">État des lieux d'entrée, photos sécurisées illimitées et véhicule de courtoisie</p>
             </div>
-            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAddReception">
-                <i class="bi bi-clipboard-plus me-1"></i>Nouvelle réception
-            </button>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAddCourtesyVehicle">
+                    <i class="bi bi-car-front-fill me-1"></i>Ajouter véhicule courtoisie
+                </button>
+                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAddReception">
+                    <i class="bi bi-clipboard-plus me-1"></i>Nouvelle réception
+                </button>
+            </div>
         </div>
 
         <div v-if="isOffline || offlineQueueCount > 0" class="alert border-0 shadow-sm d-flex justify-content-between align-items-center mb-3 py-2 small" :class="isOffline ? 'alert-warning' : 'alert-info'">
@@ -403,6 +497,11 @@ function returnCourtesy(id) {
                     <input v-model="form.belongings_left" type="text" class="form-control" placeholder="Cric, roue de secours, documents..." />
                 </div>
 
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Tour de caisse visuel (Rayures / Bosses)</label>
+                    <CarDamageDiagram v-model="form.damage_markers" />
+                </div>
+
                 <div class="row g-2 mb-3">
                     <div class="col-md-6">
                         <label class="form-label small">Véhicule de courtoisie</label>
@@ -416,6 +515,38 @@ function returnCourtesy(id) {
                         <label class="form-label small">Caution (FCFA)</label>
                         <input v-model.number="form.courtesy_deposit_amount" type="number" min="0" class="form-control" />
                     </div>
+                </div>
+
+                <div v-if="form.courtesy_vehicle_id" class="row g-2 mb-3 p-2 rounded bg-light border">
+                    <div class="col-md-6">
+                        <label class="form-label small">Km départ véhicule courtoisie</label>
+                        <input v-model.number="form.courtesy_departure_mileage" type="number" min="0" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Carburant départ ({{ form.courtesy_departure_fuel }}%)</label>
+                        <input v-model.number="form.courtesy_departure_fuel" type="range" min="0" max="100" class="form-range mt-1" />
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="form-label small fw-semibold mb-0">Signature client (facultative)</label>
+                        <button type="button" class="btn btn-link btn-sm p-0 text-muted" @click="clearSig">Effacer</button>
+                    </div>
+                    <canvas
+                        ref="sigCanvasRef"
+                        width="440"
+                        height="90"
+                        class="w-100 border rounded bg-white"
+                        style="touch-action: none; cursor: crosshair;"
+                        @mousedown="startSig"
+                        @mousemove="drawSig"
+                        @mouseup="stopSig"
+                        @mouseleave="stopSig"
+                        @touchstart.prevent="startSig"
+                        @touchmove.prevent="drawSig"
+                        @touchend="stopSig"
+                    ></canvas>
                 </div>
 
                 <div class="mb-4">
@@ -460,6 +591,11 @@ function returnCourtesy(id) {
                 <div v-if="viewingReception.notes" class="mb-3">
                     <strong>Notes &amp; Observations :</strong>
                     <div class="text-muted mt-1">{{ viewingReception.notes }}</div>
+                </div>
+
+                <div v-if="viewingReception.damage_markers?.length" class="mb-3">
+                    <strong class="d-block mb-2">Tour de caisse enregistré ({{ viewingReception.damage_markers.length }} point(s)) :</strong>
+                    <CarDamageDiagram :model-value="viewingReception.damage_markers" :readonly="true" />
                 </div>
 
                 <div v-if="viewingReception.photo_urls?.length" class="mb-3">
@@ -549,6 +685,123 @@ function returnCourtesy(id) {
                 <div class="d-flex justify-content-end gap-2">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
                     <button type="submit" class="btn btn-primary px-4" :disabled="editForm.processing">Enregistrer les modifications</button>
+                </div>
+            </form>
+        </StaticModal>
+
+        <!-- Flotte Véhicules de Courtoisie & Prêts en cours -->
+        <div class="card border-0 shadow-sm mt-4">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <h2 class="h6 fw-bold mb-0"><i class="bi bi-car-front-fill text-primary me-2"></i>Véhicules de Courtoisie &amp; Prêts en cours</h2>
+                    <p class="text-muted small mb-0">Gestion de la flotte de prêt, calendrier des sorties et état des lieux départ/retour</p>
+                </div>
+                <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAddCourtesyVehicle">
+                    <i class="bi bi-plus-circle me-1"></i>Nouveau véhicule de prêt
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 mb-3">
+                    <div v-for="cv in allCourtesyVehicles" :key="cv.id" class="col-md-4">
+                        <div class="border rounded-3 p-3 h-100 d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-bold">{{ cv.name }}</div>
+                                <div class="small text-muted">{{ cv.license_plate }} • {{ (cv.current_mileage || 0).toLocaleString('fr-FR') }} km</div>
+                                <div class="small text-muted">Caution : {{ (cv.deposit_amount || 0).toLocaleString('fr-FR') }} FCFA</div>
+                            </div>
+                            <span class="badge" :class="cv.status === 'disponible' ? 'bg-success' : (cv.status === 'prete' ? 'bg-warning text-dark' : 'bg-secondary')">
+                                {{ cv.status }}
+                            </span>
+                        </div>
+                    </div>
+                    <div v-if="!allCourtesyVehicles.length" class="col-12 text-muted small">
+                        Aucun véhicule de courtoisie enregistré dans votre flotte.
+                    </div>
+                </div>
+
+                <div v-if="activeCourtesyLoans.length" class="table-responsive">
+                    <table class="table table-sm table-hover align-middle mb-0 small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Véhicule prêté</th>
+                                <th>Client</th>
+                                <th>Départ (Km / Carb.)</th>
+                                <th>Retour prévu</th>
+                                <th class="text-end">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="loan in activeCourtesyLoans" :key="loan.id">
+                                <td class="fw-semibold">{{ loan.courtesy_vehicle?.name }} ({{ loan.courtesy_vehicle?.license_plate }})</td>
+                                <td>{{ loan.customer?.name }}</td>
+                                <td>{{ loan.courtesy_departure_mileage ?? '-' }} km / {{ loan.courtesy_departure_fuel ?? '-' }}%</td>
+                                <td>{{ loan.estimated_exit_at ? String(loan.estimated_exit_at).slice(0, 10) : '-' }}</td>
+                                <td class="text-end">
+                                    <button type="button" class="btn btn-success btn-sm" @click="openReturnCourtesyModal(loan)">
+                                        <i class="bi bi-box-arrow-in-left me-1"></i>État des lieux retour
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <StaticModal id="modalAddCourtesyVehicle" title="Ajouter un véhicule de courtoisie">
+            <form @submit.prevent="submitCourtesyVehicle">
+                <div class="mb-3">
+                    <label class="form-label small">Agence</label>
+                    <select v-model="courtesyForm.agency_id" class="form-select" required>
+                        <option v-for="ag in agencies" :key="ag.id" :value="ag.id">{{ ag.name }}</option>
+                    </select>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small">Modèle / Libellé</label>
+                        <input v-model="courtesyForm.name" type="text" class="form-control" placeholder="Ex: Toyota Yaris Prêt #1" required />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Immatriculation</label>
+                        <input v-model="courtesyForm.license_plate" type="text" class="form-control" placeholder="LT-458-AB" required />
+                    </div>
+                </div>
+                <div class="row g-2 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label small">Kilométrage actuel</label>
+                        <input v-model.number="courtesyForm.current_mileage" type="number" min="0" class="form-control" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Caution recommandée (FCFA)</label>
+                        <input v-model.number="courtesyForm.deposit_amount" type="number" min="0" class="form-control" />
+                    </div>
+                </div>
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="submit" class="btn btn-primary px-4" :disabled="courtesyForm.processing">Ajouter</button>
+                </div>
+            </form>
+        </StaticModal>
+
+        <StaticModal id="modalReturnCourtesy" title="État des lieux retour — Véhicule de courtoisie">
+            <form @submit.prevent="submitReturnCourtesy">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small">Kilométrage au retour</label>
+                        <input v-model.number="returnCourtesyForm.courtesy_return_mileage" type="number" min="0" class="form-control" required />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Carburant au retour ({{ returnCourtesyForm.courtesy_return_fuel }}%)</label>
+                        <input v-model.number="returnCourtesyForm.courtesy_return_fuel" type="range" min="0" max="100" class="form-range mt-2" />
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label small">Observations retour (rayures, propreté, caution rendue)</label>
+                    <textarea v-model="returnCourtesyForm.courtesy_return_notes" rows="2" class="form-control" placeholder="RAS, véhicule rendu propre..."></textarea>
+                </div>
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="submit" class="btn btn-success px-4" :disabled="returnCourtesyForm.processing">Valider le retour</button>
                 </div>
             </form>
         </StaticModal>

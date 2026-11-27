@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Tenant;
 use App\Http\Controllers\Controller;
 use App\Models\AfterSalesCase;
 use App\Models\Agency;
+use App\Models\ClientReview;
 use App\Models\Customer;
 use App\Models\LoyaltyCard;
 use App\Models\Vehicle;
+use App\Services\PostServiceReviewService;
 use App\Services\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,19 +20,49 @@ use Inertia\Response;
 
 class AfterSalesController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, TenantContext $tenantContext, PostServiceReviewService $reviewService): Response
     {
         if (! $request->user('web')->can('after_sales.manage')) {
             abort(403);
         }
 
+        if ($tenant = $tenantContext->getTenant()) {
+            $reviewService->dispatchDueForTenantThrottled($tenant);
+        }
+
+        $reviews = ClientReview::with(['customer:id,name,phone', 'repairOrder:id,order_number'])
+            ->latest('id')
+            ->take(25)
+            ->get();
+
+        $avgRating = round((float) (ClientReview::whereNotNull('rating')->avg('rating') ?? 0), 1);
+
         return Inertia::render('Tenant/AfterSales/Index', [
             'cases' => AfterSalesCase::with('customer')->latest()->paginate(20),
             'loyaltyCards' => LoyaltyCard::with('customer')->latest()->take(20)->get(),
+            'clientReviews' => $reviews,
+            'averageRating' => $avgRating,
             'agencies' => Agency::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'customers' => Customer::orderBy('name')->get(['id', 'name']),
             'vehicles' => Vehicle::orderBy('license_plate')->get(['id', 'customer_id', 'license_plate', 'brand', 'model']),
         ]);
+    }
+
+    public function dispatchReviews(Request $request, TenantContext $tenantContext, PostServiceReviewService $reviewService): RedirectResponse
+    {
+        if (! $request->user('web')->can('after_sales.manage')) {
+            abort(403);
+        }
+
+        $tenant = $tenantContext->getTenant();
+        $sent = $tenant ? $reviewService->dispatchDueForTenant($tenant, 30) : 0;
+
+        return back()->with(
+            $sent > 0 ? 'success' : 'info',
+            $sent > 0
+                ? "{$sent} lien(s) d'avis client (1 à 5 étoiles) envoyé(s) sur WhatsApp/E-mail."
+                : 'Aucun ordre de réparation clôturé depuis plus de 24h en attente d\'enquête satisfaction.'
+        );
     }
 
     public function storeCase(Request $request, TenantContext $tenantContext): RedirectResponse

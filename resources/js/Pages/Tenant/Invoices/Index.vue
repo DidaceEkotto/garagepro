@@ -7,11 +7,61 @@ import { ref } from 'vue';
 
 const props = defineProps({
     invoices: Object,
+    overdueCount: { type: Number, default: 0 },
     agencies: Array,
     repairOrders: Array,
 });
 
 const payingInvoice = ref(null);
+const planInvoice = ref(null);
+const installmentForm = useForm({
+    installments: [],
+});
+
+function openInstallmentPlan(inv) {
+    planInvoice.value = inv;
+    const remaining = Math.max(0, (inv.total_ttc || 0) - (inv.deposit_deducted || 0) - (inv.paid_amount || 0));
+    if (Array.isArray(inv.installment_plan) && inv.installment_plan.length) {
+        installmentForm.installments = inv.installment_plan.map((r) => ({ ...r }));
+    } else {
+        const half = Math.max(100, Math.round(remaining / 2));
+        const d1 = new Date();
+        d1.setDate(d1.getDate() + 7);
+        const d2 = new Date();
+        d2.setDate(d2.getDate() + 30);
+        installmentForm.installments = [
+            { label: 'Acompte 1', amount: half, due_date: d1.toISOString().slice(0, 10), paid: false },
+            { label: 'Solde final', amount: Math.max(100, remaining - half), due_date: d2.toISOString().slice(0, 10), paid: false },
+        ];
+    }
+    window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalInstallmentPlan'))?.show();
+}
+
+function addInstallmentRow() {
+    installmentForm.installments.push({
+        label: `Échéance ${installmentForm.installments.length + 1}`,
+        amount: 10000,
+        due_date: new Date().toISOString().slice(0, 10),
+        paid: false,
+    });
+}
+
+function submitInstallmentPlan() {
+    if (!planInvoice.value) return;
+    installmentForm.post(`/factures/${planInvoice.value.id}/echeancier`, {
+        onSuccess: () => window.bootstrap?.Modal.getInstance(document.getElementById('modalInstallmentPlan'))?.hide(),
+    });
+}
+
+function runOverdueReminders() {
+    router.post('/factures/relancer-echues');
+}
+
+function overdueDays(inv) {
+    if (!inv?.due_at || inv.status === 'payee' || inv.type !== 'facture') return 0;
+    const diff = Math.floor((Date.now() - new Date(inv.due_at).getTime()) / 86400000);
+    return diff > 0 ? diff : 0;
+}
 
 const invoiceForm = useForm({
     repair_order_id: props.repairOrders?.[0]?.id ?? '',
@@ -92,7 +142,15 @@ function submitClosure() {
                 <h1 class="h4 fw-bold mb-0">Facturation, Encaissements &amp; Caisse</h1>
                 <p class="text-muted small mb-0">Factures séquentielles, paiements Mobile Money/Espèces/SaSPay, avoirs et clôture</p>
             </div>
-            <div class="d-flex gap-2">
+            <div class="d-flex flex-wrap gap-2">
+                <button
+                    v-if="overdueCount > 0"
+                    type="button"
+                    class="btn btn-warning btn-sm fw-semibold"
+                    @click="runOverdueReminders"
+                >
+                    <i class="bi bi-bell-fill me-1"></i>Relancer échues J+3/J+7/J+15 ({{ overdueCount }})
+                </button>
                 <a href="/export-excel/factures" class="btn btn-outline-success btn-sm">
                     <i class="bi bi-file-earmark-excel me-1"></i>Exporter Excel
                 </a>
@@ -125,13 +183,27 @@ function submitClosure() {
                                     <div class="small text-muted">{{ inv.type }}</div>
                                 </td>
                                 <td>{{ inv.customer?.name }}</td>
-                                <td><span class="badge bg-info text-dark">{{ inv.status }}</span></td>
+                                <td>
+                                    <span class="badge bg-info text-dark">{{ inv.status }}</span>
+                                    <div v-if="overdueDays(inv) > 0" class="mt-1">
+                                        <span class="badge bg-danger">Échue J+{{ overdueDays(inv) }}</span>
+                                    </div>
+                                    <div v-if="inv.overdue_reminder_stage > 0" class="mt-1">
+                                        <span class="badge bg-warning text-dark">
+                                            Relance {{ inv.overdue_reminder_stage === 1 ? 'J+3' : (inv.overdue_reminder_stage === 2 ? 'J+7' : 'J+15') }}
+                                        </span>
+                                    </div>
+                                    <div v-if="inv.installment_plan?.length" class="mt-1">
+                                        <span class="badge bg-secondary">{{ inv.installment_plan.length }} échéances</span>
+                                    </div>
+                                </td>
                                 <td class="text-end small">
                                     <div class="fw-bold">{{ new Intl.NumberFormat('fr-FR').format(inv.total_ttc) }} FCFA</div>
                                     <div class="text-success">Payé : {{ new Intl.NumberFormat('fr-FR').format(inv.paid_amount) }} FCFA</div>
                                 </td>
                                 <td class="text-end text-nowrap">
                                     <button v-if="inv.type === 'facture' && inv.status !== 'payee'" type="button" class="btn btn-outline-success btn-sm me-1" @click="openPay(inv)">Encaisser</button>
+                                    <button v-if="inv.type === 'facture' && inv.status !== 'payee'" type="button" class="btn btn-outline-secondary btn-sm me-1" @click="openInstallmentPlan(inv)">Échéancier</button>
                                     <button v-if="inv.type === 'facture' && inv.status !== 'payee' && inv.customer?.email" type="button" class="btn btn-outline-info btn-sm me-1" @click="remindInvoice(inv.id)">
                                         <i class="bi bi-envelope-paper me-1"></i>Relancer
                                     </button>
@@ -201,6 +273,35 @@ function submitClosure() {
                 <div class="d-flex justify-content-end gap-2">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
                     <button type="submit" class="btn btn-primary px-4" :disabled="invoiceForm.processing">Générer la facture</button>
+                </div>
+            </form>
+        </StaticModal>
+
+        <StaticModal id="modalInstallmentPlan" title="Échéancier de paiements partiels / Acomptes">
+            <form @submit.prevent="submitInstallmentPlan">
+                <div v-for="(row, idx) in installmentForm.installments" :key="idx" class="row g-2 align-items-end mb-2">
+                    <div class="col-4">
+                        <label class="form-label small mb-1">Libellé</label>
+                        <input v-model="row.label" type="text" class="form-control form-control-sm" required />
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label small mb-1">Montant</label>
+                        <input v-model.number="row.amount" type="number" min="100" class="form-control form-control-sm" required />
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label small mb-1">Échéance</label>
+                        <input v-model="row.due_date" type="date" class="form-control form-control-sm" required />
+                    </div>
+                    <div class="col-1">
+                        <button type="button" class="btn btn-outline-danger btn-sm" @click="installmentForm.installments.splice(idx, 1)">×</button>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-outline-primary btn-sm mb-3" @click="addInstallmentRow">
+                    <i class="bi bi-plus me-1"></i>Ajouter une échéance
+                </button>
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="submit" class="btn btn-primary px-4" :disabled="installmentForm.processing">Enregistrer</button>
                 </div>
             </form>
         </StaticModal>

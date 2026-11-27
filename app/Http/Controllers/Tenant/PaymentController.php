@@ -272,6 +272,52 @@ class PaymentController extends Controller
         ]);
     }
 
+    public function openCashRegister(Request $request, TenantContext $tenantContext): RedirectResponse
+    {
+        if (! $request->user('web')->can('cash_register.manage')) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'agency_id' => ['required', 'integer', Rule::exists('agencies', 'id')->where('tenant_id', $tenantContext->id())],
+            'closure_date' => ['nullable', 'date'],
+            'opening_float' => ['required', 'integer', 'min:0'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $date = $validated['closure_date'] ?? now()->toDateString();
+
+        $existing = CashRegisterClosure::where('agency_id', $validated['agency_id'])
+            ->whereDate('closure_date', $date)
+            ->first();
+
+        if ($existing && $existing->status === CashRegisterClosure::STATUS_CLOSED) {
+            return back()->with('error', 'La caisse de cette agence est déjà clôturée (Z) pour cette date.');
+        }
+
+        $payload = [
+            'status' => CashRegisterClosure::STATUS_OPEN,
+            'opened_by' => $request->user('web')->id,
+            'closed_by' => $request->user('web')->id,
+            'opened_at' => now(),
+            'opening_float' => (int) $validated['opening_float'],
+            'notes' => $validated['notes'] ?? $existing?->notes,
+        ];
+
+        if ($existing) {
+            $existing->update($payload);
+        } else {
+            CashRegisterClosure::create([
+                'tenant_id' => $tenantContext->id(),
+                'agency_id' => $validated['agency_id'],
+                'closure_date' => $date,
+                ...$payload,
+            ]);
+        }
+
+        return back()->with('success', 'Caisse journalière ouverte avec fond de caisse de '.number_format((int) $validated['opening_float'], 0, ',', ' ').' FCFA.');
+    }
+
     public function closeCashRegister(Request $request, TenantContext $tenantContext): RedirectResponse
     {
         if (! $request->user('web')->can('cash_register.manage')) {
@@ -281,30 +327,89 @@ class PaymentController extends Controller
         $validated = $request->validate([
             'agency_id' => ['required', 'integer', Rule::exists('agencies', 'id')->where('tenant_id', $tenantContext->id())],
             'closure_date' => ['required', 'date'],
-            'cash_total' => ['required', 'integer', 'min:0'],
-            'mobile_money_total' => ['required', 'integer', 'min:0'],
-            'card_bank_total' => ['required', 'integer', 'min:0'],
+            'opening_float' => ['nullable', 'integer', 'min:0'],
+            'cash_total' => ['nullable', 'integer', 'min:0'],
+            'mobile_money_total' => ['nullable', 'integer', 'min:0'],
+            'card_bank_total' => ['nullable', 'integer', 'min:0'],
+            'virement_total' => ['nullable', 'integer', 'min:0'],
+            'counted_cash' => ['nullable', 'integer', 'min:0'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $total = (int) $validated['cash_total'] + (int) $validated['mobile_money_total'] + (int) $validated['card_bank_total'];
+        $date = $validated['closure_date'];
+        $agencyId = (int) $validated['agency_id'];
 
-        CashRegisterClosure::updateOrCreate(
-            [
+        $existing = CashRegisterClosure::where('agency_id', $agencyId)
+            ->whereDate('closure_date', $date)
+            ->first();
+
+        // Calcul automatique des encaissements du jour par moyen de paiement pour cette agence
+        $dayPayments = Payment::where('status', Payment::STATUS_SUCCESS)
+            ->where('agency_id', $agencyId)
+            ->whereDate('paid_at', $date)
+            ->get(['payment_method', 'amount']);
+
+        $autoCash = (int) $dayPayments->where('payment_method', 'especes')->sum('amount');
+        $autoMomo = (int) $dayPayments->whereIn('payment_method', ['mtn_momo', 'orange_money', 'saspay_softpay', 'saspay_checkout'])->sum('amount');
+        $autoCard = (int) $dayPayments->whereIn('payment_method', ['carte', 'cheque'])->sum('amount');
+        $autoVirement = (int) $dayPayments->where('payment_method', 'virement')->sum('amount');
+
+        $cashTotal = array_key_exists('cash_total', $validated) && $validated['cash_total'] !== null ? (int) $validated['cash_total'] : $autoCash;
+        $momoTotal = array_key_exists('mobile_money_total', $validated) && $validated['mobile_money_total'] !== null ? (int) $validated['mobile_money_total'] : $autoMomo;
+        $cardTotal = array_key_exists('card_bank_total', $validated) && $validated['card_bank_total'] !== null ? (int) $validated['card_bank_total'] : $autoCard;
+        $virementTotal = array_key_exists('virement_total', $validated) && $validated['virement_total'] !== null ? (int) $validated['virement_total'] : $autoVirement;
+
+        $expensesCash = (int) \App\Models\Expense::where('agency_id', $agencyId)
+            ->whereDate('expense_date', $date)
+            ->sum('amount');
+
+        $openingFloat = array_key_exists('opening_float', $validated) && $validated['opening_float'] !== null
+            ? (int) $validated['opening_float']
+            : (int) ($existing?->opening_float ?? 0);
+
+        $expectedCash = max(0, $openingFloat + $cashTotal - $expensesCash);
+        $countedCash = array_key_exists('counted_cash', $validated) && $validated['counted_cash'] !== null
+            ? (int) $validated['counted_cash']
+            : $expectedCash;
+        $discrepancy = $countedCash - $expectedCash;
+        $total = $cashTotal + $momoTotal + $cardTotal + $virementTotal;
+
+        $closePayload = [
+            'status' => CashRegisterClosure::STATUS_CLOSED,
+            'opened_by' => $existing?->opened_by ?? $request->user('web')->id,
+            'opened_at' => $existing?->opened_at ?? now(),
+            'closed_by' => $request->user('web')->id,
+            'closed_at' => now(),
+            'opening_float' => $openingFloat,
+            'cash_total' => $cashTotal,
+            'mobile_money_total' => $momoTotal,
+            'card_bank_total' => $cardTotal,
+            'virement_total' => $virementTotal,
+            'expenses_cash_total' => $expensesCash,
+            'expected_cash' => $expectedCash,
+            'counted_cash' => $countedCash,
+            'cash_discrepancy' => $discrepancy,
+            'total_amount' => $total,
+            'notes' => $validated['notes'] ?? null,
+        ];
+
+        if ($existing) {
+            $existing->update($closePayload);
+        } else {
+            CashRegisterClosure::create([
                 'tenant_id' => $tenantContext->id(),
-                'agency_id' => $validated['agency_id'],
-                'closure_date' => $validated['closure_date'],
-            ],
-            [
-                'closed_by' => $request->user('web')->id,
-                'cash_total' => $validated['cash_total'],
-                'mobile_money_total' => $validated['mobile_money_total'],
-                'card_bank_total' => $validated['card_bank_total'],
-                'total_amount' => $total,
-                'notes' => $validated['notes'] ?? null,
-            ]
-        );
+                'agency_id' => $agencyId,
+                'closure_date' => $date,
+                ...$closePayload,
+            ]);
+        }
 
-        return back()->with('success', 'Clôture de caisse journalière enregistrée.');
+        $msg = 'Clôture de caisse Z enregistrée.';
+        if ($discrepancy !== 0) {
+            $sign = $discrepancy > 0 ? '+' : '';
+            $msg .= ' Écart détecté : '.$sign.number_format($discrepancy, 0, ',', ' ').' FCFA.';
+        }
+
+        return back()->with($discrepancy === 0 ? 'success' : 'warning', $msg);
     }
 }

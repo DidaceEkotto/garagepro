@@ -2,18 +2,23 @@
 import PhoneInput from '@/Components/PhoneInput.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
 const props = defineProps({
     parts: Object,
     lowStockCount: Number,
+    lowStockRestockSuggestions: { type: Array, default: () => [] },
     agencies: Array,
     suppliers: Array,
     repairOrders: Array,
     mechanics: { type: Array, default: () => [] },
     recentMovements: { type: Array, default: () => [] },
 });
+
+function orderFromMarketplace(productId) {
+    router.post(`/panier/ajouter/${productId}`, { quantity: 1 });
+}
 
 const selectedPart = ref(null);
 const b2bResults = ref([]);
@@ -120,6 +125,43 @@ function submitMovement() {
                 <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAddPart">
                     <i class="bi bi-plus-circle me-1"></i>Nouvelle pièce
                 </button>
+            </div>
+        </div>
+
+        <!-- Alertes stock bas + réapprovisionnement 1-clic sur la Marketplace -->
+        <div v-if="lowStockRestockSuggestions.length" class="card border-0 shadow-sm border-start border-4 border-danger mb-4">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <h2 class="h6 fw-bold text-danger mb-0">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>Alertes Stock Bas &amp; Réapprovisionnement 1-clic Marketplace
+                    </h2>
+                    <p class="text-muted small mb-0">Pièces sous seuil critique avec offres partenaires disponibles à commander immédiatement</p>
+                </div>
+                <a href="/marketplace" class="btn btn-outline-primary btn-sm">Voir la Marketplace</a>
+            </div>
+            <div class="card-body py-2">
+                <div v-for="item in lowStockRestockSuggestions" :key="item.part_id" class="d-flex flex-wrap justify-content-between align-items-center gap-2 py-2 border-bottom">
+                    <div class="small">
+                        <strong>{{ item.name }}</strong> <span class="text-muted">({{ item.sku }})</span>
+                        <span class="badge bg-danger ms-2">Stock : {{ item.quantity_on_hand }} / Seuil : {{ item.min_threshold }}</span>
+                    </div>
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <template v-if="item.offers?.length">
+                            <button
+                                v-for="offer in item.offers.slice(0, 2)"
+                                :key="offer.product_id"
+                                type="button"
+                                class="btn btn-success btn-sm"
+                                @click="orderFromMarketplace(offer.product_id)"
+                            >
+                                <i class="bi bi-cart-plus me-1"></i>{{ offer.seller_name }} — {{ new Intl.NumberFormat('fr-FR').format(offer.price) }} FCFA
+                            </button>
+                        </template>
+                        <a v-else :href="`/marketplace?q=${encodeURIComponent(item.name)}`" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-search me-1"></i>Chercher sur Marketplace
+                        </a>
+                    </div>
+                </div>
             </div>
         </div>
 
