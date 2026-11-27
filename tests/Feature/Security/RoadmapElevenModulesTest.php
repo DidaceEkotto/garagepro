@@ -169,6 +169,9 @@ class RoadmapElevenModulesTest extends TestCase
             ->assertRedirect();
 
         $this->assertCount(2, $invoice->fresh()->installment_plan);
+
+        // Vérifie que la page /rapports (Caisse Z + Marge nette OR) charge sans erreur
+        $this->actingAs($user)->get('/rapports')->assertOk();
     }
 
     public function test_lot2_mechanic_timer_damage_diagram_optional_signature_and_courtesy_return(): void
