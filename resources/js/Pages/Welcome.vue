@@ -131,34 +131,37 @@ onUnmounted(() => {
     <header class="position-relative text-white overflow-hidden">
         <!-- Navbar superposée (transparente en haut, sombre au scroll) -->
         <nav
-            class="navbar navbar-expand-lg navbar-dark fixed-top navbar-overlay-transition"
+            class="navbar navbar-expand-xl navbar-dark fixed-top navbar-overlay-transition"
             :style="isScrolled
                 ? 'background: rgba(15, 23, 42, 0.94); backdrop-filter: blur(12px); box-shadow: 0 8px 24px rgba(15,23,42,0.25);'
                 : 'background: linear-gradient(180deg, rgba(15, 23, 42, 0.72) 0%, rgba(15, 23, 42, 0) 100%);'"
         >
             <div class="container py-2">
-                <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="/">
+                <a class="navbar-brand fw-bold d-flex align-items-center gap-2 flex-shrink-0" href="/">
                     <img
                         :src="siteLogoUrl"
                         :alt="appName"
                         class="bg-white rounded-3 px-2 py-1 shadow-sm"
-                        style="height: 40px; width: auto; object-fit: contain;"
+                        style="height: 38px; width: auto; object-fit: contain;"
                     />
                 </a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
                     <span class="navbar-toggler-icon"></span>
                 </button>
                 <div id="mainNav" class="collapse navbar-collapse mobile-nav-collapse">
-                    <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-lg-4 gap-lg-2">
-                        <li class="nav-item"><a class="nav-link text-white" href="#fonctionnalites" @click.prevent="scrollToSection('fonctionnalites')">{{ t('nav.features') }}</a></li>
+                    <ul class="navbar-nav me-auto mb-2 mb-xl-0 ms-xl-3 gap-xl-1 align-items-xl-center">
                         <li class="nav-item">
-                            <a class="nav-link text-info fw-semibold" href="#ia-auto" @click.prevent="scrollToSection('ia-auto')">
-                                <i class="bi bi-stars me-1"></i>IA Auto
+                            <a class="nav-link text-white text-nowrap px-2 small fw-medium" href="#fonctionnalites" @click.prevent="scrollToSection('fonctionnalites')">{{ t('nav.features') }}</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-info fw-semibold text-nowrap px-2 small d-inline-flex align-items-center gap-1" href="#ia-auto" @click.prevent="scrollToSection('ia-auto')">
+                                <i class="bi bi-stars"></i>
+                                <span>IA Auto</span>
                             </a>
                         </li>
                         <li class="nav-item">
                             <a
-                                class="nav-link fw-semibold d-inline-flex align-items-center gap-1"
+                                class="nav-link fw-semibold text-nowrap px-2 small d-inline-flex align-items-center gap-1"
                                 href="#mode-hors-ligne"
                                 style="color: #6ee7b7;"
                                 @click.prevent="scrollToSection('mode-hors-ligne')"
@@ -167,36 +170,43 @@ onUnmounted(() => {
                                 <span>Hors Ligne</span>
                             </a>
                         </li>
-                        <li class="nav-item"><a class="nav-link text-white" href="#tarifs" @click.prevent="scrollToSection('tarifs')">{{ t('nav.pricing') }}</a></li>
                         <li class="nav-item">
-                            <Link class="nav-link text-warning fw-semibold" href="/marketplace">
-                                <i class="bi bi-shop me-1"></i>Marketplace
+                            <a class="nav-link text-white text-nowrap px-2 small fw-medium" href="#tarifs" @click.prevent="scrollToSection('tarifs')">{{ t('nav.pricing') }}</a>
+                        </li>
+                        <li class="nav-item">
+                            <Link class="nav-link text-warning fw-semibold text-nowrap px-2 small d-inline-flex align-items-center gap-1" href="/marketplace">
+                                <i class="bi bi-shop"></i>
+                                <span>Marketplace</span>
                             </Link>
                         </li>
                     </ul>
-                    <div class="d-flex flex-wrap align-items-center gap-2">
+                    <div class="d-flex flex-wrap flex-xl-nowrap align-items-center gap-2 flex-shrink-0">
                         <LanguageSwitcher variant="light" />
                         <template v-if="isAuthenticatedPro">
                             <a
                                 :href="dashboardUrl"
-                                class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold shadow-sm d-inline-flex align-items-center gap-2"
+                                class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold shadow-sm d-inline-flex align-items-center gap-2 text-nowrap"
                             >
                                 <i class="bi bi-speedometer2"></i>
                                 <span>Dashboard</span>
-                                <span v-if="authTenantName" class="badge bg-white text-primary rounded-pill d-none d-xl-inline" style="font-size: 0.7rem;">
+                                <span
+                                    v-if="authTenantName"
+                                    class="badge bg-white text-primary rounded-pill d-none d-xxl-inline text-truncate"
+                                    style="font-size: 0.7rem; max-width: 130px;"
+                                >
                                     {{ authTenantName }}
                                 </span>
                             </a>
                         </template>
                         <template v-else-if="isDemoSession">
-                            <a href="/demo/quitter?to=login" class="btn btn-outline-light btn-sm rounded-pill px-3">{{ t('nav.login') }}</a>
-                            <a href="/demo/quitter?to=register" class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold shadow-sm">
+                            <a href="/demo/quitter?to=login" class="btn btn-outline-light btn-sm rounded-pill px-3 text-nowrap">{{ t('nav.login') }}</a>
+                            <a href="/demo/quitter?to=register" class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold shadow-sm text-nowrap">
                                 {{ t('nav.register') }}
                             </a>
                         </template>
                         <template v-else>
-                            <Link href="/connexion" class="btn btn-outline-light btn-sm rounded-pill px-3">{{ t('nav.login') }}</Link>
-                            <Link href="/inscription" class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold shadow-sm">
+                            <Link href="/connexion" class="btn btn-outline-light btn-sm rounded-pill px-3 text-nowrap">{{ t('nav.login') }}</Link>
+                            <Link href="/inscription" class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold shadow-sm text-nowrap">
                                 {{ t('nav.register') }}
                             </Link>
                         </template>
