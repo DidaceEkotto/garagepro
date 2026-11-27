@@ -397,23 +397,22 @@ function urgencyBadge(u) {
                     </div>
 
                     <div class="card-body p-4">
-                        <!-- Mode Accepter + Signature tactile -->
+                        <!-- Mode Accepter + Signature tactile (facultative) -->
                         <form v-if="decisionMode === 'accept'" @submit.prevent="submitAccept">
                             <div class="mb-3">
-                                <label class="form-label small fw-bold">Votre nom complet (Signataire)</label>
+                                <label class="form-label small fw-bold">Votre nom complet <span class="text-muted fw-normal">(facultatif)</span></label>
                                 <input
                                     v-model="responseForm.signed_by_name"
                                     type="text"
                                     class="form-control"
-                                    placeholder="Nom et prénom"
-                                    required
+                                    placeholder="Nom et prénom (pré-rempli automatiquement si laissé vide)"
                                 />
                             </div>
 
                             <div class="mb-3">
                                 <div class="d-flex justify-content-between align-items-center mb-1">
                                     <label class="form-label small fw-bold mb-0">
-                                        Signature manuscrite (au doigt ou à la souris)
+                                        Signature manuscrite <span class="text-muted fw-normal">(facultative — au doigt ou à la souris)</span>
                                     </label>
                                     <button type="button" class="btn btn-link btn-sm text-decoration-none p-0" @click="clearSignature">
                                         <i class="bi bi-eraser me-1"></i>Effacer
@@ -431,7 +430,7 @@ function urgencyBadge(u) {
                                         @pointerleave="stopDrawing"
                                     ></canvas>
                                     <span v-if="!hasSignature" class="qa-signature-placeholder">
-                                        Signez ici pour confirmer « Bon pour accord »
+                                        Facultatif : signez ici si vous le souhaitez, sinon validez directement
                                     </span>
                                 </div>
                             </div>

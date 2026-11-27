@@ -92,7 +92,7 @@
     @if($quote->signed_at)
         <div class="signature-box">
             <div class="signature-title">
-                BON POUR ACCORD — {{ $quote->status === \App\Models\Quote::STATUS_PARTIALLY_ACCEPTED ? 'VALIDATION PARTIELLE' : 'VALIDÉ' }} &amp; SIGNÉ ÉLECTRONIQUEMENT
+                BON POUR ACCORD — {{ $quote->status === \App\Models\Quote::STATUS_PARTIALLY_ACCEPTED ? 'VALIDATION PARTIELLE' : 'VALIDÉ' }}@if(!empty($signatureDataUri)) &amp; SIGNÉ ÉLECTRONIQUEMENT @else ÉLECTRONIQUEMENT @endif
             </div>
             <p class="signature-meta">
                 <strong>Signataire :</strong> {{ $quote->signed_by_name ?: trim(($quote->customer?->first_name ? $quote->customer->first_name.' ' : '').($quote->customer?->name ?? 'Client')) }}
