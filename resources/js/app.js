@@ -115,8 +115,17 @@ createInertiaApp({
 });
 
 import { initPwaInstallListener } from '@/composables/usePwaInstall';
+import { applyUiLocale, initDomUiTranslator } from '@/composables/useDomUiTranslator';
 
 initPwaInstallListener();
+initDomUiTranslator(() => document.documentElement.lang || 'fr');
+
+router.on('navigate', (event) => {
+    const loc = event?.detail?.page?.props?.locale;
+    if (loc) {
+        applyUiLocale(loc);
+    }
+});
 
 if ('serviceWorker' in navigator) {
     const isSecure = window.location.protocol === 'https:' ||

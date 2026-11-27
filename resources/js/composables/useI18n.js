@@ -1,6 +1,7 @@
 import { computed, watchEffect } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import { extraMessages } from './i18nExtra';
+import { applyUiLocale } from './useDomUiTranslator';
 
 const messages = {
     fr: {
@@ -1047,6 +1048,7 @@ export function useI18n() {
         if (typeof document !== 'undefined') {
             document.documentElement.lang = locale.value;
             document.documentElement.dir = dir.value;
+            applyUiLocale(locale.value);
         }
     });
 
