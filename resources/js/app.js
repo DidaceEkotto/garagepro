@@ -114,6 +114,10 @@ createInertiaApp({
     },
 });
 
+import { initPwaInstallListener } from '@/composables/usePwaInstall';
+
+initPwaInstallListener();
+
 if ('serviceWorker' in navigator) {
     const isSecure = window.location.protocol === 'https:' ||
         window.location.hostname === 'localhost' ||

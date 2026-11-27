@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import LanguageSwitcher from '@/Components/LanguageSwitcher.vue';
+import PwaInstallButton from '@/Components/PwaInstallButton.vue';
 import { useI18n } from '@/composables/useI18n';
 
 const props = defineProps({
@@ -132,6 +133,7 @@ const site = computed(() => page.props.app?.site || {});
                         <Link href="/contact" class="btn btn-outline-light btn-sm">
                             <i class="bi bi-envelope me-1"></i>{{ t('nav.contact') }}
                         </Link>
+                        <PwaInstallButton variant="emerald" size="sm" label="Installer l'application (PWA)" :full-width="true" />
                     </div>
                 </div>
             </div>

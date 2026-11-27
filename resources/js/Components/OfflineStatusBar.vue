@@ -1,4 +1,5 @@
 <script setup>
+import PwaInstallButton from '@/Components/PwaInstallButton.vue';
 import { useOfflineSync } from '@/composables/useOfflineSync';
 import { computed, ref } from 'vue';
 
@@ -10,11 +11,9 @@ const {
     pendingCount,
     failedCount,
     conflictLogsCount,
-    canInstallPwa,
     syncNow,
     removeQueueItem,
     clearLogs,
-    installPwa,
 } = useOfflineSync();
 
 const modalTab = ref('queue');
@@ -49,17 +48,8 @@ function formatDate(iso) {
 
 <template>
     <div class="d-flex align-items-center gap-2">
-        <!-- Bouton Installer PWA (si éligible) -->
-        <button
-            v-if="canInstallPwa"
-            type="button"
-            class="btn btn-sm btn-outline-light d-none d-md-inline-flex align-items-center gap-1 rounded-pill px-3"
-            title="Installer MboaCar comme application"
-            @click="installPwa"
-        >
-            <i class="bi bi-download"></i>
-            <span class="small fw-semibold">Installer</span>
-        </button>
+        <!-- Bouton Installer PWA (toujours accessible PC & mobile tant que non installé) -->
+        <PwaInstallButton variant="light" size="sm" label="Installer l'app" :compact="true" />
 
         <!-- Pill État Réseau & File de synchronisation -->
         <button

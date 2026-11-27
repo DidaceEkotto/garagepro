@@ -4,6 +4,7 @@ import { Head, Link, usePage } from '@inertiajs/vue3';
 import LanguageSwitcher from '../Components/LanguageSwitcher.vue';
 import LandingAiShowcase from '../Components/LandingAiShowcase.vue';
 import LandingFooter from '../Components/LandingFooter.vue';
+import PwaInstallButton from '../Components/PwaInstallButton.vue';
 import BackToTop from '../Components/BackToTop.vue';
 import { useI18n } from '../composables/useI18n';
 
@@ -445,9 +446,7 @@ onUnmounted(() => {
                         <Link href="/inscription" class="btn btn-success btn-lg rounded-pill px-4 fw-bold shadow">
                             <i class="bi bi-rocket-takeoff-fill me-2"></i>Essayer avec le Mode Hors Ligne
                         </Link>
-                        <a href="/demo" class="btn btn-outline-light rounded-pill px-4 fw-semibold">
-                            <i class="bi bi-play-circle me-1"></i>Voir la démo
-                        </a>
+                        <PwaInstallButton variant="light" size="lg" label="Télécharger l'application" />
                     </div>
                 </div>
 

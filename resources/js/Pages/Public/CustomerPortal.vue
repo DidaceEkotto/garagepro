@@ -1,5 +1,6 @@
 <script setup>
 import DatePickerInput from '@/Components/DatePickerInput.vue';
+import PwaInstallButton from '@/Components/PwaInstallButton.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 
@@ -362,6 +363,7 @@ const tabs = computed(() => [
                 </Link>
 
                 <div class="d-flex align-items-center gap-2">
+                    <PwaInstallButton variant="emerald" size="sm" label="Installer l'app" :compact="true" />
                     <Link href="/" class="cp-nav-btn">
                         <i class="bi bi-house-door"></i>
                         <span class="d-none d-sm-inline">Accueil</span>
