@@ -1,6 +1,6 @@
 <script setup>
 import { usePwaInstall } from '@/composables/usePwaInstall';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
     variant: { type: String, default: 'emerald' }, // emerald | light | primary | dark
@@ -12,6 +12,23 @@ const props = defineProps({
 
 const { showInstallButton, isIos, triggerInstall } = usePwaInstall();
 const modalId = `modalPwaInstallGuide-${Math.random().toString(36).slice(2, 8)}`;
+const copiedLink = ref(false);
+
+const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+const isFirefoxDesktop = /firefox/i.test(ua) && !/android|mobile|tablet/i.test(ua);
+const isFirefoxAndroid = /firefox/i.test(ua) && /android/i.test(ua);
+
+async function copyAppUrl() {
+    try {
+        await navigator.clipboard.writeText(window.location.origin);
+        copiedLink.value = true;
+        setTimeout(() => {
+            copiedLink.value = false;
+        }, 2500);
+    } catch {
+        // ignore clipboard error
+    }
+}
 
 const btnClass = computed(() => {
     const classes = ['btn', 'd-inline-flex', 'align-items-center', 'justify-content-center', 'gap-2', 'fw-semibold', 'text-nowrap'];
@@ -77,6 +94,35 @@ async function handleClick() {
                                 <li>Appuyez sur le bouton <strong>Partager</strong> <i class="bi bi-box-arrow-up text-primary"></i> en bas de Safari.</li>
                                 <li>Faites défiler et appuyez sur <strong>« Sur l'écran d'accueil »</strong>.</li>
                                 <li>Appuyez sur <strong>Ajouter</strong> en haut à droite.</li>
+                            </ol>
+                        </div>
+
+                        <div v-else-if="isFirefoxDesktop" class="bg-light rounded-3 p-3 mb-3">
+                            <div class="fw-bold small text-dark mb-2">
+                                <i class="bi bi-browser-firefox me-1 text-warning"></i>Vous utilisez Firefox sur ordinateur
+                            </div>
+                            <p class="small text-muted mb-2">
+                                Firefox sur PC ne propose plus nativement l'installation d'applications bureau.
+                                Bonne nouvelle : le <strong>Mode Hors Ligne (14 jours)</strong> fonctionne déjà parfaitement ici !
+                            </p>
+                            <ol class="small mb-3 ps-3 vstack gap-1">
+                                <li><strong>Recommandé :</strong> ouvrez MboaCar dans <strong>Edge</strong>, <strong>Chrome</strong> ou <strong>Brave</strong> puis cliquez sur <strong>« Télécharger l'app »</strong> pour obtenir l'icône sur votre bureau.</li>
+                                <li><strong>Pour rester sur Firefox :</strong> installez l'extension officielle gratuite <em>« PWAs for Firefox »</em> ou épinglez cet onglet.</li>
+                            </ol>
+                            <button type="button" class="btn btn-outline-primary btn-sm rounded-pill" @click="copyAppUrl">
+                                <i class="bi me-1" :class="copiedLink ? 'bi-check2 text-success' : 'bi-clipboard'"></i>
+                                {{ copiedLink ? 'Lien copié ! Collez-le dans Chrome / Edge' : 'Copier le lien MboaCar pour Chrome / Edge' }}
+                            </button>
+                        </div>
+
+                        <div v-else-if="isFirefoxAndroid" class="bg-light rounded-3 p-3 mb-3">
+                            <div class="fw-bold small text-dark mb-2">
+                                <i class="bi bi-browser-firefox me-1 text-warning"></i>Sur Android (Firefox)
+                            </div>
+                            <ol class="small mb-0 ps-3 vstack gap-1">
+                                <li>Appuyez sur le menu <strong>⋮</strong> en haut ou en bas à droite de Firefox.</li>
+                                <li>Appuyez sur <strong>« Installer »</strong> ou <strong>« Ajouter à l'écran d'accueil »</strong>.</li>
+                                <li>Confirmez : l'icône MboaCar apparaît sur votre téléphone !</li>
                             </ol>
                         </div>
 
