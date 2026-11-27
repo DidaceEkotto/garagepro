@@ -23,8 +23,24 @@ const { askConfirm } = useConfirm();
 const { openLightbox } = useLightbox();
 const chatContainer = ref(null);
 const photoInputRef = ref(null);
+const cameraInputRef = ref(null);
+const docFileInputRef = ref(null);
+const ecuFileInputRef = ref(null);
+const obdFileInputRef = ref(null);
+const attachMenuRef = ref(null);
+const attachMenuOpen = ref(false);
 const copiedId = ref(null);
 const mediaWarning = ref('');
+
+const FORBIDDEN_VIDEO_EXTS = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', 'm4v', '3gp', 'mpeg', 'mpg'];
+const FORBIDDEN_ARCHIVE_EXTS = ['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2', 'xz', 'iso', 'cab', 'zst'];
+const FORBIDDEN_EXEC_EXTS = ['exe', 'dll', 'bat', 'cmd', 'sh', 'php', 'phtml', 'js', 'mjs', 'html', 'htm', 'svg', 'msi', 'apk', 'ps1'];
+const ALLOWED_TECH_EXTS = [
+    'bin', 'ori', 'mod', 'ols', 'kp', 'mappack', 'hex', 's19', 'srec', 'a2l',
+    'dbc', 'ldf', 'arxml', 'blf', 'asc', 'trc',
+    'csv', 'mdf', 'mf4', 'log', 'vbo', 'gpx',
+    'xml', 'json', 'sql', 'sqlite', 'db', 'txt', 'pdf',
+];
 
 const form = useForm({
     conversation_id: props.activeConversation?.id ?? null,
@@ -32,8 +48,98 @@ const form = useForm({
     repair_order_id: props.prefillRepairOrder?.id ?? props.activeConversation?.repair_order_id ?? '',
     prompt: props.prefillRepairOrder?.suggested_prompt ?? '',
     photos: [],
+    files: [],
     audio: null,
     audio_duration: 0,
+});
+
+function getFileExtension(name) {
+    const parts = String(name || '').toLowerCase().split('.');
+    return parts.length > 1 ? parts.pop() : '';
+}
+
+function toggleAttachMenu() {
+    attachMenuOpen.value = !attachMenuOpen.value;
+}
+
+function closeAttachMenu() {
+    attachMenuOpen.value = false;
+}
+
+function triggerAttach(kind) {
+    closeAttachMenu();
+    if (kind === 'doc') docFileInputRef.value?.click();
+    else if (kind === 'photo') photoInputRef.value?.click();
+    else if (kind === 'camera') cameraInputRef.value?.click();
+    else if (kind === 'ecu') ecuFileInputRef.value?.click();
+    else if (kind === 'obd') obdFileInputRef.value?.click();
+    else if (kind === 'audio') toggleRecording();
+}
+
+function handleDocumentClick(e) {
+    if (attachMenuOpen.value && attachMenuRef.value && !attachMenuRef.value.contains(e.target)) {
+        attachMenuOpen.value = false;
+    }
+}
+
+function onTechFilesSelected(e) {
+    mediaWarning.value = '';
+    const picked = Array.from(e.target.files || []);
+    if (!picked.length) return;
+
+    const valid = [];
+    for (const f of picked) {
+        const ext = getFileExtension(f.name);
+        if (f.type.startsWith('video/') || FORBIDDEN_VIDEO_EXTS.includes(ext)) {
+            mediaWarning.value = 'Les vidéos sont interdites dans l\'Assistant IA (utilisez des photos, logs ou fichiers techniques).';
+            continue;
+        }
+        if (FORBIDDEN_ARCHIVE_EXTS.includes(ext)) {
+            mediaWarning.value = 'Les fichiers compressés (.zip, .rar, .7z, .tar, .gz) sont refusés. Extrayez le fichier automobile avant envoi.';
+            continue;
+        }
+        if (FORBIDDEN_EXEC_EXTS.includes(ext)) {
+            mediaWarning.value = `Le format .${ext} est bloqué par sécurité.`;
+            continue;
+        }
+        if (!ALLOWED_TECH_EXTS.includes(ext)) {
+            mediaWarning.value = `Format .${ext || '?'} non reconnu. Formats auto acceptés : ECU (.bin/.ori/.mod/.ols/.hex/.a2l), CAN (.dbc/.asc/.trc/.blf), OBD (.csv/.log/.mdf/.mf4), PDF/XML/JSON/SQLite.`;
+            continue;
+        }
+        if (f.size > 15 * 1024 * 1024) {
+            mediaWarning.value = `Le fichier « ${f.name} » dépasse la limite de 15 Mo.`;
+            continue;
+        }
+        valid.push(f);
+    }
+
+    if (form.files.length + valid.length > 3) {
+        mediaWarning.value = 'Maximum 3 fichiers techniques par message.';
+    }
+
+    form.files = [...form.files, ...valid].slice(0, 3);
+    if (e.target) e.target.value = '';
+}
+
+function removeTechFile(idx) {
+    form.files.splice(idx, 1);
+}
+
+function formatFileSize(bytes) {
+    if (!bytes) return '0 Ko';
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+    return `${Math.max(1, Math.round(bytes / 1024))} Ko`;
+}
+
+function getFileAttachments(msg) {
+    if (!Array.isArray(msg?.attachments)) return [];
+    return msg.attachments.filter((a) => a && a.type === 'file');
+}
+
+const firstFileError = computed(() => {
+    if (form.errors.files) return form.errors.files;
+    const key = Object.keys(form.errors || {}).find((k) => k.startsWith('files.'));
+    return key ? form.errors[key] : '';
 });
 
 // Aperçus photos avant envoi
@@ -170,7 +276,9 @@ function formatSeconds(sec) {
 }
 
 const canSend = computed(() =>
-    !form.processing && !isRecording.value && (form.prompt.trim().length > 0 || form.photos.length > 0 || Boolean(form.audio))
+    !form.processing
+    && !isRecording.value
+    && (form.prompt.trim().length > 0 || form.photos.length > 0 || form.files.length > 0 || Boolean(form.audio))
 );
 
 const starterPrompts = [
@@ -188,9 +296,13 @@ function scrollToBottom() {
     });
 }
 
-onMounted(scrollToBottom);
+onMounted(() => {
+    scrollToBottom();
+    document.addEventListener('click', handleDocumentClick);
+});
 
 onBeforeUnmount(() => {
+    document.removeEventListener('click', handleDocumentClick);
     stopRecording();
     photoPreviews.value.forEach((p) => URL.revokeObjectURL(p.url));
     if (recordedAudioUrl.value) URL.revokeObjectURL(recordedAudioUrl.value);
@@ -228,7 +340,7 @@ function sendPrompt() {
         forceFormData: true,
         preserveScroll: true,
         onSuccess: () => {
-            form.reset('prompt', 'photos', 'audio', 'audio_duration');
+            form.reset('prompt', 'photos', 'files', 'audio', 'audio_duration');
             rebuildPhotoPreviews();
             clearRecordedAudio();
             scrollToBottom();
@@ -607,6 +719,22 @@ function formatDateTime(iso) {
                                         <audio :src="msg.audio_url" controls class="w-100" style="height: 36px; min-width: 220px;"></audio>
                                     </div>
 
+                                    <!-- Fichiers techniques automobiles joints (ECU, CAN, OBD, PDF, BDD) -->
+                                    <div v-if="getFileAttachments(msg).length" class="d-flex flex-wrap gap-2 mb-2">
+                                        <div
+                                            v-for="(att, fIdx) in getFileAttachments(msg)"
+                                            :key="fIdx"
+                                            class="d-inline-flex align-items-center gap-2 px-2 py-1 rounded border"
+                                            :class="msg.role === 'user' ? 'bg-white bg-opacity-25 border-white border-opacity-25 text-white' : 'bg-light border-secondary-subtle text-dark'"
+                                            style="font-size: 0.74rem;"
+                                        >
+                                            <i class="bi bi-file-earmark-code-fill"></i>
+                                            <span class="fw-semibold text-truncate" style="max-width: 190px;">{{ att.name }}</span>
+                                            <span class="badge" :class="msg.role === 'user' ? 'bg-light text-primary' : 'bg-primary-subtle text-primary'">.{{ att.ext }}</span>
+                                            <span v-if="att.size_kb" class="opacity-75">{{ att.size_kb }} Ko</span>
+                                        </div>
+                                    </div>
+
                                     <div class="ai-message-text small">{{ msg.content }}</div>
 
                                     <!-- Actions métier 1-clic sous chaque réponse valide de l'IA -->
@@ -714,6 +842,28 @@ function formatDateTime(iso) {
                             </div>
                         </div>
 
+                        <!-- Aperçu des fichiers techniques sélectionnés (ECU, CAN, OBD, PDF, BDD) -->
+                        <div v-if="form.files.length" class="d-flex flex-wrap gap-2 mb-2">
+                            <div
+                                v-for="(f, idx) in form.files"
+                                :key="idx"
+                                class="d-inline-flex align-items-center gap-2 px-2 py-1 rounded bg-light border small"
+                            >
+                                <i class="bi bi-cpu-fill text-primary"></i>
+                                <span class="fw-semibold text-truncate" style="max-width: 180px;">{{ f.name }}</span>
+                                <span class="badge bg-primary-subtle text-primary">.{{ getFileExtension(f.name) }}</span>
+                                <span class="text-muted" style="font-size: 0.7rem;">{{ formatFileSize(f.size) }}</span>
+                                <button
+                                    type="button"
+                                    class="btn btn-link btn-sm p-0 text-danger lh-1"
+                                    title="Retirer le fichier"
+                                    @click="removeTechFile(idx)"
+                                >
+                                    <i class="bi bi-x-circle-fill"></i>
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- Aperçu du vocal enregistré -->
                         <div v-if="recordedAudioUrl" class="d-flex align-items-center gap-2 p-2 mb-2 rounded bg-light border">
                             <i class="bi bi-mic-fill text-danger"></i>
@@ -744,49 +894,138 @@ function formatDateTime(iso) {
                                 class="d-none"
                                 @change="onPhotosSelected"
                             />
-                            <div class="input-group">
-                                <button
-                                    type="button"
-                                    class="btn btn-outline-secondary"
-                                    title="Joindre des photos (voyant, OBD, pièce — max 4, pas de vidéo)"
-                                    :disabled="form.processing || form.photos.length >= 4"
-                                    @click="photoInputRef?.click()"
-                                >
-                                    <i class="bi bi-camera-fill"></i>
-                                </button>
-                                <button
-                                    type="button"
-                                    class="btn"
-                                    :class="isRecording ? 'btn-danger' : 'btn-outline-secondary'"
-                                    :title="isRecording ? 'Arrêter l\'enregistrement vocal' : 'Enregistrer un message vocal atelier'"
-                                    :disabled="form.processing"
-                                    @click="toggleRecording"
-                                >
-                                    <i class="bi" :class="isRecording ? 'bi-stop-circle-fill' : 'bi-mic-fill'"></i>
-                                </button>
-                                <textarea
-                                    v-model="form.prompt"
-                                    rows="2"
-                                    class="form-control"
-                                    :class="{ 'is-invalid': form.errors.prompt || form.errors.photos || form.errors.audio }"
-                                    placeholder="Décrivez la panne, un code OBD-II, joignez une photo ou enregistrez un vocal..."
-                                    :disabled="form.processing"
-                                    @keydown="handleKeydown"
-                                ></textarea>
-                                <button
-                                    type="submit"
-                                    class="btn btn-primary px-4 fw-semibold"
-                                    :disabled="!canSend"
-                                >
-                                    <span v-if="form.processing" class="spinner-border spinner-border-sm me-1"></span>
-                                    <i v-else class="bi bi-send-fill me-1"></i>Envoyer
-                                </button>
+                            <input
+                                ref="cameraInputRef"
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="d-none"
+                                @change="onPhotosSelected"
+                            />
+                            <input
+                                ref="docFileInputRef"
+                                type="file"
+                                accept=".pdf,.txt,.xml,.json,.sql,.sqlite,.db"
+                                multiple
+                                class="d-none"
+                                @change="onTechFilesSelected"
+                            />
+                            <input
+                                ref="ecuFileInputRef"
+                                type="file"
+                                accept=".bin,.ori,.mod,.ols,.kp,.mappack,.hex,.s19,.srec,.a2l"
+                                multiple
+                                class="d-none"
+                                @change="onTechFilesSelected"
+                            />
+                            <input
+                                ref="obdFileInputRef"
+                                type="file"
+                                accept=".csv,.log,.dbc,.ldf,.arxml,.blf,.asc,.trc,.mdf,.mf4,.vbo,.gpx"
+                                multiple
+                                class="d-none"
+                                @change="onTechFilesSelected"
+                            />
+                            <div class="d-flex align-items-stretch gap-2">
+                                <!-- Bouton trombone style WhatsApp avec menu popover -->
+                                <div ref="attachMenuRef" class="position-relative d-flex">
+                                    <button
+                                        type="button"
+                                        class="btn btn-outline-secondary d-flex align-items-center justify-content-center px-3"
+                                        :class="{ 'active bg-light': attachMenuOpen }"
+                                        title="Joindre un fichier automobile, une photo, la caméra ou un audio"
+                                        :disabled="form.processing"
+                                        @click.stop="toggleAttachMenu"
+                                    >
+                                        <i class="bi bi-paperclip fs-5"></i>
+                                    </button>
+
+                                    <div v-if="attachMenuOpen" class="ai-attach-popover shadow-lg border" @click.stop>
+                                        <button type="button" class="ai-attach-item" @click="triggerAttach('doc')">
+                                            <span class="ai-attach-icon" style="color: #7f66ff;"><i class="bi bi-file-earmark-text-fill"></i></span>
+                                            <span class="d-flex flex-column text-start">
+                                                <span class="fw-medium">Document &amp; BDD</span>
+                                                <span class="ai-attach-sub">PDF, XML, JSON, SQL, SQLite, TXT</span>
+                                            </span>
+                                        </button>
+                                        <button type="button" class="ai-attach-item" :disabled="form.photos.length >= 4" @click="triggerAttach('photo')">
+                                            <span class="ai-attach-icon" style="color: #007bfc;"><i class="bi bi-images"></i></span>
+                                            <span class="d-flex flex-column text-start">
+                                                <span class="fw-medium">Photos</span>
+                                                <span class="ai-attach-sub">Voyants, pièces, valise (max 4)</span>
+                                            </span>
+                                        </button>
+                                        <button type="button" class="ai-attach-item" :disabled="form.photos.length >= 4" @click="triggerAttach('camera')">
+                                            <span class="ai-attach-icon" style="color: #ff2e74;"><i class="bi bi-camera-fill"></i></span>
+                                            <span class="d-flex flex-column text-start">
+                                                <span class="fw-medium">Caméra</span>
+                                                <span class="ai-attach-sub">Prendre une photo directe</span>
+                                            </span>
+                                        </button>
+                                        <button type="button" class="ai-attach-item" @click="triggerAttach('audio')">
+                                            <span class="ai-attach-icon" style="color: #fa6533;"><i class="bi bi-headphones"></i></span>
+                                            <span class="d-flex flex-column text-start">
+                                                <span class="fw-medium">Audio atelier</span>
+                                                <span class="ai-attach-sub">Bruit moteur ou note vocale</span>
+                                            </span>
+                                        </button>
+                                        <hr class="my-1 opacity-25" />
+                                        <button type="button" class="ai-attach-item" :disabled="form.files.length >= 3" @click="triggerAttach('ecu')">
+                                            <span class="ai-attach-icon" style="color: #00a884;"><i class="bi bi-cpu-fill"></i></span>
+                                            <span class="d-flex flex-column text-start">
+                                                <span class="fw-medium">ECU / Cartographie</span>
+                                                <span class="ai-attach-sub">.bin, .ori, .mod, .ols, .kp, .hex, .a2l</span>
+                                            </span>
+                                        </button>
+                                        <button type="button" class="ai-attach-item" :disabled="form.files.length >= 3" @click="triggerAttach('obd')">
+                                            <span class="ai-attach-icon" style="color: #f59e0b;"><i class="bi bi-activity"></i></span>
+                                            <span class="d-flex flex-column text-start">
+                                                <span class="fw-medium">OBD-II &amp; Réseau CAN</span>
+                                                <span class="ai-attach-sub">.csv, .log, .dbc, .asc, .trc, .blf, .mf4</span>
+                                            </span>
+                                        </button>
+                                        <div class="px-3 pt-1 pb-2 text-muted border-top mt-1" style="font-size: 0.68rem;">
+                                            <i class="bi bi-shield-lock me-1"></i>Vidéos &amp; archives (.zip/.rar) bloquées
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="input-group flex-grow-1">
+                                    <button
+                                        type="button"
+                                        class="btn"
+                                        :class="isRecording ? 'btn-danger' : 'btn-outline-secondary'"
+                                        :title="isRecording ? 'Arrêter l\'enregistrement vocal' : 'Enregistrer un message vocal atelier'"
+                                        :disabled="form.processing"
+                                        @click="toggleRecording"
+                                    >
+                                        <i class="bi" :class="isRecording ? 'bi-stop-circle-fill' : 'bi-mic-fill'"></i>
+                                    </button>
+                                    <textarea
+                                        v-model="form.prompt"
+                                        rows="2"
+                                        class="form-control"
+                                        :class="{ 'is-invalid': form.errors.prompt || form.errors.photos || form.errors.audio || firstFileError }"
+                                        placeholder="Décrivez la panne, un code OBD-II, ou cliquez sur 📎 pour joindre un fichier ECU / CAN / OBD / photo..."
+                                        :disabled="form.processing"
+                                        @keydown="handleKeydown"
+                                    ></textarea>
+                                    <button
+                                        type="submit"
+                                        class="btn btn-primary px-4 fw-semibold"
+                                        :disabled="!canSend"
+                                    >
+                                        <span v-if="form.processing" class="spinner-border spinner-border-sm me-1"></span>
+                                        <i v-else class="bi bi-send-fill me-1"></i>Envoyer
+                                    </button>
+                                </div>
                             </div>
                             <div v-if="form.errors.prompt" class="text-danger small mt-1">{{ form.errors.prompt }}</div>
                             <div v-if="form.errors.photos" class="text-danger small mt-1">{{ form.errors.photos }}</div>
+                            <div v-if="firstFileError" class="text-danger small mt-1">{{ firstFileError }}</div>
                             <div v-if="form.errors.audio" class="text-danger small mt-1">{{ form.errors.audio }}</div>
                             <div class="d-flex justify-content-between align-items-center mt-2 text-muted" style="font-size: 0.72rem;">
-                                <span><i class="bi bi-info-circle me-1"></i>Photos &amp; vocaux enregistrés en BDD (vidéos interdites) • Vérification physique indispensable.</span>
+                                <span><i class="bi bi-cpu me-1"></i>Pré-analyse locale anti-tokens active • Fichiers auto uniquement (vidéos &amp; .zip/.rar interdits).</span>
                                 <span class="d-none d-md-inline">Entrée : envoyer • Maj+Entrée : saut de ligne</span>
                             </div>
                         </form>
@@ -970,6 +1209,68 @@ function formatDateTime(iso) {
     background: #dc2626;
     display: inline-block;
     animation: recPulse 1s infinite;
+}
+
+.ai-attach-popover {
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 0;
+    width: 268px;
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 6px 0 0;
+    z-index: 1050;
+    animation: popoverFadeIn 0.14s ease-out;
+}
+
+.ai-attach-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 9px 14px;
+    border: 0;
+    background: transparent;
+    color: #0f172a;
+    font-size: 0.87rem;
+    transition: background-color 0.12s ease;
+    cursor: pointer;
+}
+
+.ai-attach-item:hover:not(:disabled) {
+    background-color: #f1f5f9;
+}
+
+.ai-attach-item:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.ai-attach-icon {
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    flex-shrink: 0;
+}
+
+.ai-attach-sub {
+    font-size: 0.69rem;
+    color: #64748b;
+    line-height: 1.2;
+}
+
+@keyframes popoverFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }
 
 @keyframes recPulse {

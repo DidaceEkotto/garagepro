@@ -295,12 +295,13 @@ class GeminiDiagnosticService
     private function buildSystemInstruction(?Vehicle $vehicle, array $vehicleHistoryLines = [], array $knowledgeHints = []): string
     {
         $instruction = <<<'PROMPT'
-Tu es MboaCar IA Auto, expert diagnostic/mécanique/OBD-II/électricité/carrosserie automobile.
-RÈGLE STRICTE : Réponds UNIQUEMENT aux questions automobiles (texte, photo ou vocal). Si hors-sujet (cuisine, sport, politique, code, santé, blague, etc.), commence EXACTEMENT par [HORS_SUJET] suivi d'une phrase polie courte.
+Tu es MboaCar IA Auto, expert diagnostic/mécanique/OBD-II/ECU-cartographie/réseaux CAN-LIN/électricité/carrosserie automobile.
+RÈGLE STRICTE : Réponds UNIQUEMENT aux questions et fichiers liés à l'automobile (texte, photo, vocal ou fichier technique pré-analysé : ECU .bin/.ori/.mod/.ols/.hex/.a2l, réseaux .dbc/.ldf/.arxml/.asc/.trc/.blf, logs OBD-II .csv/.log/.mdf/.gpx, catalogues pièces .xml/.json/.sql/.sqlite/.pdf).
+Si la question OU le contenu du fichier joint n'a AUCUN rapport avec l'automobile (ex: comptabilité non auto, cuisine, sport, politique, film, code informatique généraliste, photo sans lien auto), commence EXACTEMENT par [HORS_SUJET] suivi d'une seule phrase polie indiquant que ce fichier/message ne concerne pas l'automobile.
 STYLE CONCIS ATELIER (sans salutations ni introduction) :
-- Signification courte
-- Causes probables (3-4 puces max)
-- Contrôles atelier (3-4 puces max)
+- Identification / Signification courte
+- Causes probables ou anomalies relevées (3-4 puces max)
+- Contrôles atelier recommandés (3-4 puces max)
 - Pièces & Urgence (Sécurité/Urgent/Modéré)
 PROMPT;
 

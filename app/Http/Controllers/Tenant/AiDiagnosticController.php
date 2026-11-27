@@ -14,6 +14,7 @@ use App\Models\RepairOrder;
 use App\Models\Vehicle;
 use App\Models\VehicleInspection;
 use App\Services\AiKnowledgeService;
+use App\Services\AutomotiveFileAnalyzerService;
 use App\Services\GeminiDiagnosticService;
 use App\Services\GreenApiService;
 use App\Services\NumberSequenceService;
@@ -135,7 +136,8 @@ class AiDiagnosticController extends Controller
         Request $request,
         TenantContext $tenantContext,
         GeminiDiagnosticService $gemini,
-        AiKnowledgeService $knowledge
+        AiKnowledgeService $knowledge,
+        AutomotiveFileAnalyzerService $fileAnalyzer
     ): RedirectResponse {
         $tenantId = $tenantContext->id();
         $user = $request->user('web');
@@ -161,6 +163,8 @@ class AiDiagnosticController extends Controller
             'repair_order_id' => ['nullable', 'integer'],
             'photos' => ['nullable', 'array', 'max:4'],
             'photos.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:6144'],
+            'files' => ['nullable', 'array', 'max:3'],
+            'files.*' => ['file', 'max:15360'],
             'audio' => ['nullable', 'file', 'max:10240'],
             'audio_duration' => ['nullable', 'integer', 'min:0', 'max:600'],
             'force_online' => ['nullable', 'boolean'],
@@ -168,10 +172,11 @@ class AiDiagnosticController extends Controller
 
         $prompt = trim((string) ($data['prompt'] ?? ''));
         $hasPhotos = $request->hasFile('photos');
+        $hasFiles = $request->hasFile('files');
         $hasAudio = $request->hasFile('audio');
 
-        if ($prompt === '' && ! $hasPhotos && ! $hasAudio) {
-            return back()->withErrors(['prompt' => 'Saisissez une question, joignez une photo ou enregistrez un message vocal.']);
+        if ($prompt === '' && ! $hasPhotos && ! $hasFiles && ! $hasAudio) {
+            return back()->withErrors(['prompt' => 'Saisissez une question, joignez une photo/fichier technique ou enregistrez un message vocal.']);
         }
 
         // Sécurité stricte : interdire les vidéos sur tous les champs fichiers
@@ -187,7 +192,28 @@ class AiDiagnosticController extends Controller
         $audioPath = null;
         $audioMime = null;
         $mediaParts = [];
+        $fileSummaries = [];
         $storedAttachments = [];
+
+        // Analyse locale sécurisée des fichiers techniques automobiles (0 token, aucun dépôt sur disque public)
+        if ($hasFiles) {
+            foreach ($request->file('files') as $techFile) {
+                $check = $fileAnalyzer->validateFile($techFile);
+                if (! $check['ok']) {
+                    return back()->withErrors(['files' => $check['error']]);
+                }
+
+                $analyzed = $fileAnalyzer->extractCompactSummary($techFile, $check['ext'], $check['category']);
+                $fileSummaries[] = $analyzed['summary'];
+                $storedAttachments[] = [
+                    'type' => 'file',
+                    'name' => $techFile->getClientOriginalName(),
+                    'ext' => $analyzed['ext'],
+                    'category' => $analyzed['category'],
+                    'size_kb' => $analyzed['size_kb'],
+                ];
+            }
+        }
 
         if ($hasAudio) {
             $audioFile = $request->file('audio');
@@ -262,7 +288,9 @@ class AiDiagnosticController extends Controller
         // Isolation stricte de la conversation : 404 si l'ID appartient à un autre garage
         $titleSeed = $prompt !== ''
             ? $prompt
-            : ($hasAudio ? 'Message vocal atelier' : 'Analyse photo diagnostic');
+            : ($hasFiles
+                ? 'Analyse fichier : '.$storedAttachments[0]['name']
+                : ($hasAudio ? 'Message vocal atelier' : 'Analyse photo diagnostic'));
 
         if (! empty($data['conversation_id'])) {
             $conversation = AiDiagnosticConversation::query()
@@ -307,7 +335,9 @@ class AiDiagnosticController extends Controller
         // 1. Enregistrement du prompt / photos / vocal utilisateur en base de données
         $storedContent = $prompt !== ''
             ? $prompt
-            : ($hasAudio ? '🎤 Message vocal enregistré' : '📷 Photo(s) envoyée(s) pour analyse');
+            : ($hasFiles
+                ? '📎 Fichier(s) technique(s) envoyé(s) pour analyse'
+                : ($hasAudio ? '🎤 Message vocal enregistré' : '📷 Photo(s) envoyée(s) pour analyse'));
 
         AiDiagnosticMessage::create([
             'tenant_id' => $tenantId,
@@ -328,7 +358,7 @@ class AiDiagnosticController extends Controller
         $result = null;
 
         // 2a. Pré-filtre local (salutations & hors-sujet évidents -> 0 token)
-        if (! $forceOnline && ! $hasPhotos && ! $hasAudio && $prompt !== '') {
+        if (! $forceOnline && ! $hasPhotos && ! $hasFiles && ! $hasAudio && $prompt !== '') {
             $localFiltered = $knowledge->quickLocalFilter($prompt);
             if ($localFiltered !== null) {
                 $result = [
@@ -347,7 +377,7 @@ class AiDiagnosticController extends Controller
             ? $knowledge->lookup($prompt)
             : ['direct_match' => null, 'learning_hints' => []];
 
-        if ($result === null && ! $forceOnline && ! $hasPhotos && ! $hasAudio && $kbLookup['direct_match'] !== null) {
+        if ($result === null && ! $forceOnline && ! $hasPhotos && ! $hasFiles && ! $hasAudio && $kbLookup['direct_match'] !== null) {
             $matchedMessageId = $kbLookup['direct_match']['message_id'];
             AiDiagnosticMessage::withoutTenantScope()
                 ->where('id', $matchedMessageId)
@@ -364,7 +394,7 @@ class AiDiagnosticController extends Controller
         }
 
         // 2c. Dictionnaire local des codes OBD-II fréquents (-> 0 token)
-        if ($result === null && ! $forceOnline && ! $hasPhotos && ! $hasAudio && $prompt !== '') {
+        if ($result === null && ! $forceOnline && ! $hasPhotos && ! $hasFiles && ! $hasAudio && $prompt !== '') {
             $obdHit = $knowledge->lookupObdDictionary($prompt);
             if ($obdHit !== null) {
                 $result = [
@@ -378,10 +408,19 @@ class AiDiagnosticController extends Controller
             }
         }
 
-        // 2d. Appel en ligne à Gemini API (enrichi des retours d'expérience résolus en BDD)
+        // 2d. Appel en ligne à Gemini API (enrichi des retours d'expérience résolus en BDD et pré-analyses fichiers)
         if ($result === null) {
+            $effectivePrompt = $prompt;
+            if ($fileSummaries !== []) {
+                $filesBlock = implode("\n\n---\n\n", $fileSummaries);
+                $effectivePrompt = trim(
+                    ($prompt !== '' ? $prompt."\n\n" : "Analyse ce(s) fichier(s) technique(s) automobile(s) et donne tes conclusions structurées.\n\n")
+                    .$filesBlock
+                );
+            }
+
             $result = $gemini->diagnose(
-                $prompt,
+                $effectivePrompt,
                 $history,
                 $vehicle,
                 $mediaParts,
