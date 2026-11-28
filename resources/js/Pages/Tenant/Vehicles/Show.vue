@@ -17,7 +17,7 @@ const whatsappReminderUrl = computed(() => {
     const plate = props.vehicle?.license_plate || '';
     const km = (props.vehicle?.mileage ?? 0).toLocaleString('fr-FR');
     const msg = `Bonjour ${clientName}, votre véhicule ${plate} (${km} km) approche de son prochain entretien périodique. Réservez votre créneau chez nous !`
-        + (passportUrl.value ? ` Carnet numérique : ${passportUrl.value}` : '');
+        + (passportUrl.value ? `\n\nCarnet numérique :\n${passportUrl.value}` : '');
     const target = rawPhone ? `https://wa.me/${rawPhone.replace('+', '')}` : 'https://wa.me/';
     return `${target}?text=${encodeURIComponent(msg)}`;
 });

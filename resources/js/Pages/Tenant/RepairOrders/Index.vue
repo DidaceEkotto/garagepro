@@ -30,7 +30,7 @@ function trackingUrl(order) {
 function whatsappShareUrl(order) {
     const url = trackingUrl(order);
     const plate = order?.vehicle?.license_plate || '';
-    const msg = `Bonjour ${order?.customer?.name ?? ''}, suivez l'intervention sur votre véhicule ${plate} (${order.order_number}) et validez votre devis en direct ici : ${url}`;
+    const msg = `Bonjour ${order?.customer?.name ?? ''}, suivez l'intervention sur votre véhicule ${plate} (${order.order_number}) et validez votre devis en direct ici :\n${url}`;
     return `https://wa.me/?text=${encodeURIComponent(msg)}`;
 }
 

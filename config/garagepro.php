@@ -7,6 +7,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'tenant_base_domain' => env('TENANT_BASE_DOMAIN', 'mboacar.com'),
+    'whatsapp_public_url' => env('WHATSAPP_PUBLIC_URL'),
 
     /*
     |--------------------------------------------------------------------------
