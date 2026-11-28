@@ -1,7 +1,8 @@
 <script setup>
+import LocationAutocomplete from '@/Components/LocationAutocomplete.vue';
 import MarketplaceLayout from '@/Layouts/MarketplaceLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
     cartItems: { type: Array, default: () => [] },
@@ -17,6 +18,16 @@ const form = useForm({
     delivery_address: '',
     notes: '',
 });
+
+const deliveryGps = ref(null);
+
+function onDeliveryLocationSelected(payload) {
+    if (!payload) return;
+    form.delivery_address = payload.formatted_location || payload.city || form.delivery_address;
+    if (payload.latitude && payload.longitude) {
+        deliveryGps.value = { lat: Number(payload.latitude), lon: Number(payload.longitude) };
+    }
+}
 
 const selectedDialCode = computed(() => {
     const found = props.countries.find((c) => c.code === form.country_code);
@@ -127,16 +138,18 @@ function fmt(n) {
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label small fw-semibold">Où souhaitez-vous être livré ? <span class="text-danger">*</span></label>
-                                <input
+                                <label class="form-label small fw-semibold">Où souhaitez-vous être livré ? (OpenStreetMap) <span class="text-danger">*</span></label>
+                                <LocationAutocomplete
                                     v-model="form.delivery_address"
-                                    type="text"
-                                    class="form-control"
-                                    :class="{ 'is-invalid': form.errors.delivery_address }"
-                                    placeholder="Ville, quartier, point de repère..."
-                                    required
+                                    :country="form.country_code"
+                                    :required="true"
+                                    placeholder="Ville, quartier, rue ou point de repère..."
+                                    @select="onDeliveryLocationSelected"
                                 />
-                                <div v-if="form.errors.delivery_address" class="invalid-feedback">{{ form.errors.delivery_address }}</div>
+                                <div v-if="deliveryGps" class="form-text text-success small">
+                                    <i class="bi bi-check-circle-fill me-1"></i>Position OpenStreetMap confirmée ({{ deliveryGps.lat.toFixed(4) }}, {{ deliveryGps.lon.toFixed(4) }})
+                                </div>
+                                <div v-if="form.errors.delivery_address" class="text-danger small mt-1">{{ form.errors.delivery_address }}</div>
                             </div>
 
                             <div class="mb-4">
