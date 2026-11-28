@@ -55,22 +55,22 @@ function formatDate(iso) {
 <template>
     <div class="d-flex align-items-center gap-2">
         <!-- Bouton Installer PWA (toujours accessible PC & mobile tant que non installé) -->
-        <PwaInstallButton variant="light" size="sm" label="Installer l'app" :compact="true" />
+        <PwaInstallButton variant="outline-primary" size="sm" label="Installer l'app" :compact="true" />
 
         <!-- Pill État Réseau & File de synchronisation -->
         <button
             type="button"
-            class="btn btn-sm rounded-pill d-inline-flex align-items-center gap-2 px-3 fw-semibold border-0"
+            class="btn btn-sm rounded-pill d-inline-flex align-items-center gap-2 px-3 fw-semibold"
             :class="
                 isSyncing
-                    ? 'btn-info text-dark'
+                    ? 'btn-info text-dark border-0'
                     : !isOnline
-                        ? 'btn-warning text-dark'
+                        ? 'btn-warning text-dark border-0'
                         : failedCount > 0
-                            ? 'btn-danger text-white'
+                            ? 'btn-danger text-white border-0'
                             : totalBadge > 0
-                                ? 'btn-primary text-white'
-                                : 'bg-white bg-opacity-10 text-white'
+                                ? 'btn-primary text-white border-0'
+                                : 'btn-light border text-dark'
             "
             data-bs-toggle="modal"
             data-bs-target="#modalOfflineSyncCenter"

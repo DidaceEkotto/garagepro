@@ -39,6 +39,7 @@ const btnClass = computed(() => {
     if (props.fullWidth) classes.push('w-100');
 
     if (props.variant === 'light') classes.push('btn-outline-light');
+    else if (props.variant === 'outline-primary') classes.push('btn-outline-primary');
     else if (props.variant === 'primary') classes.push('btn-primary');
     else if (props.variant === 'dark') classes.push('btn-dark');
     else classes.push('btn-success');
