@@ -10,8 +10,9 @@ use Illuminate\Support\Facades\Cache;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Middleware placé en tête de pile pour bloquer les IP suspectes,
- * contrer les attaques DDoS (requêtes anormales/sec) et bloquer les injections SQL / XSS (20 min).
+ * Middleware placé en tête de pile pour appliquer les blocages/bannissements IP décidés
+ * par l'administrateur et consigner les activités suspectes (rafales DDoS, SQLi/XSS, scans)
+ * dans le rapport de sécurité sans bloquer automatiquement les adresses IP.
  */
 class BlockSuspiciousIp
 {
@@ -55,38 +56,40 @@ class BlockSuspiciousIp
             return $next($request);
         }
 
-        if (BlockedIp::isCurrentlyBlocked($ip)) {
-            return $this->denyResponse($request);
+        $activeBlock = BlockedIp::activeBlockFor($ip);
+        if ($activeBlock) {
+            return $this->denyResponse($request, $activeBlock);
         }
 
-        // Protection anti-DDoS / trafic anormal par seconde (sauf assets statiques)
+        // Surveillance anti-DDoS / trafic anormal : consignation dans le rapport sans blocage automatique
         if ($this->isAbnormalBurst($request, $ip)) {
-            $minutes = (int) config('garagepro.security.auto_block_minutes', 20);
-            BlockedIp::blockIp($ip, 'Trafic anormal / tentative DDoS détectée', minutes: $minutes);
+            BlockedIp::reportSuspiciousIp(
+                ip: $ip,
+                reason: 'Trafic anormal / rafale de requêtes suspectes détectée',
+                path: '/'.ltrim($request->path(), '/'),
+                userAgent: $request->userAgent()
+            );
             AuditLog::record(
-                action: 'security.ddos_ip_blocked',
-                metadata: ['ip' => $ip, 'path' => $request->path(), 'minutes' => $minutes],
+                action: 'security.suspicious_ddos_reported',
+                metadata: ['ip' => $ip, 'path' => $request->path()],
                 request: $request
             );
-
-            return $this->denyResponse($request);
-        }
-
-        if ($reason = $this->detectMaliciousProbe($request)) {
-            $minutes = (int) config('garagepro.security.auto_block_minutes', 20);
-            BlockedIp::blockIp($ip, $reason, minutes: $minutes);
+        } elseif ($reason = $this->detectMaliciousProbe($request)) {
+            BlockedIp::reportSuspiciousIp(
+                ip: $ip,
+                reason: $reason,
+                path: '/'.ltrim($request->path(), '/'),
+                userAgent: $request->userAgent()
+            );
             AuditLog::record(
-                action: 'security.ip_auto_blocked',
+                action: 'security.suspicious_ip_reported',
                 metadata: [
                     'reason' => $reason,
                     'path' => $request->path(),
                     'method' => $request->method(),
-                    'minutes' => $minutes,
                 ],
                 request: $request
             );
-
-            return $this->denyResponse($request);
         }
 
         return $next($request);
@@ -138,10 +141,16 @@ class BlockSuspiciousIp
         return null;
     }
 
-    private function denyResponse(Request $request): Response
+    private function denyResponse(Request $request, BlockedIp $block): Response
     {
-        $minutes = (int) config('garagepro.security.auto_block_minutes', 20);
-        $message = "Votre adresse IP a été temporairement bloquée pour des raisons de sécurité (déblocage automatique après {$minutes} minutes).";
+        if ($block->permanent) {
+            $message = "Votre adresse IP a été définitivement bannie par l'administrateur pour des raisons de sécurité.";
+        } elseif ($block->blocked_until) {
+            $until = $block->blocked_until->format('d/m/Y à H:i');
+            $message = "Votre adresse IP a été bloquée par l'administrateur pour des raisons de sécurité jusqu'au {$until}.";
+        } else {
+            $message = "Votre adresse IP a été bloquée par l'administrateur pour des raisons de sécurité.";
+        }
 
         if ($request->expectsJson() || $request->is('api/*')) {
             return response()->json(['message' => $message], Response::HTTP_FORBIDDEN);

@@ -13,10 +13,13 @@ class BlockedIp extends Model
     protected $fillable = [
         'ip_address',
         'reason',
+        'last_path',
+        'user_agent',
         'is_whitelisted',
         'permanent',
         'blocked_until',
         'attempts_count',
+        'last_seen_at',
         'created_by',
     ];
 
@@ -27,6 +30,7 @@ class BlockedIp extends Model
             'permanent' => 'boolean',
             'blocked_until' => 'datetime',
             'attempts_count' => 'integer',
+            'last_seen_at' => 'datetime',
         ];
     }
 
@@ -44,44 +48,106 @@ class BlockedIp extends Model
             });
     }
 
+    public function scopeSuspiciousReported(Builder $query): Builder
+    {
+        return $query->where('is_whitelisted', false)
+            ->where('permanent', false)
+            ->where(function (Builder $q) {
+                $q->whereNull('blocked_until')
+                    ->orWhere('blocked_until', '<=', now());
+            });
+    }
+
     public static function isWhitelisted(string $ip): bool
     {
         return static::whitelisted()->where('ip_address', $ip)->exists();
     }
 
-    public static function isCurrentlyBlocked(string $ip): bool
+    public static function activeBlockFor(string $ip): ?self
     {
         if (static::isWhitelisted($ip)) {
-            return false;
+            return null;
         }
 
-        return static::activeBlocked()->where('ip_address', $ip)->exists();
+        return static::activeBlocked()->where('ip_address', $ip)->first();
+    }
+
+    public static function isCurrentlyBlocked(string $ip): bool
+    {
+        return static::activeBlockFor($ip) !== null;
     }
 
     /**
-     * Bloque automatiquement ou manuellement une IP pour une durée donnée.
+     * Enregistre une activité suspecte dans le rapport sécurité sans bloquer l'IP automatiquement.
+     */
+    public static function reportSuspiciousIp(
+        string $ip,
+        string $reason,
+        ?string $path = null,
+        ?string $userAgent = null
+    ): self {
+        $existing = static::where('ip_address', $ip)
+            ->where('is_whitelisted', false)
+            ->first();
+
+        $trimmedPath = $path !== null ? mb_substr($path, 0, 255) : null;
+        $trimmedAgent = $userAgent !== null ? mb_substr($userAgent, 0, 255) : null;
+
+        if ($existing) {
+            $existing->update([
+                'reason' => mb_substr($reason, 0, 255),
+                'last_path' => $trimmedPath ?? $existing->last_path,
+                'user_agent' => $trimmedAgent ?? $existing->user_agent,
+                'attempts_count' => $existing->attempts_count + 1,
+                'last_seen_at' => now(),
+            ]);
+
+            return $existing;
+        }
+
+        return static::create([
+            'ip_address' => $ip,
+            'reason' => mb_substr($reason, 0, 255),
+            'last_path' => $trimmedPath,
+            'user_agent' => $trimmedAgent,
+            'is_whitelisted' => false,
+            'permanent' => false,
+            'blocked_until' => null,
+            'attempts_count' => 1,
+            'last_seen_at' => now(),
+            'created_by' => 'system_report',
+        ]);
+    }
+
+    /**
+     * Bloque manuellement une IP pour une durée donnée (jours, heures, minutes) ou définitivement.
      */
     public static function blockIp(
         string $ip,
         string $reason,
         ?int $hours = null,
         bool $permanent = false,
-        string $createdBy = 'system',
-        ?int $minutes = null
+        string $createdBy = 'admin',
+        ?int $minutes = null,
+        ?int $days = null
     ): self {
         $existing = static::where('ip_address', $ip)
             ->where('is_whitelisted', false)
             ->first();
 
-        $durationMinutes = $minutes ?? ($hours !== null ? $hours * 60 : (int) config('garagepro.security.auto_block_minutes', 20));
+        $durationMinutes = $days !== null
+            ? $days * 24 * 60
+            : ($minutes ?? ($hours !== null ? $hours * 60 : 24 * 60));
+
         $blockedUntil = $permanent ? null : now()->addMinutes($durationMinutes);
 
         if ($existing) {
             $existing->update([
-                'reason' => $reason,
-                'permanent' => $existing->permanent || $permanent,
-                'blocked_until' => ($existing->permanent || $permanent) ? null : $blockedUntil,
-                'attempts_count' => $existing->attempts_count + 1,
+                'reason' => mb_substr($reason, 0, 255),
+                'permanent' => $permanent,
+                'blocked_until' => $blockedUntil,
+                'attempts_count' => max(1, $existing->attempts_count),
+                'last_seen_at' => $existing->last_seen_at ?? now(),
                 'created_by' => $createdBy,
             ]);
 
@@ -90,11 +156,12 @@ class BlockedIp extends Model
 
         return static::create([
             'ip_address' => $ip,
-            'reason' => $reason,
+            'reason' => mb_substr($reason, 0, 255),
             'is_whitelisted' => false,
             'permanent' => $permanent,
             'blocked_until' => $blockedUntil,
             'attempts_count' => 1,
+            'last_seen_at' => now(),
             'created_by' => $createdBy,
         ]);
     }

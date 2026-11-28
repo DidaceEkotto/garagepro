@@ -123,6 +123,9 @@ class PlatformDashboard extends Component
 
     public string $newIp = '';
     public string $newIpReason = '';
+    public string $newIpDuration = 'permanent';
+    /** @var array<int, int|string> */
+    public array $suspiciousBlockDays = [];
     public string $feedbackMessage = '';
     public string $feedbackError = '';
 
@@ -765,13 +768,91 @@ class PlatformDashboard extends Component
         $this->validate([
             'newIp' => ['required', 'ip'],
             'newIpReason' => ['required', 'string', 'max:255'],
+            'newIpDuration' => ['required', 'in:1,2,3,4,5,6,7,8,9,10,permanent'],
         ]);
 
-        BlockedIp::blockIp($this->newIp, $this->newIpReason, permanent: true, createdBy: 'admin');
-        AuditLog::record('admin.ip_blocked', actor: Auth::guard('admin')->user(), metadata: ['ip' => $this->newIp]);
+        if ($this->newIpDuration === 'permanent') {
+            BlockedIp::blockIp($this->newIp, $this->newIpReason, permanent: true, createdBy: 'admin');
+            AuditLog::record('admin.ip_banned', actor: Auth::guard('admin')->user(), metadata: [
+                'ip' => $this->newIp,
+                'reason' => $this->newIpReason,
+                'permanent' => true,
+            ]);
+            $this->feedbackMessage = "Adresse IP {$this->newIp} bannie définitivement.";
+        } else {
+            $days = (int) $this->newIpDuration;
+            BlockedIp::blockIp($this->newIp, $this->newIpReason, days: $days, permanent: false, createdBy: 'admin');
+            AuditLog::record('admin.ip_blocked', actor: Auth::guard('admin')->user(), metadata: [
+                'ip' => $this->newIp,
+                'reason' => $this->newIpReason,
+                'days' => $days,
+            ]);
+            $this->feedbackMessage = "Adresse IP {$this->newIp} bloquée pour {$days} jour(s).";
+        }
 
         $this->reset('newIp', 'newIpReason');
-        $this->feedbackMessage = 'Adresse IP bloquée.';
+        $this->newIpDuration = 'permanent';
+    }
+
+    public function blockSuspiciousIp(int $id, ?int $days = null): void
+    {
+        $this->authorizeSection('security');
+
+        $selectedDays = $days ?? (int) ($this->suspiciousBlockDays[$id] ?? 1);
+        $selectedDays = max(1, min(10, $selectedDays));
+
+        $record = BlockedIp::findOrFail($id);
+        $record->update([
+            'is_whitelisted' => false,
+            'permanent' => false,
+            'blocked_until' => now()->addDays($selectedDays),
+            'created_by' => 'admin',
+        ]);
+
+        AuditLog::record('admin.ip_blocked', actor: Auth::guard('admin')->user(), metadata: [
+            'ip' => $record->ip_address,
+            'days' => $selectedDays,
+            'attempts_count' => $record->attempts_count,
+            'reason' => $record->reason,
+        ]);
+
+        unset($this->suspiciousBlockDays[$id]);
+        $this->feedbackMessage = "IP {$record->ip_address} bloquée pour {$selectedDays} jour(s).";
+    }
+
+    public function banSuspiciousIp(int $id): void
+    {
+        $this->authorizeSection('security');
+
+        $record = BlockedIp::findOrFail($id);
+        $record->update([
+            'is_whitelisted' => false,
+            'permanent' => true,
+            'blocked_until' => null,
+            'created_by' => 'admin',
+        ]);
+
+        AuditLog::record('admin.ip_banned', actor: Auth::guard('admin')->user(), metadata: [
+            'ip' => $record->ip_address,
+            'attempts_count' => $record->attempts_count,
+            'reason' => $record->reason,
+        ]);
+
+        unset($this->suspiciousBlockDays[$id]);
+        $this->feedbackMessage = "IP {$record->ip_address} bannie définitivement.";
+    }
+
+    public function dismissSuspiciousIp(int $id): void
+    {
+        $this->authorizeSection('security');
+
+        $record = BlockedIp::findOrFail($id);
+        $ip = $record->ip_address;
+        $record->delete();
+
+        AuditLog::record('admin.suspicious_ip_dismissed', actor: Auth::guard('admin')->user(), metadata: ['ip' => $ip]);
+        unset($this->suspiciousBlockDays[$id]);
+        $this->feedbackMessage = "Rapport supprimé pour l'IP {$ip}.";
     }
 
     public function unblockIp(int $id): void
@@ -1639,7 +1720,13 @@ class PlatformDashboard extends Component
                 'mrr' => $activeTenants * $this->subscriptionPrice,
             ],
             'tenants' => $allTenants,
-            'blockedIps' => BlockedIp::latest()->take(25)->get(),
+            'suspiciousIps' => BlockedIp::suspiciousReported()
+                ->orderByDesc('attempts_count')
+                ->orderByDesc('last_seen_at')
+                ->orderByDesc('updated_at')
+                ->take(50)
+                ->get(),
+            'blockedIps' => BlockedIp::activeBlocked()->latest('updated_at')->take(50)->get(),
             'recentPayments' => Payment::withoutTenantScope()->with('tenant:id,name,slug,type')->latest()->take(15)->get(),
             'auditLogs' => AuditLog::latest('id')->take(20)->get(),
             'testimonials' => Testimonial::latest()->get(),

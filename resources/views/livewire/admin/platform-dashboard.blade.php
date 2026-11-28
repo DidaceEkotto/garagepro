@@ -1069,27 +1069,151 @@
         {{-- 7. SÉCURITÉ & BLOCAGE IP --}}
         @if($activeSection === 'security')
             <div class="mb-4">
-                <h1 class="h4 fw-bold mb-0">Sécurité &amp; Pare-feu IP</h1>
-                <p class="text-muted small mb-0">Bloquez les adresses IP suspectes et consultez les journaux de sécurité</p>
+                <h1 class="h4 fw-bold mb-0">Sécurité &amp; Surveillance des IP suspectes</h1>
+                <p class="text-muted small mb-0">
+                    Les requêtes suspectes sont consignées dans le rapport ci-dessous sans blocage automatique. Vous décidez de bloquer une IP (1 à 10 jours) ou de la bannir définitivement.
+                </p>
+            </div>
+
+            {{-- KPIs sécurité --}}
+            <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+                        <div class="small text-muted">IP suspectes en surveillance</div>
+                        <div class="h4 fw-bold text-warning mb-0">{{ $suspiciousIps->count() }}</div>
+                        <div class="small text-muted">Non bloquées (rapport actif)</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+                        <div class="small text-muted">IP bloquées temporairement</div>
+                        <div class="h4 fw-bold text-primary mb-0">{{ $blockedIps->where('permanent', false)->count() }}</div>
+                        <div class="small text-muted">Blocage de 1 à 10 jours</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+                        <div class="small text-muted">IP bannies définitivement</div>
+                        <div class="h4 fw-bold text-danger mb-0">{{ $blockedIps->where('permanent', true)->count() }}</div>
+                        <div class="small text-muted">Accès au site totalement interdit</div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Rapport des IP suspectes --}}
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+                <div class="card-header bg-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div>
+                        <span class="fw-bold">Rapport des IP suspectes</span>
+                        <span class="badge bg-warning-subtle text-warning-emphasis ms-2">{{ $suspiciousIps->count() }}</span>
+                    </div>
+                    <span class="small text-muted">Classées par nombre de requêtes suspectes</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Adresse IP</th>
+                                <th class="text-center">Requêtes suspectes</th>
+                                <th>Motif &amp; dernier chemin</th>
+                                <th>Dernière activité</th>
+                                <th class="text-end" style="min-width: 340px;">Décision administrateur</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($suspiciousIps as $item)
+                            <tr wire:key="suspicious-ip-{{ $item->id }}">
+                                <td>
+                                    <code class="fw-semibold">{{ $item->ip_address }}</code>
+                                    @if($item->user_agent)
+                                        <div class="text-muted text-truncate" style="max-width: 190px; font-size: 11px;" title="{{ $item->user_agent }}">
+                                            {{ $item->user_agent }}
+                                        </div>
+                                    @endif
+                                </td>
+                                <td class="text-center">
+                                    @php
+                                        $badgeClass = $item->attempts_count >= 10
+                                            ? 'bg-danger'
+                                            : ($item->attempts_count >= 3 ? 'bg-warning text-dark' : 'bg-secondary');
+                                    @endphp
+                                    <span class="badge {{ $badgeClass }} rounded-pill">{{ $item->attempts_count }}</span>
+                                </td>
+                                <td>
+                                    <div class="small fw-medium">{{ $item->reason }}</div>
+                                    @if($item->last_path)
+                                        <code class="text-muted" style="font-size: 11px;">{{ $item->last_path }}</code>
+                                    @endif
+                                </td>
+                                <td class="small text-muted">
+                                    {{ ($item->last_seen_at ?? $item->updated_at)?->format('d/m/Y H:i') }}
+                                </td>
+                                <td class="text-end">
+                                    <div class="d-inline-flex flex-wrap align-items-center justify-content-end gap-1">
+                                        <select wire:model="suspiciousBlockDays.{{ $item->id }}" class="form-select form-select-sm" style="width: auto; min-width: 105px;">
+                                            @for($d = 1; $d <= 10; $d++)
+                                                <option value="{{ $d }}">{{ $d }} {{ $d > 1 ? 'jours' : 'jour' }}</option>
+                                            @endfor
+                                        </select>
+                                        <button type="button" wire:click="blockSuspiciousIp({{ $item->id }})" class="btn btn-warning btn-sm fw-semibold">
+                                            Bloquer
+                                        </button>
+                                        <button type="button" wire:click="banSuspiciousIp({{ $item->id }})" class="btn btn-danger btn-sm fw-semibold">
+                                            Bannir
+                                        </button>
+                                        <button type="button" wire:click="dismissSuspiciousIp({{ $item->id }})" class="btn btn-outline-secondary btn-sm" title="Supprimer du rapport">
+                                            Ignorer
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            @empty
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">
+                                    Aucune adresse IP suspecte signalée pour le moment.
+                                </td>
+                            </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <div class="row g-4">
                 <div class="col-lg-5">
                     <div class="card border-0 shadow-sm rounded-4 p-4">
-                        <h2 class="h6 fw-bold mb-3">Blocage manuel d'IP</h2>
+                        <h2 class="h6 fw-bold mb-3">Blocage / Bannissement manuel d'IP</h2>
                         <form wire:submit="blockIpManual" class="vstack gap-2 mb-3">
                             <input wire:model="newIp" type="text" class="form-control form-control-sm" placeholder="Adresse IP (ex: 192.168.1.50)">
-                            <input wire:model="newIpReason" type="text" class="form-control form-control-sm" placeholder="Motif">
-                            <button type="submit" class="btn btn-danger btn-sm">Bloquer l'IP</button>
+                            <input wire:model="newIpReason" type="text" class="form-control form-control-sm" placeholder="Motif (ex: Requêtes suspectes répétées)">
+                            <select wire:model="newIpDuration" class="form-select form-select-sm">
+                                @for($d = 1; $d <= 10; $d++)
+                                    <option value="{{ $d }}">Bloquer pour {{ $d }} {{ $d > 1 ? 'jours' : 'jour' }}</option>
+                                @endfor
+                                <option value="permanent">Bannir définitivement (accès interdit)</option>
+                            </select>
+                            <button type="submit" class="btn btn-danger btn-sm">Appliquer la sanction</button>
                         </form>
+
+                        <h3 class="h6 fw-bold mt-3 mb-2">IP actuellement bloquées / bannies</h3>
                         <ul class="list-group list-group-flush small">
                             @forelse($blockedIps as $ip)
-                            <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
-                                <span><code>{{ $ip->ip_address }}</code> ({{ $ip->reason }})</span>
-                                <button wire:click="unblockIp({{ $ip->id }})" class="btn btn-outline-secondary btn-sm">Débloquer</button>
+                            <li wire:key="blocked-ip-{{ $ip->id }}" class="list-group-item px-0 d-flex justify-content-between align-items-start gap-2">
+                                <div>
+                                    <div>
+                                        <code class="fw-semibold">{{ $ip->ip_address }}</code>
+                                        @if($ip->permanent)
+                                            <span class="badge bg-danger ms-1">Bannie définitivement</span>
+                                        @elseif($ip->blocked_until)
+                                            <span class="badge bg-warning text-dark ms-1">Jusqu'au {{ $ip->blocked_until->format('d/m/Y H:i') }}</span>
+                                        @endif
+                                    </div>
+                                    <div class="text-muted">{{ $ip->reason }}</div>
+                                </div>
+                                <button type="button" wire:click="unblockIp({{ $ip->id }})" class="btn btn-outline-secondary btn-sm flex-shrink-0">Débloquer</button>
                             </li>
                             @empty
-                            <li class="list-group-item px-0 text-muted">Aucune IP bloquée.</li>
+                            <li class="list-group-item px-0 text-muted">Aucune IP bloquée ou bannie actuellement.</li>
                             @endforelse
                         </ul>
                     </div>

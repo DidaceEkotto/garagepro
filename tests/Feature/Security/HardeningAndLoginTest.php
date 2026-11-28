@@ -111,29 +111,27 @@ class HardeningAndLoginTest extends TestCase
             );
     }
 
-    public function test_sqli_xss_and_ddos_burst_auto_block_ip_for_twenty_minutes(): void
+    public function test_sqli_xss_and_ddos_burst_are_reported_without_auto_blocking_ip(): void
     {
         $this->createTenantAndUsers();
 
         $sqliIp = '10.20.0.1';
         $this->withServerVariables(['REMOTE_ADDR' => $sqliIp])
             ->get('http://garage-sec.mboacar.com/?q=1+UNION+SELECT+password+FROM+users')
-            ->assertStatus(403);
+            ->assertOk();
 
-        $this->assertTrue(BlockedIp::isCurrentlyBlocked($sqliIp));
-
-        // Après 21 minutes, l'IP est automatiquement débloquée
-        $this->travel(21)->minutes();
+        // L'IP suspecte est signalée dans le rapport mais PAS bloquée automatiquement
         $this->assertFalse(BlockedIp::isCurrentlyBlocked($sqliIp));
+        $this->assertTrue(BlockedIp::suspiciousReported()->where('ip_address', $sqliIp)->exists());
 
-        // Burst DDoS
+        // Burst DDoS : consigné dans le rapport sans bloquer automatiquement
         $ddosIp = '10.20.0.2';
         config(['garagepro.security.ddos_max_requests_per_5s' => 5]);
-        for ($i = 1; $i <= 5; $i++) {
+        for ($i = 1; $i <= 6; $i++) {
             $this->withServerVariables(['REMOTE_ADDR' => $ddosIp])->get('http://garage-sec.mboacar.com/')->assertOk();
         }
-        $this->withServerVariables(['REMOTE_ADDR' => $ddosIp])->get('http://garage-sec.mboacar.com/')->assertStatus(403);
-        $this->assertTrue(BlockedIp::isCurrentlyBlocked($ddosIp));
+        $this->assertFalse(BlockedIp::isCurrentlyBlocked($ddosIp));
+        $this->assertTrue(BlockedIp::suspiciousReported()->where('ip_address', $ddosIp)->exists());
     }
 
     public function test_role_permission_middleware_blocks_unauthorized_resources(): void
