@@ -80,11 +80,19 @@ class HandleInertiaRequests extends Middleware
             $navBundle = Cache::remember("mboacar_tenant_nav_{$tenant->id}", 20, function () use ($tenant): array {
                 $aff = AffiliateLink::where('tenant_id', $tenant->id)->where('is_blocked', true)->first(['code', 'blocked_reason']);
 
+                $platformUnread = PlatformMessage::where('tenant_id', $tenant->id)
+                    ->where('recipient_type', PlatformMessage::TYPE_TENANT)
+                    ->where('is_read', false)
+                    ->count();
+
+                $b2bUnread = \App\Models\TenantConversationMessage::query()
+                    ->where('sender_tenant_id', '!=', $tenant->id)
+                    ->whereNull('read_at')
+                    ->whereHas('conversation', fn ($q) => $q->where('tenant_one_id', $tenant->id)->orWhere('tenant_two_id', $tenant->id))
+                    ->count();
+
                 return [
-                    'unreadMessagesCount' => PlatformMessage::where('tenant_id', $tenant->id)
-                        ->where('recipient_type', PlatformMessage::TYPE_TENANT)
-                        ->where('is_read', false)
-                        ->count(),
+                    'unreadMessagesCount' => $platformUnread + $b2bUnread,
                     'pendingMarketplaceOrdersCount' => MarketplaceOrderItem::where('tenant_id', $tenant->id)
                         ->where('is_seen_by_seller', false)
                         ->count(),

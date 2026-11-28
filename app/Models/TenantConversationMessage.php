@@ -15,6 +15,8 @@ class TenantConversationMessage extends Model
         'body',
         'shared_context',
         'attachments',
+        'audio_path',
+        'audio_duration',
         'is_urgent',
         'read_at',
     ];
@@ -24,6 +26,7 @@ class TenantConversationMessage extends Model
         return [
             'shared_context' => 'array',
             'attachments' => 'array',
+            'audio_duration' => 'integer',
             'is_urgent' => 'boolean',
             'read_at' => 'datetime',
         ];

@@ -155,4 +155,68 @@ class B2bNetworkMessagingTest extends TestCase
 
         $this->assertSame(0, TenantConversationMessage::where('conversation_id', $conv->id)->count());
     }
+
+    public function test_sos_board_voice_notes_lightbox_preview_and_anti_spam_block(): void
+    {
+        Storage::fake('local');
+
+        [$garageA, , $userA] = $this->createEstablishment('garage-sos-a', Tenant::TYPE_GARAGE);
+        [$centerB, , $userB] = $this->createEstablishment('centre-sos-b', 'centre_technique');
+        [$garageC, , $userC] = $this->createEstablishment('garage-sos-c', Tenant::TYPE_GARAGE);
+
+        // 1) Bourse d'entraide SOS : Garage A publie une demande SOS à Douala
+        $sosRes = $this->actingAs($userA)
+            ->postJson('/reseau-pro/demandes', [
+                'category' => 'piece',
+                'title' => 'Cherche injecteur 1.6 HDi urgence',
+                'city' => 'Douala',
+                'is_urgent' => true,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('ok', true);
+
+        $sosId = $sosRes->json('id');
+
+        // Centre B clique sur "J'ai ça / Répondre en privé" -> ouvre la conversation
+        $replyRes = $this->actingAs($userB)
+            ->postJson("/reseau-pro/demandes/{$sosId}/repondre")
+            ->assertOk()
+            ->assertJsonPath('ok', true);
+
+        $convId = $replyRes->json('conversation_id');
+
+        // 2) Note vocale + photo Lightbox + anti-IDOR sur audio et aperçu
+        $voice = UploadedFile::fake()->createWithContent('vocal.webm', "OggS\x00\x02audio-bytes");
+        $photo = UploadedFile::fake()->image('panne.jpg', 300, 200);
+
+        $msgRes = $this->actingAs($userA)
+            ->post("/reseau-pro/conversations/{$convId}/messages", [
+                'body' => 'Voici le bruit moteur et la photo',
+                'audio' => $voice,
+                'audio_duration' => 12,
+                'attachments' => [$photo],
+            ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('ok', true);
+
+        $msgId = $msgRes->json('message.id');
+
+        // Participant B accède à l'audio et à l'aperçu photo
+        $this->actingAs($userB)->get("/reseau-pro/messages/{$msgId}/audio")->assertOk();
+        $this->actingAs($userB)->get("/reseau-pro/messages/{$msgId}/apercu/0")->assertOk();
+
+        // Intrus C bloqué en 403 sur audio et aperçu photo
+        $this->actingAs($userC)->get("/reseau-pro/messages/{$msgId}/audio")->assertForbidden();
+        $this->actingAs($userC)->get("/reseau-pro/messages/{$msgId}/apercu/0")->assertForbidden();
+
+        // 3) Blocage anti-spam : Garage A bloque Centre B -> Centre B reçoit 403
+        $this->actingAs($userA)->postJson("/reseau-pro/bloquer/{$centerB->id}")->assertOk();
+        $this->actingAs($userB)
+            ->postJson("/reseau-pro/conversations/{$convId}/messages", ['body' => 'Tentative après blocage'])
+            ->assertForbidden();
+
+        // Déblocage + résolution SOS
+        $this->actingAs($userA)->deleteJson("/reseau-pro/bloquer/{$centerB->id}")->assertOk();
+        $this->actingAs($userA)->patchJson("/reseau-pro/demandes/{$sosId}/resoudre")->assertOk();
+    }
 }

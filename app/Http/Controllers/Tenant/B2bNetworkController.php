@@ -4,16 +4,19 @@ namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
+use App\Models\B2bNetworkRequest;
 use App\Models\RepairOrder;
 use App\Models\TechnicalInspection;
 use App\Models\Tenant;
 use App\Models\TenantConversation;
 use App\Models\TenantConversationMessage;
+use App\Models\TenantNetworkBlock;
 use App\Models\Vehicle;
 use App\Services\GreenApiService;
 use App\Services\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -21,7 +24,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Réseau Pro Inter-Établissements (Garage <-> Garage / Centre Technique / Assurance / Boutique Pièces).
- * Isolation stricte : un établissement ne peut accéder qu'aux conversations dont il est participant.
+ * Inclut : chat fluide, notes vocales, aperçu Lightbox, accusés de lecture, partage dossier 1-clic,
+ * Bourse d'entraide Express (SOS par ville) et blocage anti-spam.
  */
 class B2bNetworkController extends Controller
 {
@@ -31,6 +35,9 @@ class B2bNetworkController extends Controller
         'bin', 'ori', 'mod', 'dbc', 'asc', 'trc',
     ];
 
+    private const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
+    private const AUDIO_EXTENSIONS = ['webm', 'ogg', 'mp3', 'm4a', 'wav'];
+
     public function state(Request $request, TenantContext $tenantContext): JsonResponse
     {
         $tenant = $tenantContext->getTenant();
@@ -38,11 +45,16 @@ class B2bNetworkController extends Controller
 
         $search = trim((string) $request->query('q', ''));
         $typeFilter = trim((string) $request->query('type', ''));
+        $sosCityFilter = trim((string) $request->query('sos_city', ''));
         $activeConvId = (int) $request->query('conversation_id', 0);
 
-        // 1) Annuaire des établissements partenaires visibles
+        $blockedIds = TenantNetworkBlock::where('blocker_tenant_id', $myId)->pluck('blocked_tenant_id')->all();
+        $blockedByIds = TenantNetworkBlock::where('blocked_tenant_id', $myId)->pluck('blocker_tenant_id')->all();
+        $excludedIds = array_unique(array_merge([$myId], $blockedIds, $blockedByIds));
+
+        // 1) Annuaire des établissements partenaires visibles (hors bloqués)
         $directory = Tenant::query()
-            ->where('id', '!=', $myId)
+            ->whereNotIn('id', $excludedIds)
             ->where('b2b_directory_visible', true)
             ->whereIn('status', [Tenant::STATUS_ACTIVE, Tenant::STATUS_TRIALING])
             ->when($typeFilter !== '', fn ($q) => $q->where('type', $typeFilter))
@@ -55,7 +67,7 @@ class B2bNetworkController extends Controller
             })
             ->orderBy('name')
             ->limit(60)
-            ->get(['id', 'name', 'type', 'city', 'country', 'phone'])
+            ->get(['id', 'name', 'type', 'city', 'country'])
             ->map(fn (Tenant $t) => [
                 'id' => $t->id,
                 'name' => $t->name,
@@ -92,21 +104,23 @@ class B2bNetworkController extends Controller
             ->unique('conversation_id')
             ->keyBy('conversation_id');
 
-        $conversations = $conversationsRaw->map(function (TenantConversation $c) use ($myId, $unreadCounts, $lastMessages) {
+        $conversations = $conversationsRaw->map(function (TenantConversation $c) use ($myId, $unreadCounts, $lastMessages, $blockedIds) {
             $peer = (int) $c->tenant_one_id === $myId ? $c->tenantTwo : $c->tenantOne;
             $last = $lastMessages->get($c->id);
+            $peerId = (int) ($peer?->id ?? 0);
 
             return [
                 'id' => $c->id,
                 'peer' => [
-                    'id' => $peer?->id,
+                    'id' => $peerId,
                     'name' => $peer?->name ?? 'Établissement',
                     'type' => $peer?->type ?? 'garage',
                     'type_label' => $this->typeLabel($peer?->type),
                     'city' => $peer?->city,
+                    'is_blocked_by_me' => in_array($peerId, $blockedIds, true),
                 ],
                 'unread_count' => (int) ($unreadCounts->get($c->id) ?? 0),
-                'last_preview' => $last ? Str::limit($last->body, 70) : '',
+                'last_preview' => $last ? ($last->audio_path && ! $last->body ? '🎙️ Note vocale' : Str::limit($last->body, 70)) : '',
                 'last_message_at' => $c->last_message_at?->toIso8601String(),
             ];
         })->values();
@@ -119,10 +133,14 @@ class B2bNetworkController extends Controller
             if ($conv && $conv->involvesTenant($myId)) {
                 $activeConversation = $conversations->firstWhere('id', $activeConvId);
 
-                TenantConversationMessage::where('conversation_id', $conv->id)
+                $marked = TenantConversationMessage::where('conversation_id', $conv->id)
                     ->where('sender_tenant_id', '!=', $myId)
                     ->whereNull('read_at')
                     ->update(['read_at' => now()]);
+
+                if ($marked > 0) {
+                    Cache::forget("mboacar_tenant_nav_{$myId}");
+                }
 
                 $messages = TenantConversationMessage::where('conversation_id', $conv->id)
                     ->orderBy('id')
@@ -133,7 +151,32 @@ class B2bNetworkController extends Controller
             }
         }
 
-        // 4) Éléments partageables en 1 clic (véhicules, OR, PV visite technique)
+        // 4) Bourse d'entraide Express (SOS Pièces & Sous-traitance par ville)
+        $sosRequests = B2bNetworkRequest::with('tenant:id,name,type,city')
+            ->where('status', B2bNetworkRequest::STATUS_OPEN)
+            ->whereNotIn('tenant_id', array_merge($blockedIds, $blockedByIds))
+            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            ->when($sosCityFilter !== '', fn ($q) => $q->where('city', 'like', "%{$sosCityFilter}%"))
+            ->orderByDesc('is_urgent')
+            ->latest('id')
+            ->limit(30)
+            ->get()
+            ->map(fn (B2bNetworkRequest $r) => [
+                'id' => $r->id,
+                'is_mine' => (int) $r->tenant_id === $myId,
+                'tenant_id' => $r->tenant_id,
+                'tenant_name' => $r->tenant?->name ?? 'Établissement',
+                'tenant_type_label' => $this->typeLabel($r->tenant?->type),
+                'city' => $r->city ?: ($r->tenant?->city ?? ''),
+                'category' => $r->category,
+                'title' => $r->title,
+                'description' => $r->description,
+                'is_urgent' => (bool) $r->is_urgent,
+                'created_at' => $r->created_at?->toIso8601String(),
+            ])
+            ->values();
+
+        // 5) Éléments partageables en 1 clic
         $shareableVehicles = Vehicle::orderByDesc('id')
             ->limit(30)
             ->get(['id', 'license_plate', 'brand', 'model', 'mileage'])
@@ -163,12 +206,14 @@ class B2bNetworkController extends Controller
         return response()->json([
             'ok' => true,
             'my_tenant_id' => $myId,
+            'my_city' => $tenant->city ?? '',
             'b2b_directory_visible' => (bool) $tenant->b2b_directory_visible,
             'total_unread' => (int) $unreadCounts->sum(),
             'directory' => $directory,
             'conversations' => $conversations,
             'active_conversation' => $activeConversation,
             'messages' => $messages,
+            'sos_requests' => $sosRequests,
             'shareable' => [
                 'vehicles' => $shareableVehicles,
                 'repair_orders' => $shareableOrders,
@@ -187,6 +232,10 @@ class B2bNetworkController extends Controller
         $targetId = (int) $validated['target_tenant_id'];
         if ($targetId === (int) $tenant->id) {
             return response()->json(['ok' => false, 'error' => 'Vous ne pouvez pas ouvrir une conversation avec votre propre établissement.'], 422);
+        }
+
+        if (TenantNetworkBlock::isBlockedBetween((int) $tenant->id, $targetId)) {
+            return response()->json(['ok' => false, 'error' => 'Communication impossible : un blocage existe entre ces deux établissements.'], 403);
         }
 
         $target = Tenant::where('id', $targetId)
@@ -222,17 +271,32 @@ class B2bNetworkController extends Controller
             abort(403, 'Accès refusé à cette conversation inter-établissements.');
         }
 
+        $peerId = $conversation->otherTenantId($myId);
+        if (TenantNetworkBlock::isBlockedBetween($myId, $peerId)) {
+            return response()->json(['ok' => false, 'error' => 'Envoi bloqué : un blocage existe entre ces deux établissements.'], 403);
+        }
+
         $validated = $request->validate([
-            'body' => ['required', 'string', 'min:1', 'max:4000'],
+            'body' => ['nullable', 'string', 'max:4000'],
             'is_urgent' => ['nullable', 'boolean'],
             'notify_whatsapp' => ['nullable', 'boolean'],
             'share_type' => ['nullable', 'in:vehicle,repair_order,technical_pv'],
             'share_id' => ['nullable', 'integer'],
             'attachments' => ['nullable', 'array', 'max:3'],
             'attachments.*' => ['file', 'max:10240'],
+            'audio' => ['nullable', 'file', 'max:10240'],
+            'audio_duration' => ['nullable', 'integer', 'min:0', 'max:180'],
         ]);
 
-        // Validation stricte des pièces jointes (blocage vidéos, archives compressées, scripts)
+        $bodyText = trim((string) ($validated['body'] ?? ''));
+        $hasAudio = $request->hasFile('audio');
+        $hasFiles = $request->hasFile('attachments');
+
+        if ($bodyText === '' && ! $hasAudio && ! $hasFiles) {
+            return response()->json(['ok' => false, 'error' => 'Veuillez saisir un message, joindre un fichier ou enregistrer une note vocale.'], 422);
+        }
+
+        // Pièces jointes sécurisées
         $storedAttachments = [];
         foreach ($request->file('attachments', []) as $file) {
             $ext = strtolower($file->getClientOriginalExtension());
@@ -257,7 +321,25 @@ class B2bNetworkController extends Controller
             ];
         }
 
-        // Construction serveur du contexte partagé en 1 clic (uniquement des ressources du tenant courant)
+        // Note vocale atelier (audio uniquement, jamais de vidéo)
+        $audioPath = null;
+        $audioDuration = null;
+        if ($hasAudio) {
+            $audioFile = $request->file('audio');
+            $audioExt = strtolower($audioFile->getClientOriginalExtension() ?: 'webm');
+            $mime = strtolower((string) $audioFile->getMimeType());
+            $isForbiddenVideoMime = str_starts_with($mime, 'video/') && $mime !== 'video/webm';
+            if ($isForbiddenVideoMime || ! in_array($audioExt, self::AUDIO_EXTENSIONS, true)) {
+                return response()->json(['ok' => false, 'error' => 'Seules les notes vocales audio (webm, ogg, mp3, m4a, wav) sont autorisées.'], 422);
+            }
+            $audioPath = $audioFile->storeAs(
+                "b2b-network/conv-{$conversation->id}/audio",
+                Str::random(32).'.'.$audioExt,
+                'local'
+            );
+            $audioDuration = (int) ($validated['audio_duration'] ?? 0);
+        }
+
         $sharedContext = $this->resolveSharedContext(
             $validated['share_type'] ?? null,
             isset($validated['share_id']) ? (int) $validated['share_id'] : null
@@ -271,22 +353,23 @@ class B2bNetworkController extends Controller
             'sender_tenant_id' => $myId,
             'sender_user_id' => $user->id,
             'sender_name' => $tenant->name.' — '.$user->name,
-            'body' => trim($validated['body']),
+            'body' => $bodyText !== '' ? $bodyText : ($audioPath ? '🎙️ Note vocale atelier' : '📎 Pièce jointe'),
             'shared_context' => $sharedContext,
             'attachments' => $storedAttachments,
+            'audio_path' => $audioPath,
+            'audio_duration' => $audioDuration,
             'is_urgent' => $isUrgent,
         ]);
 
         $conversation->update(['last_message_at' => now()]);
+        Cache::forget("mboacar_tenant_nav_{$peerId}");
 
-        // Alerte WhatsApp optionnelle vers l'établissement destinataire
         if ($request->boolean('notify_whatsapp') || $isUrgent) {
-            $peerId = $conversation->otherTenantId($myId);
             $peer = Tenant::find($peerId);
             if ($peer && ! empty($peer->phone)) {
                 try {
                     $prefix = $isUrgent ? '🚨 [URGENT Réseau Pro MboaCar]' : '💬 [Réseau Pro MboaCar]';
-                    $waText = "{$prefix}\n*{$tenant->name}* vous a envoyé un message :\n\"".Str::limit($message->body, 220)."\"\n\nRépondez directement depuis votre espace MboaCar → Messagerie → Réseau Pro.";
+                    $waText = "{$prefix}\n*{$tenant->name}* vous a envoyé un message :\n\"".Str::limit($message->body, 220)."\"\n\nRépondez depuis MboaCar → Messagerie → Réseau Pro.";
                     $greenApi->sendMessage($peer->phone, $waText);
                 } catch (\Throwable $e) {
                     Log::warning('B2B network WhatsApp alert failed', ['conversation_id' => $conversation->id, 'error' => $e->getMessage()]);
@@ -323,6 +406,46 @@ class B2bNetworkController extends Controller
         return Storage::disk('local')->download($att['path'], $att['original_name'] ?? 'piece-jointe');
     }
 
+    public function previewAttachment(
+        TenantConversationMessage $message,
+        int $index,
+        TenantContext $tenantContext
+    ): StreamedResponse {
+        $message->loadMissing('conversation');
+        $myId = (int) $tenantContext->id();
+
+        if (! $message->conversation || ! $message->conversation->involvesTenant($myId)) {
+            abort(403, 'Accès refusé à cet aperçu.');
+        }
+
+        $attachments = is_array($message->attachments) ? $message->attachments : [];
+        $att = $attachments[$index] ?? null;
+        $ext = strtolower((string) ($att['ext'] ?? ''));
+        if (! $att || empty($att['path']) || ! in_array($ext, self::IMAGE_EXTENSIONS, true) || ! Storage::disk('local')->exists($att['path'])) {
+            abort(404);
+        }
+
+        return Storage::disk('local')->response($att['path']);
+    }
+
+    public function streamAudio(
+        TenantConversationMessage $message,
+        TenantContext $tenantContext
+    ): StreamedResponse {
+        $message->loadMissing('conversation');
+        $myId = (int) $tenantContext->id();
+
+        if (! $message->conversation || ! $message->conversation->involvesTenant($myId)) {
+            abort(403, 'Accès refusé à cette note vocale.');
+        }
+
+        if (empty($message->audio_path) || ! Storage::disk('local')->exists($message->audio_path)) {
+            abort(404);
+        }
+
+        return Storage::disk('local')->response($message->audio_path);
+    }
+
     public function toggleVisibility(Request $request, TenantContext $tenantContext): JsonResponse
     {
         $validated = $request->validate([
@@ -338,15 +461,108 @@ class B2bNetworkController extends Controller
         ]);
     }
 
+    public function storeSosRequest(Request $request, TenantContext $tenantContext): JsonResponse
+    {
+        $tenant = $tenantContext->getTenant();
+        $validated = $request->validate([
+            'category' => ['required', 'in:piece,diagnostic,sous_traitance,outillage'],
+            'title' => ['required', 'string', 'min:4', 'max:180'],
+            'description' => ['nullable', 'string', 'max:1500'],
+            'city' => ['nullable', 'string', 'max:120'],
+            'is_urgent' => ['nullable', 'boolean'],
+        ]);
+
+        $sos = B2bNetworkRequest::create([
+            'tenant_id' => $tenant->id,
+            'user_id' => $request->user('web')->id,
+            'city' => trim((string) ($validated['city'] ?? $tenant->city ?? '')),
+            'category' => $validated['category'],
+            'title' => trim($validated['title']),
+            'description' => $validated['description'] ?? null,
+            'is_urgent' => (bool) ($validated['is_urgent'] ?? false),
+            'status' => B2bNetworkRequest::STATUS_OPEN,
+            'expires_at' => now()->addDays(7),
+        ]);
+
+        return response()->json(['ok' => true, 'id' => $sos->id], 201);
+    }
+
+    public function resolveSosRequest(B2bNetworkRequest $sosRequest, TenantContext $tenantContext): JsonResponse
+    {
+        if ((int) $sosRequest->tenant_id !== (int) $tenantContext->id()) {
+            abort(403);
+        }
+
+        $sosRequest->update(['status' => B2bNetworkRequest::STATUS_RESOLVED]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function replyToSosRequest(B2bNetworkRequest $sosRequest, TenantContext $tenantContext): JsonResponse
+    {
+        $myId = (int) $tenantContext->id();
+        $targetId = (int) $sosRequest->tenant_id;
+
+        if ($targetId === $myId) {
+            return response()->json(['ok' => false, 'error' => 'C\'est votre propre annonce.'], 422);
+        }
+
+        if (TenantNetworkBlock::isBlockedBetween($myId, $targetId)) {
+            return response()->json(['ok' => false, 'error' => 'Un blocage existe avec cet établissement.'], 403);
+        }
+
+        $conv = TenantConversation::findOrCreatePair($myId, $targetId);
+        if (! $conv->last_message_at) {
+            $conv->update(['last_message_at' => now()]);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'conversation_id' => $conv->id,
+            'prefill' => "Bonjour, concernant votre demande SOS « {$sosRequest->title} » : ",
+        ]);
+    }
+
+    public function blockTenant(Tenant $targetTenant, TenantContext $tenantContext): JsonResponse
+    {
+        $myId = (int) $tenantContext->id();
+        if ((int) $targetTenant->id === $myId) {
+            return response()->json(['ok' => false, 'error' => 'Action invalide.'], 422);
+        }
+
+        TenantNetworkBlock::firstOrCreate([
+            'blocker_tenant_id' => $myId,
+            'blocked_tenant_id' => (int) $targetTenant->id,
+        ]);
+
+        return response()->json(['ok' => true, 'blocked' => true]);
+    }
+
+    public function unblockTenant(Tenant $targetTenant, TenantContext $tenantContext): JsonResponse
+    {
+        TenantNetworkBlock::where('blocker_tenant_id', (int) $tenantContext->id())
+            ->where('blocked_tenant_id', (int) $targetTenant->id)
+            ->delete();
+
+        return response()->json(['ok' => true, 'blocked' => false]);
+    }
+
     private function formatMessage(TenantConversationMessage $m, int $myTenantId): array
     {
-        $attachments = collect($m->attachments ?? [])->map(fn ($att, $idx) => [
-            'index' => $idx,
-            'name' => $att['original_name'] ?? 'fichier',
-            'ext' => $att['ext'] ?? '',
-            'size_kb' => round(((int) ($att['size'] ?? 0)) / 1024, 1),
-            'download_url' => route('tenant.b2b_network.attachment', ['message' => $m->id, 'index' => $idx]),
-        ])->values();
+        $attachments = collect($m->attachments ?? [])->map(function ($att, $idx) use ($m) {
+            $ext = strtolower((string) ($att['ext'] ?? ''));
+            $isImage = in_array($ext, self::IMAGE_EXTENSIONS, true);
+
+            return [
+                'index' => $idx,
+                'name' => $att['original_name'] ?? 'fichier',
+                'ext' => $ext,
+                'is_image' => $isImage,
+                'size_kb' => round(((int) ($att['size'] ?? 0)) / 1024, 1),
+                'download_url' => route('tenant.b2b_network.attachment', ['message' => $m->id, 'index' => $idx]),
+                'preview_url' => $isImage ? route('tenant.b2b_network.preview', ['message' => $m->id, 'index' => $idx]) : null,
+            ];
+        })->values();
 
         return [
             'id' => $m->id,
@@ -355,6 +571,8 @@ class B2bNetworkController extends Controller
             'body' => $m->body,
             'shared_context' => $m->shared_context,
             'attachments' => $attachments,
+            'audio_url' => $m->audio_path ? route('tenant.b2b_network.audio', ['message' => $m->id]) : null,
+            'audio_duration' => $m->audio_duration,
             'is_urgent' => (bool) $m->is_urgent,
             'read_at' => $m->read_at?->toIso8601String(),
             'created_at' => $m->created_at?->toIso8601String(),
@@ -378,6 +596,8 @@ class B2bNetworkController extends Controller
                 'badge' => 'Fiche Véhicule',
                 'title' => trim("{$v->brand} {$v->model} ({$v->license_plate})"),
                 'details' => trim(($v->year ? "Année {$v->year} • " : '').($v->mileage ? number_format($v->mileage, 0, ',', ' ').' km' : '').($v->vin ? " • VIN {$v->vin}" : '')),
+                'action_label' => 'Ouvrir en Réception',
+                'action_url' => '/receptions',
             ];
         }
 
@@ -392,6 +612,8 @@ class B2bNetworkController extends Controller
                 'badge' => 'Ordre de Réparation',
                 'title' => "{$ro->order_number} — ".trim(($ro->vehicle?->brand ?? '').' '.($ro->vehicle?->model ?? '').' ('.($ro->vehicle?->license_plate ?? '').')'),
                 'details' => "Statut : {$ro->status}".($ro->customer_complaint ? ' • '.Str::limit($ro->customer_complaint, 120) : ''),
+                'action_label' => 'Créer un Devis',
+                'action_url' => '/devis',
             ];
         }
 
@@ -405,7 +627,10 @@ class B2bNetworkController extends Controller
                 'type' => 'technical_pv',
                 'badge' => 'PV Visite Technique',
                 'title' => "PV {$pv->pv_number} — ".trim(($pv->vehicle?->brand ?? '').' '.($pv->vehicle?->model ?? '').' ('.($pv->vehicle?->license_plate ?? '').')'),
-                'details' => "Résultat : {$pv->result}".($pv->public_token ? ' • Lien PV : '.url("/pv-visite/{$pv->public_token}") : ''),
+                'details' => "Résultat : {$pv->result}",
+                'pv_url' => $pv->public_token ? url("/pv-visite/{$pv->public_token}") : null,
+                'action_label' => 'Créer un Devis',
+                'action_url' => '/devis',
             ];
         }
 

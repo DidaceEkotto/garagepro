@@ -512,8 +512,24 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
             ->name('tenant.b2b_network.send');
         Route::get('/reseau-pro/messages/{message}/piece-jointe/{index}', [B2bNetworkController::class, 'downloadAttachment'])
             ->name('tenant.b2b_network.attachment');
+        Route::get('/reseau-pro/messages/{message}/apercu/{index}', [B2bNetworkController::class, 'previewAttachment'])
+            ->name('tenant.b2b_network.preview');
+        Route::get('/reseau-pro/messages/{message}/audio', [B2bNetworkController::class, 'streamAudio'])
+            ->name('tenant.b2b_network.audio');
         Route::patch('/reseau-pro/visibilite', [B2bNetworkController::class, 'toggleVisibility'])
             ->name('tenant.b2b_network.visibility');
+        Route::post('/reseau-pro/demandes', [B2bNetworkController::class, 'storeSosRequest'])
+            ->middleware('throttle:15,1')
+            ->name('tenant.b2b_network.sos.store');
+        Route::patch('/reseau-pro/demandes/{sosRequest}/resoudre', [B2bNetworkController::class, 'resolveSosRequest'])
+            ->name('tenant.b2b_network.sos.resolve');
+        Route::post('/reseau-pro/demandes/{sosRequest}/repondre', [B2bNetworkController::class, 'replyToSosRequest'])
+            ->middleware('throttle:30,1')
+            ->name('tenant.b2b_network.sos.reply');
+        Route::post('/reseau-pro/bloquer/{targetTenant}', [B2bNetworkController::class, 'blockTenant'])
+            ->name('tenant.b2b_network.block');
+        Route::delete('/reseau-pro/bloquer/{targetTenant}', [B2bNetworkController::class, 'unblockTenant'])
+            ->name('tenant.b2b_network.unblock');
     });
 
     // Gestion Marketplace côté Garage (Catégories, Sous-catégories, Produits, Commandes)

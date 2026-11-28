@@ -237,7 +237,7 @@ const menuGroups = computed(() => {
                 { label: t('layoutExtra.agencies'), href: '/agences', icon: 'bi-building', permissions: ['agencies.view', 'agencies.manage'] },
                 { label: t('layout.professionals'), href: '/professionnels', icon: 'bi-person-plus', permissions: ['users.view', 'users.manage'] },
                 { label: t('layout.hr'), href: '/rh', icon: 'bi-person-badge', permissions: ['hr.manage'] },
-                { label: t('layoutExtra.messaging'), href: '/messagerie', icon: 'bi-chat-dots', permissions: [] },
+                { label: t('layoutExtra.messaging'), href: '/messagerie', icon: 'bi-chat-dots', permissions: [], badge: unreadMessagesCount.value },
                 { label: t('layoutExtra.afterSales'), href: '/apres-vente', icon: 'bi-award', permissions: ['after_sales.manage'] },
                 { label: t('layout.settings'), href: '/parametres-espace', icon: 'bi-gear', permissions: ['settings.manage'] },
                 { label: t('layoutExtra.affiliation'), href: '/affiliation', icon: 'bi-ticket-perforated', permissions: ['settings.manage', 'payments.manage'] },
