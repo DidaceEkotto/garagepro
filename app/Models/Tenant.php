@@ -50,6 +50,7 @@ class Tenant extends Model
         'vat_rate',
         'hourly_rate',
         'settings',
+        'showcase_photos',
     ];
 
     protected function casts(): array
@@ -67,6 +68,7 @@ class Tenant extends Model
             'vat_rate' => 'decimal:2',
             'hourly_rate' => 'integer',
             'settings' => 'array',
+            'showcase_photos' => 'array',
         ];
     }
 
@@ -78,6 +80,32 @@ class Tenant extends Model
     public function users(): HasMany
     {
         return $this->hasMany(User::class);
+    }
+
+    public function services(): HasMany
+    {
+        return $this->hasMany(TenantService::class);
+    }
+
+    public function clientReviews(): HasMany
+    {
+        return $this->hasMany(ClientReview::class);
+    }
+
+    /**
+     * Retourne les URLs publiques des photos vitrine de l'établissement.
+     *
+     * @return array<int, string>
+     */
+    public function showcasePhotoUrls(): array
+    {
+        $photos = is_array($this->showcase_photos) ? $this->showcase_photos : [];
+
+        return collect($photos)
+            ->filter(fn ($p) => is_string($p) && trim($p) !== '')
+            ->map(fn (string $p) => \Illuminate\Support\Facades\Storage::disk('public')->url($p))
+            ->values()
+            ->all();
     }
 
     public function isInTrialGrace(): bool

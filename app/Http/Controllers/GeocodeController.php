@@ -133,12 +133,19 @@ class GeocodeController extends Controller
                 $addr = $item['address'] ?? [];
                 $city = $addr['city'] ?? $addr['town'] ?? $addr['village'] ?? $addr['municipality'] ?? $addr['state'] ?? '';
                 $suburb = $addr['suburb'] ?? $addr['neighbourhood'] ?? $addr['quarter'] ?? '';
+                $cc = strtoupper((string) ($addr['country_code'] ?? ''));
+                $dialCode = $cc !== ''
+                    ? (\App\Models\Country::where('code', $cc)->value('dial_code')
+                        ?? collect(\App\Models\Country::defaultAfricanCountries())->firstWhere('code', $cc)['dial_code'] ?? '+237')
+                    : '+237';
 
                 return [
                     'display_name' => (string) ($item['display_name'] ?? ''),
                     'short_label' => trim(($suburb && $suburb !== $city ? "{$suburb}, " : '').$city),
                     'city' => (string) $city,
                     'country' => (string) ($addr['country'] ?? ''),
+                    'country_code' => $cc,
+                    'dial_code' => $dialCode,
                     'lat' => $lat,
                     'lon' => $lon,
                 ];

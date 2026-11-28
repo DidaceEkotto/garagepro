@@ -10,6 +10,7 @@ use App\Http\Controllers\DemoController;
 use App\Http\Controllers\GeocodeController;
 use App\Http\Controllers\MarketplaceController;
 use App\Http\Controllers\PublicAppointmentController;
+use App\Http\Controllers\PublicGarageController;
 use App\Http\Controllers\PublicQuoteController;
 use App\Http\Controllers\PublicReviewController;
 use App\Http\Controllers\PublicSosController;
@@ -45,6 +46,7 @@ use App\Http\Controllers\Tenant\RepairOrderController;
 use App\Http\Controllers\Tenant\ReportController;
 use App\Http\Controllers\Tenant\RoadsideSosController;
 use App\Http\Controllers\Tenant\SecureFileController;
+use App\Http\Controllers\Tenant\ShowcaseController;
 use App\Http\Controllers\Tenant\SpaceSettingsController;
 use App\Http\Controllers\Tenant\SubcontractController;
 use App\Http\Controllers\Tenant\TechnicalInspectionController;
@@ -175,6 +177,12 @@ Route::post('/sos-depannage/{token}/offres/{offer}/accepter', [PublicSosControll
     ->middleware('throttle:15,1')
     ->name('public.sos.accept_offer');
 
+// Vitrine publique d'un établissement + Prise de rendez-vous instantanée
+Route::get('/garage/{slug}', [PublicGarageController::class, 'show'])->name('public.garage.show');
+Route::post('/garage/{slug}/rendez-vous', [PublicGarageController::class, 'bookAppointment'])
+    ->middleware('throttle:12,1')
+    ->name('public.garage.book_appointment');
+
 // MboaCar Check — Rapport Historique Anti-Fraude Véhicule d'Occasion + Scan QR Intelligent
 Route::get('/verifier-vehicule', [VehicleHistoryCheckController::class, 'index'])->name('public.vehicle_check.index');
 Route::get('/verifier-vehicule/pdf', [VehicleHistoryCheckController::class, 'pdf'])
@@ -291,6 +299,14 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
     Route::get('/depannage-sos', [RoadsideSosController::class, 'index'])->name('tenant.sos.index');
     Route::post('/depannage-sos/{sosRequest}/offre', [RoadsideSosController::class, 'sendOffer'])->name('tenant.sos.offer');
     Route::patch('/depannage-sos/{sosRequest}/statut', [RoadsideSosController::class, 'updateMissionStatus'])->name('tenant.sos.status');
+
+    // Ma Vitrine & Prestations (photos établissement + services avec image facultative)
+    Route::get('/vitrine-prestations', [ShowcaseController::class, 'index'])->name('tenant.showcase.index');
+    Route::post('/vitrine-prestations/photos', [ShowcaseController::class, 'uploadPhotos'])->name('tenant.showcase.photos.upload');
+    Route::delete('/vitrine-prestations/photos', [ShowcaseController::class, 'deletePhoto'])->name('tenant.showcase.photos.delete');
+    Route::post('/vitrine-prestations/prestations', [ShowcaseController::class, 'storeService'])->name('tenant.showcase.services.store');
+    Route::post('/vitrine-prestations/prestations/{service}', [ShowcaseController::class, 'updateService'])->name('tenant.showcase.services.update');
+    Route::delete('/vitrine-prestations/prestations/{service}', [ShowcaseController::class, 'deleteService'])->name('tenant.showcase.services.delete');
 
     // Assistant IA Diagnostic Automobile (Gemini — isolé par tenant)
     Route::get('/assistant-ia', [AiDiagnosticController::class, 'index'])->name('tenant.ai_diagnostic.index');
