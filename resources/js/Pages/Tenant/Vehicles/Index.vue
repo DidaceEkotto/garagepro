@@ -296,6 +296,14 @@ async function createVehicle() {
                                 <td>{{ (v.mileage ?? 0).toLocaleString('fr-FR') }} km</td>
                                 <td class="text-end text-nowrap">
                                     <a
+                                        :href="`/vehicules/${v.id}/etiquette-qr`"
+                                        target="_blank"
+                                        class="btn btn-outline-dark btn-sm me-1"
+                                        title="Imprimer Étiquette QR Pare-Brise & Porte-Clés (Check-in 3s)"
+                                    >
+                                        <i class="bi bi-printer me-1"></i>QR
+                                    </a>
+                                    <a
                                         v-if="v.public_token"
                                         :href="`/carnet/${v.public_token}`"
                                         target="_blank"

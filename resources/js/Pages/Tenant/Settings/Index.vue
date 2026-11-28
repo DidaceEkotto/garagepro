@@ -1,10 +1,12 @@
 <script setup>
 import FileDropzone from '@/Components/FileDropzone.vue';
+import LocationAutocomplete from '@/Components/LocationAutocomplete.vue';
 import PhoneInput from '@/Components/PhoneInput.vue';
 import TimePickerInput from '@/Components/TimePickerInput.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
 import { useLightbox } from '@/composables/useLightbox';
 import { Head, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
 
 const { openLightbox } = useLightbox();
 
@@ -27,6 +29,13 @@ const form = useForm({
     phone: props.space?.phone ?? '',
     address: props.space?.address ?? '',
     city: props.space?.city ?? '',
+    formatted_location: props.space?.formatted_location ?? props.space?.city ?? '',
+    latitude: props.space?.latitude ?? null,
+    longitude: props.space?.longitude ?? null,
+    sos_enabled: props.space?.sos_enabled ?? true,
+    sos_radius_km: props.space?.sos_radius_km ?? 35,
+    whatsapp_bot_enabled: props.space?.whatsapp_bot_enabled ?? false,
+    whatsapp_bot_catalog: props.space?.whatsapp_bot_catalog ?? '',
     vat_rate: props.space?.vat_rate ?? 19.25,
     hourly_rate: props.space?.hourly_rate ?? 5000,
     legal_mentions: props.space?.legal_mentions ?? '',
@@ -44,6 +53,39 @@ function toggleDay(dayKey) {
         form.work_days.push(dayKey);
     } else if (form.work_days.length > 1) {
         form.work_days.splice(idx, 1);
+    }
+}
+
+const botTestMsg = ref('Bonjour, combien coûte une vidange complète sur Toyota RAV4 ? Avez-vous de la place demain ?');
+const botTestReply = ref('');
+const botTesting = ref(false);
+
+function onLocationSelected(loc) {
+    form.city = loc.city || form.city;
+    form.formatted_location = loc.formatted_location || loc.city;
+    form.latitude = loc.latitude;
+    form.longitude = loc.longitude;
+}
+
+async function testWhatsappBot() {
+    if (!botTestMsg.value.trim() || botTesting.value) return;
+    botTesting.value = true;
+    botTestReply.value = '';
+    try {
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        const res = await fetch('/parametres-espace/bot-whatsapp/tester', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': token,
+                Accept: 'application/json',
+            },
+            body: JSON.stringify({ message: botTestMsg.value }),
+        });
+        const data = await res.json();
+        botTestReply.value = data.reply || 'Aucune réponse.';
+    } finally {
+        botTesting.value = false;
     }
 }
 
@@ -174,6 +216,86 @@ function saveSettings() {
                         />
                         <div v-else class="text-muted small py-4 border rounded bg-light">
                             Aucun logo téléversé pour le moment.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Localisation OpenStreetMap (SOS Dépannage) & Réceptionniste IA WhatsApp 24/7 -->
+        <div class="row g-4 mt-1">
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-white py-3 fw-bold">
+                        <i class="bi bi-geo-alt-fill text-danger me-2"></i>Localisation GPS OpenStreetMap &amp; SOS Dépannage
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold">Localisation précise de l'établissement</label>
+                            <LocationAutocomplete
+                                v-model="form.formatted_location"
+                                :country="space?.country || ''"
+                                placeholder="Tapez votre quartier, rue ou ville..."
+                                @select="onLocationSelected"
+                            />
+                            <div v-if="form.latitude && form.longitude" class="form-text text-success small">
+                                <i class="bi bi-check-circle-fill me-1"></i>Coordonnées GPS : {{ Number(form.latitude).toFixed(5) }}, {{ Number(form.longitude).toFixed(5) }}
+                            </div>
+                        </div>
+                        <div class="row g-2 align-items-center mb-3">
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input id="sosSwitch" v-model="form.sos_enabled" type="checkbox" class="form-check-input" />
+                                    <label class="form-check-label small fw-semibold" for="sosSwitch">Recevoir les alertes SOS Dépannage</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small mb-1">Rayon d'intervention (km)</label>
+                                <input v-model.number="form.sos_radius_km" type="number" min="5" max="200" class="form-control form-control-sm" />
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-primary btn-sm px-4" :disabled="form.processing" @click="saveSettings">
+                            Enregistrer la localisation &amp; SOS
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-white py-3 fw-bold d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-robot text-success me-2"></i>Réceptionniste IA WhatsApp 24h/24</span>
+                        <div class="form-check form-switch mb-0">
+                            <input id="botSwitch" v-model="form.whatsapp_bot_enabled" type="checkbox" class="form-check-input" />
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold">Grille de tarifs &amp; horaires communiqués aux clients par l'IA</label>
+                            <textarea
+                                v-model="form.whatsapp_bot_catalog"
+                                rows="3"
+                                class="form-control form-control-sm"
+                                placeholder="Ex: Vidange simple 25 000 FCFA, Diagnostic valise 10 000 FCFA, Plaquettes dès 18 000 FCFA. Ouvert Lun-Sam 8h-18h."
+                            ></textarea>
+                        </div>
+                        <div v-if="space?.whatsapp_bot_secret" class="alert alert-light border small py-1 px-2 mb-2">
+                            <div><strong>Webhook :</strong> <code>{{ space.whatsapp_bot_webhook_url }}</code></div>
+                            <div><strong>Header <code>X-Bot-Secret</code> :</strong> <code>{{ space.whatsapp_bot_secret }}</code></div>
+                        </div>
+                        <button type="button" class="btn btn-success btn-sm px-4 mb-3" :disabled="form.processing" @click="saveSettings">
+                            Enregistrer le Bot WhatsApp
+                        </button>
+
+                        <div class="border-top pt-2">
+                            <label class="form-label small fw-semibold mb-1">Simulateur en direct (tester une question client)</label>
+                            <div class="input-group input-group-sm mb-2">
+                                <input v-model="botTestMsg" type="text" class="form-control" />
+                                <button type="button" class="btn btn-outline-success" :disabled="botTesting" @click="testWhatsappBot">
+                                    {{ botTesting ? '...' : 'Tester' }}
+                                </button>
+                            </div>
+                            <div v-if="botTestReply" class="p-2 rounded bg-light border small" style="white-space: pre-wrap;">{{ botTestReply }}</div>
                         </div>
                     </div>
                 </div>

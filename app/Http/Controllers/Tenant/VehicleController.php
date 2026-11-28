@@ -60,6 +60,18 @@ class VehicleController extends Controller
         return back()->with('success', "Véhicule {$vehicle->license_plate} ajouté.");
     }
 
+    public function qrLabel(Vehicle $vehicle, TenantContext $tenantContext): \Illuminate\Contracts\View\View
+    {
+        $this->authorize('view', $vehicle);
+        $token = $vehicle->ensurePublicToken();
+
+        return view('pdf.vehicle-qr-label', [
+            'vehicle' => $vehicle,
+            'tenant' => $tenantContext->getTenant(),
+            'scanUrl' => url("/vehicule-scan/{$token}"),
+        ]);
+    }
+
     /**
      * OCR Carte Grise / Plaque d'immatriculation / VIN via Gemini Vision
      * pour pré-remplir automatiquement la fiche véhicule sans saisie manuelle.

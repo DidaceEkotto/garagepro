@@ -317,6 +317,9 @@ class TenantRegistrationController extends Controller
                 'phone' => $data['phone'] ?? null,
                 'country' => $data['country'],
                 'city' => $data['city'] ?? null,
+                'formatted_location' => $data['formatted_location'] ?? null,
+                'latitude' => isset($data['latitude']) ? (float) $data['latitude'] : null,
+                'longitude' => isset($data['longitude']) ? (float) $data['longitude'] : null,
                 'status' => Tenant::STATUS_TRIALING,
                 'trial_ends_at' => now()->addDays($trialDays),
             ]);

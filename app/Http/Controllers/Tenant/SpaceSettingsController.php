@@ -32,6 +32,16 @@ class SpaceSettingsController extends Controller
                 'phone' => $tenant->phone,
                 'address' => $tenant->address,
                 'city' => $tenant->city,
+                'country' => $tenant->country,
+                'formatted_location' => $tenant->formatted_location ?: $tenant->city,
+                'latitude' => $tenant->latitude,
+                'longitude' => $tenant->longitude,
+                'sos_enabled' => (bool) $tenant->sos_enabled,
+                'sos_radius_km' => (int) ($tenant->sos_radius_km ?: 35),
+                'whatsapp_bot_enabled' => (bool) $tenant->whatsapp_bot_enabled,
+                'whatsapp_bot_secret' => $tenant->whatsapp_bot_secret,
+                'whatsapp_bot_catalog' => $tenant->whatsapp_bot_catalog ?? '',
+                'whatsapp_bot_webhook_url' => url("/webhooks/whatsapp-bot/{$tenant->slug}"),
                 'vat_rate' => (float) $tenant->vat_rate,
                 'hourly_rate' => (int) $tenant->hourly_rate,
                 'legal_mentions' => $settings['legal_mentions'] ?? '',
@@ -58,7 +68,14 @@ class SpaceSettingsController extends Controller
             'name' => ['required', 'string', 'min:2', 'max:150'],
             'phone' => ['nullable', 'string', 'max:50'],
             'address' => ['nullable', 'string', 'max:255'],
-            'city' => ['nullable', 'string', 'max:100'],
+            'city' => ['nullable', 'string', 'max:120'],
+            'formatted_location' => ['nullable', 'string', 'max:255'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'sos_enabled' => ['nullable', 'boolean'],
+            'sos_radius_km' => ['nullable', 'integer', 'min:5', 'max:200'],
+            'whatsapp_bot_enabled' => ['nullable', 'boolean'],
+            'whatsapp_bot_catalog' => ['nullable', 'string', 'max:4000'],
             'vat_rate' => ['required', 'numeric', 'min:0', 'max:50'],
             'hourly_rate' => ['required', 'integer', 'min:0'],
             'legal_mentions' => ['nullable', 'string', 'max:2000'],
@@ -84,11 +101,28 @@ class SpaceSettingsController extends Controller
             $settings['logo_path'] = $uploadService->storeImage($request->file('logo'), $tenant->id, 'branding');
         }
 
+        $botEnabled = array_key_exists('whatsapp_bot_enabled', $validated)
+            ? (bool) $validated['whatsapp_bot_enabled']
+            : (bool) $tenant->whatsapp_bot_enabled;
+
+        $botSecret = $tenant->whatsapp_bot_secret;
+        if ($botEnabled && empty($botSecret)) {
+            $botSecret = \Illuminate\Support\Str::random(40);
+        }
+
         $tenant->update([
             'name' => $validated['name'],
             'phone' => $validated['phone'] ?? null,
             'address' => $validated['address'] ?? null,
             'city' => $validated['city'] ?? null,
+            'formatted_location' => $validated['formatted_location'] ?? $tenant->formatted_location,
+            'latitude' => array_key_exists('latitude', $validated) && $validated['latitude'] !== null ? (float) $validated['latitude'] : $tenant->latitude,
+            'longitude' => array_key_exists('longitude', $validated) && $validated['longitude'] !== null ? (float) $validated['longitude'] : $tenant->longitude,
+            'sos_enabled' => array_key_exists('sos_enabled', $validated) ? (bool) $validated['sos_enabled'] : (bool) $tenant->sos_enabled,
+            'sos_radius_km' => ! empty($validated['sos_radius_km']) ? (int) $validated['sos_radius_km'] : (int) ($tenant->sos_radius_km ?: 35),
+            'whatsapp_bot_enabled' => $botEnabled,
+            'whatsapp_bot_secret' => $botSecret,
+            'whatsapp_bot_catalog' => array_key_exists('whatsapp_bot_catalog', $validated) ? $validated['whatsapp_bot_catalog'] : $tenant->whatsapp_bot_catalog,
             'vat_rate' => $validated['vat_rate'],
             'hourly_rate' => $validated['hourly_rate'],
             'settings' => $settings,

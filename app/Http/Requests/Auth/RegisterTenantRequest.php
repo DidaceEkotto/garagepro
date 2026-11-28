@@ -48,7 +48,10 @@ class RegisterTenantRequest extends FormRequest
             'email' => ['required', 'string', 'email', 'max:150', Rule::unique('users', 'email')],
             'phone' => ['required', 'string', 'min:6', 'max:50'],
             'country' => ['required', 'string', 'size:2', Rule::exists('countries', 'code')->where('is_active', true)],
-            'city' => ['nullable', 'string', 'max:100'],
+            'city' => ['nullable', 'string', 'max:120'],
+            'formatted_location' => ['nullable', 'string', 'max:255'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'password' => [
                 'nullable',
                 'string',

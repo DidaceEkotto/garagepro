@@ -2,6 +2,7 @@
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import LanguageSwitcher from '../../Components/LanguageSwitcher.vue';
+import LocationAutocomplete from '../../Components/LocationAutocomplete.vue';
 import { useI18n } from '../../composables/useI18n';
 
 const props = defineProps({
@@ -28,6 +29,9 @@ const form = useForm({
     phone: '',
     country: 'CM',
     city: '',
+    formatted_location: '',
+    latitude: null,
+    longitude: null,
     agencies_count: 1,
     promo_code: props.promoCode || '',
     password: '',
@@ -80,6 +84,13 @@ watch(
 
 function onSlugInput() {
     slugManuallyEdited.value = form.slug.trim() !== '';
+}
+
+function onLocationSelected(loc) {
+    form.city = loc.city || form.city;
+    form.formatted_location = loc.formatted_location || loc.city;
+    form.latitude = loc.latitude;
+    form.longitude = loc.longitude;
 }
 
 function submit() {
@@ -300,8 +311,17 @@ function submit() {
                                 <div v-if="form.errors.country" class="invalid-feedback">{{ form.errors.country }}</div>
                             </div>
                             <div class="col-md-6">
-                                <label for="city" class="form-label small">{{ t('auth.city') }} <span class="text-danger">*</span></label>
-                                <input id="city" v-model="form.city" type="text" class="form-control" placeholder="Douala" required />
+                                <label class="form-label small">Localisation (OpenStreetMap) <span class="text-danger">*</span></label>
+                                <LocationAutocomplete
+                                    v-model="form.city"
+                                    :country="form.country"
+                                    :required="true"
+                                    placeholder="Quartier, rue ou ville..."
+                                    @select="onLocationSelected"
+                                />
+                                <div v-if="form.latitude && form.longitude" class="form-text text-success small">
+                                    <i class="bi bi-check-circle-fill me-1"></i>GPS enregistré ({{ Number(form.latitude).toFixed(4) }}, {{ Number(form.longitude).toFixed(4) }})
+                                </div>
                             </div>
                         </div>
 

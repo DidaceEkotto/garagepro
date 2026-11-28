@@ -924,4 +924,98 @@ class AiDiagnosticController extends Controller
         return redirect()->route('tenant.ai_diagnostic.index', ['conversation' => $conversation->id])
             ->with('success', "Comparaison ECU terminée ({$diff['diff_bytes']} octets modifiés, {$diff['diff_percent']}%).");
     }
+
+    /**
+     * Diagnostic Acoustique & Gravité IA (bruits moteur, freins, turbo, courroie, suspension).
+     */
+    public function acousticDiagnostic(
+        Request $request,
+        TenantContext $tenantContext,
+        GeminiDiagnosticService $gemini
+    ): RedirectResponse {
+        $validated = $request->validate([
+            'zone' => ['required', 'in:moteur_haut,bas_moteur,courroie_poulies,turbo,freins_roues,suspension,echappement'],
+            'condition' => ['required', 'in:ralenti,acceleration,freinage,virage,froid,chaud'],
+            'description' => ['nullable', 'string', 'max:1200'],
+            'audio' => ['nullable', 'file', 'max:10240'],
+            'conversation_id' => ['nullable', 'integer'],
+            'vehicle_id' => ['nullable', 'integer'],
+        ]);
+
+        $tenant = $tenantContext->getTenant();
+        $user = $request->user('web');
+
+        $conversation = null;
+        if (! empty($validated['conversation_id'])) {
+            $conversation = AiDiagnosticConversation::where('tenant_id', $tenant->id)
+                ->where('id', $validated['conversation_id'])
+                ->first();
+        }
+        if (! $conversation) {
+            $conversation = AiDiagnosticConversation::create([
+                'tenant_id' => $tenant->id,
+                'user_id' => $user->id,
+                'vehicle_id' => $validated['vehicle_id'] ?? null,
+                'title' => "Diagnostic Acoustique ({$validated['zone']})",
+                'last_message_at' => now(),
+            ]);
+        }
+
+        $zoneLabel = str_replace('_', ' ', $validated['zone']);
+        $userSummary = "🔊 Diagnostic Acoustique — Zone : {$zoneLabel} | Moment : {$validated['condition']}"
+            .(! empty($validated['description']) ? "\nDescription : {$validated['description']}" : '');
+
+        $inlineMedia = [];
+        $audioPath = null;
+        if ($request->hasFile('audio')) {
+            $audioFile = $request->file('audio');
+            $ext = strtolower($audioFile->getClientOriginalExtension() ?: 'webm');
+            if (in_array($ext, ['webm', 'ogg', 'mp3', 'm4a', 'wav'], true)) {
+                $audioPath = $audioFile->storeAs("tenants/{$tenant->id}/ai-acoustic", \Illuminate\Support\Str::random(32).'.'.$ext, 'local');
+                $rawBytes = @file_get_contents($audioFile->getRealPath());
+                if ($rawBytes !== false && strlen($rawBytes) <= 6 * 1024 * 1024) {
+                    $inlineMedia[] = [
+                        'mime_type' => $ext === 'mp3' ? 'audio/mpeg' : ($ext === 'wav' ? 'audio/wav' : 'audio/webm'),
+                        'data' => base64_encode($rawBytes),
+                    ];
+                }
+            }
+        }
+
+        AiDiagnosticMessage::create([
+            'tenant_id' => $tenant->id,
+            'conversation_id' => $conversation->id,
+            'user_id' => $user->id,
+            'role' => AiDiagnosticMessage::ROLE_USER,
+            'content' => $userSummary,
+            'audio_path' => $audioPath,
+        ]);
+
+        $prompt = "Effectue un DIAGNOSTIC ACOUSTIQUE AUTOMOBILE structuré pour ce bruit suspect :\n"
+            ."- Zone localisée : {$zoneLabel}\n"
+            ."- Apparaît : {$validated['condition']}\n"
+            ."- Détails : ".($validated['description'] ?: 'Bruit anormal enregistré')."\n\n"
+            ."Réponds impérativement avec :\n"
+            ."1. FEU TRICOLORE DE SÉCURITÉ : 🟢 VERT (Peut rouler), 🟠 ORANGE (Contrôle rapide) ou 🔴 ROUGE (Arrêt immédiat — risque casse moteur/sécurité)\n"
+            ."2. TOP 3 DES CAUSES MÉCANIQUES LES PLUS PROBABLES (du plus fréquent au moins fréquent)\n"
+            ."3. CONTRÔLES ATELIER À EFFECTUER (étapes rapides)\n"
+            ."4. FOURCHETTE ESTIMATIVE DE RÉPARATION (pièces + main-d'œuvre).";
+
+        $res = $gemini->diagnose($prompt, [], $conversation->vehicle, $inlineMedia);
+
+        AiDiagnosticMessage::create([
+            'tenant_id' => $tenant->id,
+            'conversation_id' => $conversation->id,
+            'role' => AiDiagnosticMessage::ROLE_ASSISTANT,
+            'content' => $res['ok'] ? $res['reply'] : ($res['reply'] ?? 'Impossible de lancer le diagnostic acoustique pour le moment.'),
+            'model' => $res['model'] ?? 'gemini',
+            'tokens_used' => (int) ($res['tokens'] ?? 0),
+            'is_off_topic' => false,
+        ]);
+
+        $conversation->update(['last_message_at' => now()]);
+
+        return redirect()->route('tenant.ai_diagnostic.index', ['conversation' => $conversation->id])
+            ->with('success', 'Diagnostic acoustique IA généré.');
+    }
 }

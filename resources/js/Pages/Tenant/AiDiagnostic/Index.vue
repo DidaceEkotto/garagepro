@@ -74,6 +74,32 @@ const ecuDiffForm = useForm({
     vehicle_id: props.prefillRepairOrder?.vehicle_id ?? props.activeConversation?.vehicle_id ?? '',
 });
 
+const acousticForm = useForm({
+    zone: 'moteur_haut',
+    condition: 'ralenti',
+    description: '',
+    audio: null,
+    conversation_id: props.activeConversation?.id ?? null,
+    vehicle_id: props.prefillRepairOrder?.vehicle_id ?? props.activeConversation?.vehicle_id ?? '',
+});
+
+function openAcousticModal() {
+    closeAttachMenu();
+    acousticForm.conversation_id = form.conversation_id;
+    acousticForm.vehicle_id = form.vehicle_id;
+    window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalAcousticDiag'))?.show();
+}
+
+function submitAcousticDiag() {
+    acousticForm.post('/assistant-ia/diagnostic-acoustique', {
+        forceFormData: true,
+        onSuccess: () => {
+            acousticForm.reset('description', 'audio');
+            window.bootstrap?.Modal.getInstance(document.getElementById('modalAcousticDiag'))?.hide();
+        },
+    });
+}
+
 function openEcuDiffModal() {
     closeAttachMenu();
     ecuDiffForm.conversation_id = form.conversation_id;
@@ -1017,6 +1043,13 @@ function formatDateTime(iso) {
                                                 <span class="ai-attach-sub">Diff local 0 token + risques IA</span>
                                             </span>
                                         </button>
+                                        <button type="button" class="ai-attach-item" @click="openAcousticModal">
+                                            <span class="ai-attach-icon" style="color: #e11d48;"><i class="bi bi-soundwave"></i></span>
+                                            <span class="d-flex flex-column text-start">
+                                                <span class="fw-medium">Diagnostic Acoustique IA</span>
+                                                <span class="ai-attach-sub">Bruit moteur/freins + Feu tricolore</span>
+                                            </span>
+                                        </button>
                                         <div class="px-3 pt-1 pb-2 text-muted border-top mt-1" style="font-size: 0.68rem;">
                                             <i class="bi bi-shield-lock me-1"></i>Vidéos &amp; archives (.zip/.rar) bloquées
                                         </div>
@@ -1067,6 +1100,55 @@ function formatDateTime(iso) {
             </div>
         </div>
         </div>
+
+        <!-- Modale : Diagnostic Acoustique & Gravité IA -->
+        <StaticModal id="modalAcousticDiag" title="Diagnostic Acoustique IA — Analyse des Bruits">
+            <form @submit.prevent="submitAcousticDiag">
+                <p class="small text-muted mb-3">
+                    Décrivez ou importez l'enregistrement audio d'un bruit suspect : l'IA évalue la gravité (🟢 Vert / 🟠 Orange / 🔴 Arrêt immédiat) et identifie les 3 causes les plus probables.
+                </p>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Zone du bruit</label>
+                        <select v-model="acousticForm.zone" class="form-select no-select2" required>
+                            <option value="moteur_haut">Haut moteur (injecteurs, soupapes)</option>
+                            <option value="bas_moteur">Bas moteur (bielles, vilebrequin)</option>
+                            <option value="courroie_poulies">Courroie / Poulies / Alternateur</option>
+                            <option value="turbo">Turbo / Admission (sifflement)</option>
+                            <option value="freins_roues">Freins / Roulements / Roues</option>
+                            <option value="suspension">Train avant / Suspension</option>
+                            <option value="echappement">Échappement / Catalyseur</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Quand apparaît le bruit ?</label>
+                        <select v-model="acousticForm.condition" class="form-select no-select2" required>
+                            <option value="ralenti">Au ralenti</option>
+                            <option value="acceleration">À l'accélération</option>
+                            <option value="freinage">Au freinage</option>
+                            <option value="virage">En tournant / Dos d'âne</option>
+                            <option value="froid">À froid uniquement</option>
+                            <option value="chaud">À chaud uniquement</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Description du bruit (claquement, sifflement, grincement...)</label>
+                    <textarea v-model="acousticForm.description" rows="2" class="form-control" placeholder="Ex: Claquement métallique régulier qui accélère avec le régime moteur..."></textarea>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label small fw-semibold">Enregistrement audio du bruit (facultatif — .webm, .mp3, .wav, .m4a)</label>
+                    <input type="file" accept="audio/*" class="form-control form-control-sm" @change="(e) => (acousticForm.audio = e.target.files?.[0] || null)" />
+                </div>
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="submit" class="btn btn-danger px-4" :disabled="acousticForm.processing">
+                        <span v-if="acousticForm.processing" class="spinner-border spinner-border-sm me-1"></span>
+                        Analyser le bruit
+                    </button>
+                </div>
+            </form>
+        </StaticModal>
 
         <!-- Modale : Comparateur ECU .ori vs .mod (0 token en local + interprétation risques IA) -->
         <StaticModal id="modalCompareEcu" title="Comparateur ECU .ori vs .mod (0 token)">

@@ -7,11 +7,15 @@ use App\Http\Controllers\Auth\TenantRegistrationController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\CustomerPortalController;
 use App\Http\Controllers\DemoController;
+use App\Http\Controllers\GeocodeController;
 use App\Http\Controllers\MarketplaceController;
 use App\Http\Controllers\PublicAppointmentController;
 use App\Http\Controllers\PublicQuoteController;
 use App\Http\Controllers\PublicReviewController;
+use App\Http\Controllers\PublicSosController;
 use App\Http\Controllers\PublicTrackingController;
+use App\Http\Controllers\VehicleHistoryCheckController;
+use App\Http\Controllers\WhatsappBotController;
 use App\Http\Controllers\Tenant\AccountingController;
 use App\Http\Controllers\Tenant\AffiliationController;
 use App\Http\Controllers\Tenant\AfterSalesController;
@@ -39,6 +43,7 @@ use App\Http\Controllers\Tenant\PurchaseOrderController;
 use App\Http\Controllers\Tenant\QuoteController;
 use App\Http\Controllers\Tenant\RepairOrderController;
 use App\Http\Controllers\Tenant\ReportController;
+use App\Http\Controllers\Tenant\RoadsideSosController;
 use App\Http\Controllers\Tenant\SecureFileController;
 use App\Http\Controllers\Tenant\SpaceSettingsController;
 use App\Http\Controllers\Tenant\SubcontractController;
@@ -68,6 +73,14 @@ Route::get('/', function () {
         'partners' => Partner::active()->get(['id', 'name', 'logo_path', 'website_url']),
     ]);
 })->name('home');
+
+// Géocodage gratuit OpenStreetMap Nominatim (autocomplétion localisation & GPS)
+Route::get('/api/geocode/search', [GeocodeController::class, 'search'])
+    ->middleware('throttle:40,1')
+    ->name('api.geocode.search');
+Route::get('/api/geocode/reverse', [GeocodeController::class, 'reverse'])
+    ->middleware('throttle:30,1')
+    ->name('api.geocode.reverse');
 
 // Page Contact
 Route::get('/contact', [ContactController::class, 'show'])->name('contact.show');
@@ -145,6 +158,32 @@ Route::get('/avis/{token}', [PublicReviewController::class, 'show'])->name('publ
 Route::post('/avis/{token}', [PublicReviewController::class, 'submit'])
     ->middleware('throttle:15,1')
     ->name('public.review.submit');
+
+// SOS Dépannage & Remorquage Géolocalisé (OpenStreetMap — public sans inscription)
+Route::get('/sos-depannage', [PublicSosController::class, 'index'])->name('public.sos.index');
+Route::get('/sos-depannage/proximite', [PublicSosController::class, 'nearby'])
+    ->middleware('throttle:40,1')
+    ->name('public.sos.nearby');
+Route::post('/sos-depannage', [PublicSosController::class, 'store'])
+    ->middleware('throttle:10,1')
+    ->name('public.sos.store');
+Route::get('/sos-depannage/{token}', [PublicSosController::class, 'track'])->name('public.sos.track');
+Route::post('/sos-depannage/{token}/offres/{offer}/accepter', [PublicSosController::class, 'acceptOffer'])
+    ->middleware('throttle:15,1')
+    ->name('public.sos.accept_offer');
+
+// MboaCar Check — Rapport Historique Anti-Fraude Véhicule d'Occasion + Scan QR Intelligent
+Route::get('/verifier-vehicule', [VehicleHistoryCheckController::class, 'index'])->name('public.vehicle_check.index');
+Route::get('/verifier-vehicule/pdf', [VehicleHistoryCheckController::class, 'pdf'])
+    ->middleware('throttle:pdf')
+    ->name('public.vehicle_check.pdf');
+Route::get('/vehicule-scan/{token}', [VehicleHistoryCheckController::class, 'smartQrScan'])->name('public.vehicle.smart_scan');
+
+// Webhook Réceptionniste IA WhatsApp 24/7 par garage (protégé par X-Bot-Secret)
+Route::post('/webhooks/whatsapp-bot/{tenantSlug}', [WhatsappBotController::class, 'webhook'])
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+    ->middleware('throttle:60,1')
+    ->name('webhooks.whatsapp_bot');
 
 // Portail Client Unique MboaCar (accès multi-garages par OTP WhatsApp)
 Route::get('/mon-espace-client', [CustomerPortalController::class, 'index'])->name('public.customer_portal');
@@ -240,7 +279,15 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
     Route::middleware('tenant.permission:settings.manage')->group(function () {
         Route::get('/parametres-espace', [SpaceSettingsController::class, 'index'])->name('tenant.settings.index');
         Route::post('/parametres-espace', [SpaceSettingsController::class, 'update'])->name('tenant.settings.update');
+        Route::post('/parametres-espace/bot-whatsapp/tester', [WhatsappBotController::class, 'simulate'])
+            ->middleware('throttle:20,1')
+            ->name('tenant.settings.whatsapp_bot_simulate');
     });
+
+    // SOS Dépannage côté Garage
+    Route::get('/depannage-sos', [RoadsideSosController::class, 'index'])->name('tenant.sos.index');
+    Route::post('/depannage-sos/{sosRequest}/offre', [RoadsideSosController::class, 'sendOffer'])->name('tenant.sos.offer');
+    Route::patch('/depannage-sos/{sosRequest}/statut', [RoadsideSosController::class, 'updateMissionStatus'])->name('tenant.sos.status');
 
     // Assistant IA Diagnostic Automobile (Gemini — isolé par tenant)
     Route::get('/assistant-ia', [AiDiagnosticController::class, 'index'])->name('tenant.ai_diagnostic.index');
@@ -250,6 +297,9 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
     Route::post('/assistant-ia/comparer-ecu', [AiDiagnosticController::class, 'compareEcu'])
         ->middleware('throttle:15,1')
         ->name('tenant.ai_diagnostic.compare_ecu');
+    Route::post('/assistant-ia/diagnostic-acoustique', [AiDiagnosticController::class, 'acousticDiagnostic'])
+        ->middleware('throttle:15,1')
+        ->name('tenant.ai_diagnostic.acoustic');
     Route::post('/assistant-ia/messages/{messageId}/creer-devis', [AiDiagnosticController::class, 'createQuoteFromMessage'])
         ->name('tenant.ai_diagnostic.create_quote');
     Route::post('/assistant-ia/messages/{messageId}/appliquer-or', [AiDiagnosticController::class, 'applyToRepairOrder'])
@@ -295,6 +345,7 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
         ->name('tenant.vehicles.ocr');
     Route::put('/vehicules/{vehicle}', [VehicleController::class, 'update'])->name('tenant.vehicles.update');
     Route::get('/vehicules/{vehicle}', [VehicleController::class, 'show'])->name('tenant.vehicles.show');
+    Route::get('/vehicules/{vehicle}/etiquette-qr', [VehicleController::class, 'qrLabel'])->name('tenant.vehicles.qr_label');
 
     // Rendez-vous & File sans rendez-vous
     Route::get('/rendez-vous', [AppointmentController::class, 'index'])->name('tenant.appointments.index');
