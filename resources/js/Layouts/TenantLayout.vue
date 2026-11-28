@@ -264,7 +264,6 @@ const menuGroups = computed(() => {
                 items: [
                     { label: t('layout.dashboard'), href: '/tableau-de-bord', icon: 'bi-speedometer2', permissions: [] },
                     { label: 'Mes Pièces (Produits)', href: '/marketplace-gestion/produits', icon: 'bi-box2-heart', permissions: ['stock.manage', 'settings.manage'] },
-                    { label: 'Catégories & Sous-catégories', href: '/marketplace-gestion/categories', icon: 'bi-tags', permissions: ['stock.manage', 'settings.manage'] },
                     { label: 'Commandes reçues', href: '/marketplace-gestion/commandes', icon: 'bi-bag-check', permissions: ['stock.manage', 'settings.manage'] },
                 ],
             },
