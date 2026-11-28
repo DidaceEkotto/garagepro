@@ -45,6 +45,9 @@ class TenantService extends Model
             return null;
         }
 
-        return Storage::disk('public')->url($this->image_path);
+        return route('public.garage.service_image', [
+            'service' => $this->id,
+            'v' => substr(md5($this->image_path), 0, 8),
+        ], false);
     }
 }

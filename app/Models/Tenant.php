@@ -93,7 +93,7 @@ class Tenant extends Model
     }
 
     /**
-     * Retourne les URLs publiques des photos vitrine de l'établissement.
+     * Retourne les URLs publiques (relatives, sans dépendre du symlink storage:link) des photos vitrine.
      *
      * @return array<int, string>
      */
@@ -103,8 +103,12 @@ class Tenant extends Model
 
         return collect($photos)
             ->filter(fn ($p) => is_string($p) && trim($p) !== '')
-            ->map(fn (string $p) => \Illuminate\Support\Facades\Storage::disk('public')->url($p))
             ->values()
+            ->map(fn (string $p, int $idx) => route('public.garage.showcase_image', [
+                'tenant' => $this->id,
+                'index' => $idx,
+                'v' => substr(md5($p), 0, 8),
+            ], false))
             ->all();
     }
 

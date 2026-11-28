@@ -465,14 +465,13 @@ onBeforeUnmount(() => {
                         </select>
                         <button
                             type="button"
-                            class="btn btn-light btn-sm rounded-circle p-0 d-flex align-items-center justify-content-center border"
-                            style="width: 28px; height: 28px;"
+                            class="sos-gps-circle-btn btn btn-light border flex-shrink-0"
                             title="Actualiser ma position GPS"
                             :disabled="geoLoading"
                             @click="requestGps"
                         >
                             <span v-if="geoLoading" class="spinner-border spinner-border-sm"></span>
-                            <i v-else class="bi bi-crosshair text-primary small"></i>
+                            <i v-else class="bi bi-crosshair text-primary" style="font-size: 0.85rem; line-height: 1;"></i>
                         </button>
                     </div>
 
@@ -963,6 +962,21 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* Bouton GPS parfaitement rond dans le bandeau pilule */
+.sos-gps-circle-btn {
+    width: 30px !important;
+    height: 30px !important;
+    min-width: 30px !important;
+    min-height: 30px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    aspect-ratio: 1 / 1;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 30px;
+}
+
 /* Carte sticky droite : reste fixe tant que la grille gauche scrolle, puis défile normalement */
 .sos-sticky-map-shell {
     position: sticky;

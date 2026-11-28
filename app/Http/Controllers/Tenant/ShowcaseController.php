@@ -28,7 +28,11 @@ class ShowcaseController extends Controller
             ->map(fn (string $path, int $index) => [
                 'index' => $index,
                 'path' => $path,
-                'url' => Storage::disk('public')->url($path),
+                'url' => route('public.garage.showcase_image', [
+                    'tenant' => $tenant->id,
+                    'index' => $index,
+                    'v' => substr(md5($path), 0, 8),
+                ], false),
             ])
             ->all();
 

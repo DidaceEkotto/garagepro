@@ -76,6 +76,9 @@ class ShowcaseAndBookingTest extends TestCase
         $tenantA->refresh();
         $this->assertCount(2, $tenantA->showcase_photos ?? []);
 
+        // Vérifier que la route directe d'image vitrine répond 200 sans dépendre de storage:link
+        $this->get("/garage-media/vitrine/{$tenantA->id}/0")->assertOk();
+
         // 2. Créer une prestation AVEC image facultative
         $resSvc1 = $this->actingAs($ownerA)->post('/vitrine-prestations/prestations', [
             'name' => 'Vidange complète 5W30',
@@ -86,6 +89,9 @@ class ShowcaseAndBookingTest extends TestCase
             'image' => UploadedFile::fake()->image('vidange.webp', 600, 400),
         ]);
         $resSvc1->assertRedirect();
+
+        $svcWithImage = TenantService::withoutGlobalScopes()->where('tenant_id', $tenantA->id)->firstOrFail();
+        $this->get("/garage-media/prestation/{$svcWithImage->id}")->assertOk();
 
         // 3. Créer une prestation SANS image
         $resSvc2 = $this->actingAs($ownerA)->post('/vitrine-prestations/prestations', [

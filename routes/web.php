@@ -182,6 +182,12 @@ Route::get('/garage/{slug}', [PublicGarageController::class, 'show'])->name('pub
 Route::post('/garage/{slug}/rendez-vous', [PublicGarageController::class, 'bookAppointment'])
     ->middleware('throttle:12,1')
     ->name('public.garage.book_appointment');
+Route::get('/garage-media/vitrine/{tenant}/{index}', [PublicGarageController::class, 'showcaseImage'])
+    ->whereNumber(['tenant', 'index'])
+    ->name('public.garage.showcase_image');
+Route::get('/garage-media/prestation/{service}', [PublicGarageController::class, 'serviceImage'])
+    ->whereNumber('service')
+    ->name('public.garage.service_image');
 
 // MboaCar Check — Rapport Historique Anti-Fraude Véhicule d'Occasion + Scan QR Intelligent
 Route::get('/verifier-vehicule', [VehicleHistoryCheckController::class, 'index'])->name('public.vehicle_check.index');

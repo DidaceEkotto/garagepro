@@ -18,8 +18,10 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * Vitrine publique d'un établissement (/garage/{slug}) avec choix de prestations
@@ -278,5 +280,43 @@ class PublicGarageController extends Controller
         }
 
         return back()->with('success', 'Votre rendez-vous a bien été enregistré ! L\'établissement vient d\'être notifié sur WhatsApp et dans son espace professionnel.');
+    }
+
+    /**
+     * Sert une photo vitrine d'un établissement directement depuis le disque (indépendant du symlink public/storage).
+     */
+    public function showcaseImage(int $tenant, int $index): BinaryFileResponse
+    {
+        $record = Tenant::findOrFail($tenant);
+        $photos = collect(is_array($record->showcase_photos) ? $record->showcase_photos : [])
+            ->filter(fn ($p) => is_string($p) && trim($p) !== '')
+            ->values()
+            ->all();
+
+        $path = $photos[$index] ?? null;
+        if (! $path || ! str_starts_with($path, "tenants/{$record->id}/showcase/") || ! Storage::disk('public')->exists($path)) {
+            abort(404);
+        }
+
+        return response()->file(Storage::disk('public')->path($path), [
+            'Cache-Control' => 'public, max-age=604800',
+        ]);
+    }
+
+    /**
+     * Sert l'image d'une prestation directement depuis le disque.
+     */
+    public function serviceImage(int $service): BinaryFileResponse
+    {
+        $record = TenantService::withoutGlobalScopes()->findOrFail($service);
+        $path = $record->image_path;
+
+        if (! $path || ! str_starts_with($path, "tenants/{$record->tenant_id}/services/") || ! Storage::disk('public')->exists($path)) {
+            abort(404);
+        }
+
+        return response()->file(Storage::disk('public')->path($path), [
+            'Cache-Control' => 'public, max-age=604800',
+        ]);
     }
 }
