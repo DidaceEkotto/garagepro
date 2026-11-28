@@ -993,64 +993,65 @@ function formatDateTime(iso) {
                                     </button>
 
                                     <div v-if="attachMenuOpen" class="ai-attach-popover shadow-lg border" @click.stop>
-                                        <button type="button" class="ai-attach-item" @click="triggerAttach('doc')">
-                                            <span class="ai-attach-icon" style="color: #7f66ff;"><i class="bi bi-file-earmark-text-fill"></i></span>
-                                            <span class="d-flex flex-column text-start">
-                                                <span class="fw-medium">Document &amp; BDD</span>
-                                                <span class="ai-attach-sub">PDF, XML, JSON, SQL, SQLite, TXT</span>
-                                            </span>
-                                        </button>
-                                        <button type="button" class="ai-attach-item" :disabled="form.photos.length >= 4" @click="triggerAttach('photo')">
-                                            <span class="ai-attach-icon" style="color: #007bfc;"><i class="bi bi-images"></i></span>
-                                            <span class="d-flex flex-column text-start">
-                                                <span class="fw-medium">Photos</span>
-                                                <span class="ai-attach-sub">Voyants, pièces, valise (max 4)</span>
-                                            </span>
-                                        </button>
-                                        <button type="button" class="ai-attach-item" :disabled="form.photos.length >= 4" @click="triggerAttach('camera')">
-                                            <span class="ai-attach-icon" style="color: #ff2e74;"><i class="bi bi-camera-fill"></i></span>
-                                            <span class="d-flex flex-column text-start">
-                                                <span class="fw-medium">Caméra</span>
-                                                <span class="ai-attach-sub">Prendre une photo directe</span>
-                                            </span>
-                                        </button>
-                                        <button type="button" class="ai-attach-item" @click="triggerAttach('audio')">
-                                            <span class="ai-attach-icon" style="color: #fa6533;"><i class="bi bi-headphones"></i></span>
-                                            <span class="d-flex flex-column text-start">
-                                                <span class="fw-medium">Audio atelier</span>
-                                                <span class="ai-attach-sub">Bruit moteur ou note vocale</span>
-                                            </span>
-                                        </button>
-                                        <hr class="my-1 opacity-25" />
-                                        <button type="button" class="ai-attach-item" :disabled="form.files.length >= 3" @click="triggerAttach('ecu')">
-                                            <span class="ai-attach-icon" style="color: #00a884;"><i class="bi bi-cpu-fill"></i></span>
-                                            <span class="d-flex flex-column text-start">
-                                                <span class="fw-medium">ECU / Cartographie</span>
-                                                <span class="ai-attach-sub">.bin, .ori, .mod, .ols, .kp, .hex, .a2l</span>
-                                            </span>
-                                        </button>
-                                        <button type="button" class="ai-attach-item" :disabled="form.files.length >= 3" @click="triggerAttach('obd')">
-                                            <span class="ai-attach-icon" style="color: #f59e0b;"><i class="bi bi-activity"></i></span>
-                                            <span class="d-flex flex-column text-start">
-                                                <span class="fw-medium">OBD-II &amp; Réseau CAN</span>
-                                                <span class="ai-attach-sub">.csv, .log, .dbc, .asc, .trc, .blf, .mf4</span>
-                                            </span>
-                                        </button>
-                                        <button type="button" class="ai-attach-item" @click="openEcuDiffModal">
-                                            <span class="ai-attach-icon" style="color: #0ea5e9;"><i class="bi bi-file-diff-fill"></i></span>
-                                            <span class="d-flex flex-column text-start">
-                                                <span class="fw-medium">Comparer ECU (.ori vs .mod)</span>
-                                                <span class="ai-attach-sub">Diff local 0 token + risques IA</span>
-                                            </span>
-                                        </button>
-                                        <button type="button" class="ai-attach-item" @click="openAcousticModal">
-                                            <span class="ai-attach-icon" style="color: #e11d48;"><i class="bi bi-soundwave"></i></span>
-                                            <span class="d-flex flex-column text-start">
-                                                <span class="fw-medium">Diagnostic Acoustique IA</span>
-                                                <span class="ai-attach-sub">Bruit moteur/freins + Feu tricolore</span>
-                                            </span>
-                                        </button>
-                                        <div class="px-3 pt-1 pb-2 text-muted border-top mt-1" style="font-size: 0.68rem;">
+                                        <div class="ai-attach-grid">
+                                            <button type="button" class="ai-attach-item" @click="triggerAttach('doc')">
+                                                <span class="ai-attach-icon" style="color: #7f66ff;"><i class="bi bi-file-earmark-text-fill"></i></span>
+                                                <span class="d-flex flex-column text-start">
+                                                    <span class="fw-medium">Document &amp; BDD</span>
+                                                    <span class="ai-attach-sub">PDF, XML, JSON, SQL, SQLite, TXT</span>
+                                                </span>
+                                            </button>
+                                            <button type="button" class="ai-attach-item" :disabled="form.photos.length >= 4" @click="triggerAttach('photo')">
+                                                <span class="ai-attach-icon" style="color: #007bfc;"><i class="bi bi-images"></i></span>
+                                                <span class="d-flex flex-column text-start">
+                                                    <span class="fw-medium">Photos</span>
+                                                    <span class="ai-attach-sub">Voyants, pièces, valise (max 4)</span>
+                                                </span>
+                                            </button>
+                                            <button type="button" class="ai-attach-item" :disabled="form.photos.length >= 4" @click="triggerAttach('camera')">
+                                                <span class="ai-attach-icon" style="color: #ff2e74;"><i class="bi bi-camera-fill"></i></span>
+                                                <span class="d-flex flex-column text-start">
+                                                    <span class="fw-medium">Caméra</span>
+                                                    <span class="ai-attach-sub">Prendre une photo directe</span>
+                                                </span>
+                                            </button>
+                                            <button type="button" class="ai-attach-item" @click="triggerAttach('audio')">
+                                                <span class="ai-attach-icon" style="color: #fa6533;"><i class="bi bi-headphones"></i></span>
+                                                <span class="d-flex flex-column text-start">
+                                                    <span class="fw-medium">Audio atelier</span>
+                                                    <span class="ai-attach-sub">Bruit moteur ou note vocale</span>
+                                                </span>
+                                            </button>
+                                            <button type="button" class="ai-attach-item" :disabled="form.files.length >= 3" @click="triggerAttach('ecu')">
+                                                <span class="ai-attach-icon" style="color: #00a884;"><i class="bi bi-cpu-fill"></i></span>
+                                                <span class="d-flex flex-column text-start">
+                                                    <span class="fw-medium">ECU / Cartographie</span>
+                                                    <span class="ai-attach-sub">.bin, .ori, .mod, .ols, .kp, .hex, .a2l</span>
+                                                </span>
+                                            </button>
+                                            <button type="button" class="ai-attach-item" :disabled="form.files.length >= 3" @click="triggerAttach('obd')">
+                                                <span class="ai-attach-icon" style="color: #f59e0b;"><i class="bi bi-activity"></i></span>
+                                                <span class="d-flex flex-column text-start">
+                                                    <span class="fw-medium">OBD-II &amp; Réseau CAN</span>
+                                                    <span class="ai-attach-sub">.csv, .log, .dbc, .asc, .trc, .blf, .mf4</span>
+                                                </span>
+                                            </button>
+                                            <button type="button" class="ai-attach-item" @click="openEcuDiffModal">
+                                                <span class="ai-attach-icon" style="color: #0ea5e9;"><i class="bi bi-file-diff-fill"></i></span>
+                                                <span class="d-flex flex-column text-start">
+                                                    <span class="fw-medium">Comparer ECU (.ori vs .mod)</span>
+                                                    <span class="ai-attach-sub">Diff local 0 token + risques IA</span>
+                                                </span>
+                                            </button>
+                                            <button type="button" class="ai-attach-item" @click="openAcousticModal">
+                                                <span class="ai-attach-icon" style="color: #e11d48;"><i class="bi bi-soundwave"></i></span>
+                                                <span class="d-flex flex-column text-start">
+                                                    <span class="fw-medium">Diagnostic Acoustique IA</span>
+                                                    <span class="ai-attach-sub">Bruit moteur/freins + Feu tricolore</span>
+                                                </span>
+                                            </button>
+                                        </div>
+                                        <div class="px-3 pt-2 pb-2 text-muted border-top" style="font-size: 0.7rem;">
                                             <i class="bi bi-shield-lock me-1"></i>Vidéos &amp; archives (.zip/.rar) bloquées
                                         </div>
                                     </div>
@@ -1270,7 +1271,7 @@ function formatDateTime(iso) {
     .ai-chat-card {
         height: 100%;
         min-height: 0;
-        overflow: hidden;
+        overflow: visible;
     }
 }
 
@@ -1361,12 +1362,30 @@ function formatDateTime(iso) {
     position: absolute;
     bottom: calc(100% + 10px);
     left: 0;
-    width: 268px;
+    width: 500px;
+    max-width: calc(100vw - 32px);
+    max-height: 70vh;
+    overflow-y: auto;
     background: #ffffff;
     border-radius: 16px;
-    padding: 6px 0 0;
-    z-index: 1050;
+    padding: 8px 6px 0;
+    z-index: 1060;
     animation: popoverFadeIn 0.14s ease-out;
+}
+
+.ai-attach-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px;
+}
+
+@media (max-width: 575.98px) {
+    .ai-attach-popover {
+        width: 280px;
+    }
+    .ai-attach-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .ai-attach-item {
