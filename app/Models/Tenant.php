@@ -35,6 +35,7 @@ class Tenant extends Model
         'city',
         'country',
         'status',
+        'b2b_directory_visible',
         'trial_ends_at',
         'subscription_ends_at',
         'grace_ends_at',
@@ -46,6 +47,7 @@ class Tenant extends Model
     protected function casts(): array
     {
         return [
+            'b2b_directory_visible' => 'boolean',
             'trial_ends_at' => 'datetime',
             'subscription_ends_at' => 'datetime',
             'grace_ends_at' => 'datetime',

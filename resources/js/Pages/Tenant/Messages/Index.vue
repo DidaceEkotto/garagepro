@@ -1,4 +1,5 @@
 <script setup>
+import B2bNetworkChat from '@/Components/B2bNetworkChat.vue';
 import FileDropzone from '@/Components/FileDropzone.vue';
 import StaticModal from '@/Components/StaticModal.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
@@ -10,6 +11,8 @@ const props = defineProps({
     customers: { type: Array, default: () => [] },
 });
 
+const activeTab = ref('b2b');
+const b2bUnread = ref(0);
 const customerSearch = ref('');
 const replyingMessage = ref(null);
 
@@ -73,17 +76,33 @@ function submitReply() {
 <template>
     <Head title="Messagerie & Notifications" />
     <TenantLayout>
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
             <div>
-                <h1 class="h4 fw-bold mb-0">Messagerie &amp; Notifications</h1>
-                <p class="text-muted small mb-0">Envoi individuel ou groupé aux clients par e-mail (avec pièces jointes) et messagerie interne Admin</p>
+                <h1 class="h4 fw-bold mb-0">Messagerie &amp; Réseau Pro B2B</h1>
+                <p class="text-muted small mb-0">Échanges directs Garages ↔ Centres Techniques, messagerie clients et support Admin</p>
             </div>
-            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalComposeMessage">
+            <button v-if="activeTab === 'classic'" type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalComposeMessage">
                 <i class="bi bi-pencil-square me-1"></i>Nouveau message
             </button>
         </div>
 
-        <div class="card border-0 shadow-sm">
+        <ul class="nav nav-pills mb-3 gap-2">
+            <li class="nav-item">
+                <button type="button" class="nav-link fw-semibold" :class="{ active: activeTab === 'b2b' }" @click="activeTab = 'b2b'">
+                    <i class="bi bi-building-gear me-1"></i>Réseau Pro (Garages &amp; Centres Techniques)
+                    <span v-if="b2bUnread > 0" class="badge bg-danger ms-1">{{ b2bUnread }}</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <button type="button" class="nav-link fw-semibold" :class="{ active: activeTab === 'classic' }" @click="activeTab = 'classic'">
+                    <i class="bi bi-envelope-paper me-1"></i>Clients &amp; Admin ({{ messages.length }})
+                </button>
+            </li>
+        </ul>
+
+        <B2bNetworkChat v-show="activeTab === 'b2b'" @unread-change="(n) => (b2bUnread = n)" />
+
+        <div v-show="activeTab === 'classic'" class="card border-0 shadow-sm">
             <div class="card-body p-0">
                 <div v-if="!messages.length" class="text-center text-muted py-5 small">
                     Aucun message pour le moment. Cliquez sur « Nouveau message » pour écrire à un client ou à l'administration.

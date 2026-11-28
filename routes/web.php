@@ -18,6 +18,7 @@ use App\Http\Controllers\Tenant\AfterSalesController;
 use App\Http\Controllers\Tenant\AgencyController;
 use App\Http\Controllers\Tenant\AiDiagnosticController;
 use App\Http\Controllers\Tenant\AppointmentController;
+use App\Http\Controllers\Tenant\B2bNetworkController;
 use App\Http\Controllers\Tenant\CustomerController;
 use App\Http\Controllers\Tenant\DashboardController;
 use App\Http\Controllers\Tenant\ExportController;
@@ -495,12 +496,24 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
         Route::post('/rapports/depenses', [ReportController::class, 'storeExpense'])->name('tenant.reports.expenses.store');
     });
 
-    // Messagerie & Notifications internes / clients
+    // Messagerie & Notifications internes / clients + Réseau Pro Inter-Établissements (B2B)
     Route::middleware('tenant.permission:clients.view|settings.manage')->group(function () {
         Route::get('/messagerie', [MessageController::class, 'index'])->name('tenant.messages.index');
         Route::post('/messagerie', [MessageController::class, 'store'])->name('tenant.messages.store');
         Route::post('/messagerie/{message}/repondre', [MessageController::class, 'reply'])->name('tenant.messages.reply');
         Route::post('/messagerie/{message}/lu', [MessageController::class, 'markRead'])->name('tenant.messages.read');
+
+        Route::get('/reseau-pro/etat', [B2bNetworkController::class, 'state'])->name('tenant.b2b_network.state');
+        Route::post('/reseau-pro/conversations', [B2bNetworkController::class, 'startConversation'])
+            ->middleware('throttle:30,1')
+            ->name('tenant.b2b_network.start');
+        Route::post('/reseau-pro/conversations/{conversation}/messages', [B2bNetworkController::class, 'sendMessage'])
+            ->middleware('throttle:40,1')
+            ->name('tenant.b2b_network.send');
+        Route::get('/reseau-pro/messages/{message}/piece-jointe/{index}', [B2bNetworkController::class, 'downloadAttachment'])
+            ->name('tenant.b2b_network.attachment');
+        Route::patch('/reseau-pro/visibilite', [B2bNetworkController::class, 'toggleVisibility'])
+            ->name('tenant.b2b_network.visibility');
     });
 
     // Gestion Marketplace côté Garage (Catégories, Sous-catégories, Produits, Commandes)
