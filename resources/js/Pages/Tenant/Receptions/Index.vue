@@ -5,7 +5,7 @@ import StaticModal from '@/Components/StaticModal.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { useLightbox } from '@/composables/useLightbox';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 const { openLightbox } = useLightbox();
@@ -370,9 +370,9 @@ function returnCourtesy(id) {
                 <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAddCourtesyVehicle">
                     <i class="bi bi-car-front-fill me-1"></i>Ajouter véhicule courtoisie
                 </button>
-                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAddReception">
+                <Link href="/receptions/nouvelle" class="btn btn-primary btn-sm">
                     <i class="bi bi-clipboard-plus me-1"></i>Nouvelle réception
-                </button>
+                </Link>
             </div>
         </div>
 

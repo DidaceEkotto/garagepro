@@ -136,7 +136,12 @@ function submitBooking() {
         onSuccess: () => {
             bookingDone.value = true;
             selectedIds.value = [];
-            bookingForm.reset('custom_service', 'notes');
+            scheduledDate.value = defaultSlot.date;
+            scheduledTime.value = defaultSlot.time;
+            bookingForm.reset();
+            bookingForm.service_ids = [];
+            bookingForm.dial_code = props.defaultDialCode || '+237';
+            bookingForm.scheduled_at = `${defaultSlot.date} ${defaultSlot.time}:00`;
         },
     });
 }

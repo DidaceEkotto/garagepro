@@ -385,6 +385,7 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
     Route::middleware('tenant.type:garage')->group(function () {
         // Réception & Véhicules de courtoisie
         Route::get('/receptions', [VehicleReceptionController::class, 'index'])->name('tenant.receptions.index');
+        Route::get('/receptions/nouvelle', [VehicleReceptionController::class, 'create'])->name('tenant.receptions.create');
         Route::post('/receptions', [VehicleReceptionController::class, 'store'])->name('tenant.receptions.store');
         Route::put('/receptions/{reception}', [VehicleReceptionController::class, 'update'])->name('tenant.receptions.update');
         Route::post('/receptions/{reception}/retour-courtoisie', [VehicleReceptionController::class, 'returnCourtesy'])->name('tenant.receptions.return_courtesy');

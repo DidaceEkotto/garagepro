@@ -55,6 +55,24 @@ class VehicleReceptionController extends Controller
         ]);
     }
 
+    public function create(): Response
+    {
+        $this->authorize('create', VehicleReception::class);
+
+        return Inertia::render('Tenant/Receptions/Create', [
+            'agencies' => Agency::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'customers' => Customer::orderBy('name')->get(['id', 'name', 'first_name', 'phone']),
+            'vehicles' => Vehicle::orderBy('license_plate')->get(['id', 'customer_id', 'license_plate', 'brand', 'model', 'year', 'color', 'mileage']),
+            'appointments' => Appointment::with(['customer:id,name', 'vehicle:id,license_plate'])
+                ->whereIn('status', [Appointment::STATUS_PENDING, Appointment::STATUS_CONFIRMED, Appointment::STATUS_WALK_IN_QUEUE])
+                ->latest('scheduled_at')
+                ->get(['id', 'customer_id', 'vehicle_id', 'reason', 'scheduled_at']),
+            'courtesyVehicles' => CourtesyVehicle::where('status', CourtesyVehicle::STATUS_AVAILABLE)
+                ->orderBy('name')
+                ->get(['id', 'name', 'license_plate', 'deposit_amount', 'current_mileage']),
+        ]);
+    }
+
     public function store(
         StoreVehicleReceptionRequest $request,
         TenantContext $tenantContext,
@@ -127,7 +145,8 @@ class VehicleReceptionController extends Controller
 
         AuditLog::record('reception.created', subject: $reception, actor: $request->user('web'), tenantId: $tenantId, request: $request);
 
-        return back()->with('success', 'Réception du véhicule enregistrée avec succès.');
+        return redirect()->route('tenant.receptions.index')
+            ->with('success', 'Réception du véhicule enregistrée avec succès.');
     }
 
     public function update(

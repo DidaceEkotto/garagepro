@@ -62,6 +62,7 @@ const routeTitleMap = [
     ['/vehicules/', 'Fiche Véhicule'],
     ['/vehicules', 'Véhicules'],
     ['/rendez-vous', 'Rendez-vous'],
+    ['/receptions/nouvelle', 'Nouvelle fiche de réception'],
     ['/receptions', 'Réceptions véhicules'],
     ['/ordres-reparation', 'Ordres de réparation'],
     ['/devis', 'Devis'],
