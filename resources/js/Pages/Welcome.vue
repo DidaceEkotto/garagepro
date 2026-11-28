@@ -594,7 +594,7 @@ onUnmounted(() => {
         <div class="pricing-glow pricing-glow-2" aria-hidden="true"></div>
 
         <div class="container py-4 position-relative" style="z-index: 1;">
-            <div class="text-center mx-auto mb-4 reveal-on-scroll" style="max-width: 680px;">
+            <div class="text-center mx-auto mb-4 reveal-on-scroll" style="max-width: 820px;">
                 <span class="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle px-3 py-2 fw-semibold small text-uppercase mb-2">
                     <i class="bi bi-tag-fill me-1"></i>{{ t('nav.pricing') }}
                 </span>
@@ -602,29 +602,29 @@ onUnmounted(() => {
                 <p class="text-muted mb-3">{{ t('pricing.subtitle', { days: trialDays }) }}</p>
 
                 <!-- Sélecteur d'offre : Suite Pro vs Vendeur de Pièces Détachées -->
-                <div class="d-inline-flex flex-wrap justify-content-center gap-2 p-1 rounded-pill bg-white border shadow-sm">
+                <div class="d-inline-flex flex-column flex-md-row align-items-stretch align-items-md-center justify-content-center gap-2 p-2 rounded-4 bg-white border shadow-sm">
                     <button
                         type="button"
-                        class="btn btn-sm rounded-pill px-4 py-2 fw-semibold d-inline-flex align-items-center gap-2"
+                        class="btn btn-sm rounded-3 px-3 py-2 fw-semibold d-inline-flex align-items-center justify-content-center gap-2 text-nowrap"
                         :class="pricingTab === 'pro' ? 'btn-primary text-white shadow-sm' : 'btn-light text-dark border-0 bg-transparent'"
                         @click="pricingTab = 'pro'"
                     >
                         <i class="bi bi-wrench-adjustable"></i>
                         <span>Garages, Centres &amp; Assurances</span>
                         <span class="badge rounded-pill" :class="pricingTab === 'pro' ? 'bg-white text-primary' : 'bg-primary-subtle text-primary'">
-                            {{ formatFcfa(monthlyPrice) }} F
+                            {{ formatFcfa(monthlyPrice) }}
                         </span>
                     </button>
                     <button
                         type="button"
-                        class="btn btn-sm rounded-pill px-4 py-2 fw-semibold d-inline-flex align-items-center gap-2"
+                        class="btn btn-sm rounded-3 px-3 py-2 fw-semibold d-inline-flex align-items-center justify-content-center gap-2 text-nowrap"
                         :class="pricingTab === 'parts' ? 'btn-primary text-white shadow-sm' : 'btn-light text-dark border-0 bg-transparent'"
                         @click="pricingTab = 'parts'"
                     >
                         <i class="bi bi-shop"></i>
                         <span>Vendeurs de Pièces Détachées</span>
                         <span class="badge rounded-pill" :class="pricingTab === 'parts' ? 'bg-white text-primary' : 'bg-success-subtle text-success'">
-                            {{ formatFcfa(partsMonthlyPrice) }} F
+                            {{ formatFcfa(partsMonthlyPrice) }}
                         </span>
                     </button>
                 </div>
