@@ -117,11 +117,11 @@ class DashboardController extends Controller
             'totalProducts' => Product::where('tenant_id', $tenant->id)->count(),
             'lowStockProducts' => Product::where('tenant_id', $tenant->id)->where('stock_quantity', '<=', 2)->count(),
             'pendingOrders' => MarketplaceOrderItem::where('tenant_id', $tenant->id)
-                ->whereIn('status', ['pending', 'en_attente', 'confirmed'])
+                ->whereIn('seller_status', ['nouveau', 'en_attente', 'pending', 'en_preparation', 'confirmed'])
                 ->count(),
             'marketplaceRevenue' => (int) MarketplaceOrderItem::where('tenant_id', $tenant->id)
-                ->whereNotIn('status', ['cancelled', 'annule'])
-                ->sum('total_price'),
+                ->whereNotIn('seller_status', ['cancelled', 'annule'])
+                ->sum('subtotal'),
         ] : null;
 
         return Inertia::render('Tenant/Dashboard', [

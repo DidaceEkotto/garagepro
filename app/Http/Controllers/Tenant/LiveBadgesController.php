@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\AppointmentLink;
 use App\Models\B2bMessage;
-use App\Models\MarketplaceOrder;
+use App\Models\MarketplaceOrderItem;
 use App\Models\PlatformMessage;
 use App\Models\RoadsideSosRequest;
 use App\Services\TenantContext;
@@ -72,11 +72,14 @@ class LiveBadgesController extends Controller
                 ->count();
         }
 
-        // 4. Commandes Marketplace en attente
+        // 4. Commandes Marketplace en attente (lignes de commande du vendeur non traitées)
         $pendingOrders = 0;
-        if (Schema::hasTable('marketplace_orders')) {
-            $pendingOrders = MarketplaceOrder::where('tenant_id', $tenantId)
-                ->whereIn('status', ['pending', 'en_attente', 'paid'])
+        if (Schema::hasTable('marketplace_order_items')) {
+            $pendingOrders = MarketplaceOrderItem::where('tenant_id', $tenantId)
+                ->where(function ($q) {
+                    $q->where('is_seen_by_seller', false)
+                        ->orWhereIn('seller_status', ['nouveau', 'en_attente', 'pending']);
+                })
                 ->count();
         }
 
