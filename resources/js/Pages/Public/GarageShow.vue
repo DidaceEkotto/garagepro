@@ -440,27 +440,27 @@ function scrollToSection(id) {
                         <p class="small text-muted mb-3">{{ garage.formatted_location || garage.city }}</p>
                         <div class="rounded-4 overflow-hidden border shadow-sm">
                             <OsmRouteMap
-                                :breakdown-lat="garage.latitude"
-                                :breakdown-lon="garage.longitude"
-                                :breakdown-label="garage.name"
+                                :target-lat="Number(garage.latitude)"
+                                :target-lon="Number(garage.longitude)"
+                                :target-label="garage.name"
                                 height="300px"
                             />
                         </div>
                     </section>
                 </div>
 
-                <!-- COLONNE DROITE STICKY : Carte Réservation façon Airbnb -->
+                <!-- COLONNE DROITE : Carte Réservation (scrolle normalement avec la page) -->
                 <div class="col-lg-5">
-                    <div class="garage-booking-sticky">
-                        <!-- Bannière pilule au-dessus de la carte (façon Airbnb) -->
+                    <div>
+                        <!-- Bannière pilule au-dessus de la carte -->
                         <div class="border rounded-4 shadow-sm bg-white px-3 py-2 mb-3 d-flex align-items-center justify-content-center gap-2 small fw-semibold text-dark">
                             <i class="bi bi-whatsapp text-success fs-6"></i>
                             <span>Confirmation instantanée envoyée au garage</span>
                         </div>
 
                         <div class="card border rounded-4 shadow overflow-hidden">
-                            <!-- En-tête "Sur devis / Tarif" fixe en haut de la carte au scroll -->
-                            <div class="garage-booking-price-header bg-white px-4 pt-4 pb-3 border-bottom">
+                            <!-- En-tête "Sur devis / Tarif" (scrolle avec la page) -->
+                            <div class="bg-white px-4 pt-4 pb-3 border-bottom">
                                 <div v-if="selectedServices.length" class="d-flex justify-content-between align-items-baseline">
                                     <span class="fs-5 fw-bold text-dark">
                                         {{ totalEstimatedPrice > 0 ? `${formatMoney(totalEstimatedPrice)} FCFA` : 'Sur devis' }}
@@ -486,7 +486,7 @@ function scrollToSection(id) {
                                 </div>
                             </div>
 
-                            <div class="garage-booking-body p-4 pt-3">
+                            <div class="p-4 pt-3">
                             <form @submit.prevent="submitBooking" class="row g-2">
                                 <div class="col-7">
                                     <label class="form-label small fw-semibold mb-1">Date souhaitée *</label>
@@ -623,34 +623,6 @@ function scrollToSection(id) {
 </template>
 
 <style scoped>
-/* Colonne droite sticky + en-tête "Sur devis" toujours fixe au scroll */
-.garage-booking-sticky {
-    position: sticky;
-    top: 76px;
-    z-index: 20;
-}
-
-.garage-booking-price-header {
-    position: sticky;
-    top: 0;
-    z-index: 5;
-}
-
-.garage-booking-body {
-    max-height: calc(100vh - 230px);
-    overflow-y: auto;
-}
-
-@media (max-width: 991.98px) {
-    .garage-booking-sticky {
-        position: static;
-    }
-    .garage-booking-body {
-        max-height: none;
-        overflow-y: visible;
-    }
-}
-
 /* Mosaïque Photos façon Airbnb */
 .airbnb-mosaic {
     display: grid;

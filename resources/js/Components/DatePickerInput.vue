@@ -1,4 +1,6 @@
 <script setup>
+import $ from 'jquery';
+import 'jquery-ui-dist/jquery-ui.min.css';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -10,14 +12,21 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'change']);
 const el = ref(null);
+let initialized = false;
 
-onMounted(async () => {
-    const $ = window.jQuery;
-    if ($ && ! $.fn?.datepicker) {
-        await import('jquery-ui-dist/jquery-ui.min.js');
+async function ensureDatepicker() {
+    window.$ = window.jQuery = $;
+    if (!$.fn?.datepicker) {
+        const mod = await import('jquery-ui-dist/jquery-ui.min.js');
+        if (!$.fn?.datepicker && typeof mod?.default === 'function') {
+            try {
+                mod.default($);
+            } catch {}
+        }
     }
-    if ($ && $.fn && $.fn.datepicker && el.value) {
-        $(el.value).datepicker({
+    const jq = window.jQuery || $;
+    if (!initialized && jq?.fn?.datepicker && el.value) {
+        jq(el.value).datepicker({
             dateFormat: 'yy-mm-dd',
             changeMonth: true,
             changeYear: true,
@@ -36,7 +45,20 @@ onMounted(async () => {
                 emit('change', dateText);
             },
         });
+        initialized = true;
     }
+}
+
+async function openPicker() {
+    await ensureDatepicker();
+    const jq = window.jQuery || $;
+    if (jq?.fn?.datepicker && el.value) {
+        jq(el.value).datepicker('show');
+    }
+}
+
+onMounted(() => {
+    ensureDatepicker();
 });
 
 watch(
@@ -49,10 +71,10 @@ watch(
 );
 
 onBeforeUnmount(() => {
-    const $ = window.jQuery;
-    if ($ && $.fn && $.fn.datepicker && el.value) {
+    const jq = window.jQuery || $;
+    if (initialized && jq?.fn?.datepicker && el.value) {
         try {
-            $(el.value).datepicker('destroy');
+            jq(el.value).datepicker('destroy');
         } catch {}
     }
 });
@@ -60,7 +82,7 @@ onBeforeUnmount(() => {
 
 <template>
     <div class="input-group">
-        <span class="input-group-text"><i class="bi bi-calendar3"></i></span>
+        <span class="input-group-text" style="cursor: pointer;" @click="openPicker"><i class="bi bi-calendar3"></i></span>
         <input
             ref="el"
             type="text"
@@ -69,6 +91,8 @@ onBeforeUnmount(() => {
             :placeholder="placeholder"
             :required="required"
             autocomplete="off"
+            @click="openPicker"
+            @focus="openPicker"
             @input="emit('update:modelValue', $event.target.value); emit('change', $event.target.value)"
         />
     </div>
