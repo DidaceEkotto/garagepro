@@ -1,6 +1,8 @@
 <script setup>
+import DatePickerInput from '@/Components/DatePickerInput.vue';
 import LandingFooter from '@/Components/LandingFooter.vue';
 import OsmRouteMap from '@/Components/OsmRouteMap.vue';
+import TimePickerInput from '@/Components/TimePickerInput.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
@@ -89,13 +91,24 @@ const categoryLabels = {
     autre: 'Autre prestation',
 };
 
-// Date/heure min (dans 2 heures)
-const defaultDateTime = (() => {
+// Date & heure par défaut (jQuery UI DatePickerInput + TimePickerInput)
+const defaultSlot = (() => {
     const d = new Date(Date.now() + 2 * 3600 * 1000);
-    d.setMinutes(0, 0, 0);
     const pad = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:00`;
+    let h = d.getHours();
+    if (h < 6) h = 8;
+    if (h > 22) {
+        d.setDate(d.getDate() + 1);
+        h = 9;
+    }
+    return {
+        date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+        time: `${pad(h)}:00`,
+    };
 })();
+
+const scheduledDate = ref(defaultSlot.date);
+const scheduledTime = ref(defaultSlot.time);
 
 const bookingForm = useForm({
     service_ids: [],
@@ -107,7 +120,7 @@ const bookingForm = useForm({
     vehicle_brand: '',
     vehicle_model: '',
     vehicle_plate: '',
-    scheduled_at: defaultDateTime,
+    scheduled_at: `${defaultSlot.date} ${defaultSlot.time}:00`,
     notes: '',
 });
 
@@ -115,6 +128,9 @@ const bookingDone = ref(false);
 
 function submitBooking() {
     bookingForm.service_ids = [...selectedIds.value];
+    bookingForm.scheduled_at = scheduledDate.value && scheduledTime.value
+        ? `${scheduledDate.value} ${scheduledTime.value}:00`
+        : '';
     bookingForm.post(`/garage/${props.garage.slug}/rendez-vous`, {
         preserveScroll: true,
         onSuccess: () => {
@@ -435,16 +451,16 @@ function scrollToSection(id) {
 
                 <!-- COLONNE DROITE STICKY : Carte Réservation façon Airbnb -->
                 <div class="col-lg-5">
-                    <div class="sticky-top" style="top: 84px; z-index: 10;">
+                    <div class="garage-booking-sticky">
                         <!-- Bannière pilule au-dessus de la carte (façon Airbnb) -->
                         <div class="border rounded-4 shadow-sm bg-white px-3 py-2 mb-3 d-flex align-items-center justify-content-center gap-2 small fw-semibold text-dark">
                             <i class="bi bi-whatsapp text-success fs-6"></i>
                             <span>Confirmation instantanée envoyée au garage</span>
                         </div>
 
-                        <div class="card border rounded-4 shadow p-4">
-                            <!-- Prix d'appel / total sélectionné -->
-                            <div class="mb-3 pb-3 border-bottom">
+                        <div class="card border rounded-4 shadow overflow-hidden">
+                            <!-- En-tête "Sur devis / Tarif" fixe en haut de la carte au scroll -->
+                            <div class="garage-booking-price-header bg-white px-4 pt-4 pb-3 border-bottom">
                                 <div v-if="selectedServices.length" class="d-flex justify-content-between align-items-baseline">
                                     <span class="fs-5 fw-bold text-dark">
                                         {{ totalEstimatedPrice > 0 ? `${formatMoney(totalEstimatedPrice)} FCFA` : 'Sur devis' }}
@@ -453,7 +469,7 @@ function scrollToSection(id) {
                                 </div>
                                 <div v-else class="d-flex justify-content-between align-items-baseline">
                                     <span class="fs-5 fw-bold text-dark">
-                                        {{ startingPrice ? `À partir de ${formatMoney(startingPrice)} FCFA` : 'Prendre rendez-vous' }}
+                                        {{ startingPrice ? `À partir de ${formatMoney(startingPrice)} FCFA` : 'Sur devis' }}
                                     </span>
                                 </div>
 
@@ -470,11 +486,27 @@ function scrollToSection(id) {
                                 </div>
                             </div>
 
+                            <div class="garage-booking-body p-4 pt-3">
                             <form @submit.prevent="submitBooking" class="row g-2">
-                                <div class="col-12">
-                                    <label class="form-label small fw-semibold mb-1">Date & heure souhaitées *</label>
-                                    <input v-model="bookingForm.scheduled_at" type="datetime-local" class="form-control form-control-sm rounded-3" required />
-                                    <div v-if="bookingForm.errors.scheduled_at" class="text-danger small">{{ bookingForm.errors.scheduled_at }}</div>
+                                <div class="col-7">
+                                    <label class="form-label small fw-semibold mb-1">Date souhaitée *</label>
+                                    <DatePickerInput
+                                        v-model="scheduledDate"
+                                        input-class="form-control form-control-sm"
+                                        placeholder="AAAA-MM-JJ"
+                                        :required="true"
+                                    />
+                                </div>
+                                <div class="col-5">
+                                    <label class="form-label small fw-semibold mb-1">Heure *</label>
+                                    <TimePickerInput
+                                        v-model="scheduledTime"
+                                        input-class="form-select form-select-sm"
+                                        :required="true"
+                                    />
+                                </div>
+                                <div v-if="bookingForm.errors.scheduled_at" class="col-12 text-danger small">
+                                    {{ bookingForm.errors.scheduled_at }}
                                 </div>
 
                                 <div class="col-12">
@@ -543,6 +575,7 @@ function scrollToSection(id) {
                                     </div>
                                 </div>
                             </form>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -590,6 +623,34 @@ function scrollToSection(id) {
 </template>
 
 <style scoped>
+/* Colonne droite sticky + en-tête "Sur devis" toujours fixe au scroll */
+.garage-booking-sticky {
+    position: sticky;
+    top: 76px;
+    z-index: 20;
+}
+
+.garage-booking-price-header {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+}
+
+.garage-booking-body {
+    max-height: calc(100vh - 230px);
+    overflow-y: auto;
+}
+
+@media (max-width: 991.98px) {
+    .garage-booking-sticky {
+        position: static;
+    }
+    .garage-booking-body {
+        max-height: none;
+        overflow-y: visible;
+    }
+}
+
 /* Mosaïque Photos façon Airbnb */
 .airbnb-mosaic {
     display: grid;

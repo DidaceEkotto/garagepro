@@ -158,7 +158,17 @@ class PublicGarageController extends Controller
         $fullName = trim($validated['customer_name'].(! empty($validated['customer_first_name']) ? ' '.$validated['customer_first_name'] : ''));
         $plate = strtoupper(trim($validated['vehicle_plate']));
         $scheduledAt = Carbon::parse($validated['scheduled_at']);
-        $reason = implode(' + ', $serviceNames);
+        $servicesSummary = implode(' + ', $serviceNames);
+
+        // La colonne appointments.reason fait 30 caractères max (entretien, panne, controle, accident, autre)
+        $firstCategory = (string) ($selectedServices->first()?->category ?? '');
+        $reasonCode = match ($firstCategory) {
+            'entretien', 'climatisation', 'pneumatique' => 'entretien',
+            'visite_technique', 'diagnostic' => 'controle',
+            'carrosserie' => 'accident',
+            'mecanique', 'depannage' => 'panne',
+            default => 'autre',
+        };
 
         $appointment = DB::transaction(function () use (
             $tenant,
@@ -169,7 +179,8 @@ class PublicGarageController extends Controller
             $plate,
             $scheduledAt,
             $totalDuration,
-            $reason,
+            $reasonCode,
+            $servicesSummary,
             $totalPrice
         ) {
             $agencyId = Agency::withoutGlobalScopes()
@@ -215,7 +226,7 @@ class PublicGarageController extends Controller
                 ]);
             }
 
-            $notesParts = [];
+            $notesParts = ['Prestation(s) : '.$servicesSummary];
             if ($totalPrice > 0) {
                 $notesParts[] = 'Estimation prestations : '.number_format($totalPrice, 0, ',', ' ').' FCFA';
             }
@@ -233,7 +244,7 @@ class PublicGarageController extends Controller
                 'scheduled_at' => $scheduledAt,
                 'duration_minutes' => $totalDuration,
                 'status' => Appointment::STATUS_PENDING,
-                'reason' => mb_substr($reason, 0, 250),
+                'reason' => mb_substr($reasonCode, 0, 30),
                 'notes' => implode("\n", $notesParts),
             ]);
         });
@@ -250,7 +261,7 @@ class PublicGarageController extends Controller
                 'body' => "Client : {$fullName} ({$fullPhone})\n"
                     ."Véhicule : {$validated['vehicle_brand']} {$validated['vehicle_model']} ({$plate})\n"
                     ."Date souhaitée : {$scheduledAt->format('d/m/Y à H:i')}\n"
-                    ."Prestation(s) : {$reason}"
+                    ."Prestation(s) : {$servicesSummary}"
                     .($totalPrice > 0 ? "\nEstimation : ".number_format($totalPrice, 0, ',', ' ').' FCFA' : '')
                     .(! empty($validated['notes']) ? "\nNote client : ".trim($validated['notes']) : ''),
                 'is_read' => false,
@@ -267,7 +278,7 @@ class PublicGarageController extends Controller
                     ."👤 *Client :* {$fullName}\n"
                     ."📱 *WhatsApp :* {$fullPhone}\n"
                     ."🚗 *Véhicule :* {$validated['vehicle_brand']} {$validated['vehicle_model']} ({$plate})\n"
-                    ."🛠️ *Prestation(s) :* {$reason}\n"
+                    ."🛠️ *Prestation(s) :* {$servicesSummary}\n"
                     .($totalPrice > 0 ? '💰 *Tarif indicatif :* '.number_format($totalPrice, 0, ',', ' ')." FCFA\n" : '')
                     ."🗓️ *Date & heure :* {$scheduledAt->format('d/m/Y à H:i')}\n"
                     .(! empty($validated['notes']) ? "📝 *Précisions :* ".trim($validated['notes'])."\n" : '')
