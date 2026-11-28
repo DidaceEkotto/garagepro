@@ -102,6 +102,8 @@ const site = computed(() => page.props.app?.site || {});
                     <h4 class="h6 fw-bold mb-3">{{ t('footer.product') }}</h4>
                     <ul class="list-unstyled small vstack gap-2 mb-0">
                         <li><Link href="/#fonctionnalites" class="text-white-50 text-decoration-none">{{ t('nav.features') }}</Link></li>
+                        <li><Link href="/sos-depannage" class="text-decoration-none fw-semibold" style="color: #fda4af;"><i class="bi bi-geo-alt-fill me-1"></i>SOS Dépannage GPS</Link></li>
+                        <li><Link href="/verifier-vehicule" class="text-decoration-none fw-semibold text-info"><i class="bi bi-shield-check me-1"></i>MboaCar Check</Link></li>
                         <li><Link href="/#mode-hors-ligne" class="text-decoration-none fw-semibold" style="color: #6ee7b7;"><i class="bi bi-wifi-off me-1"></i>Mode Hors Ligne</Link></li>
                         <li><Link href="/#tarifs" class="text-white-50 text-decoration-none">{{ t('nav.pricing') }}</Link></li>
                         <li><Link href="/marketplace" class="text-white-50 text-decoration-none">{{ t('mp.marketplace') }}</Link></li>
@@ -112,7 +114,7 @@ const site = computed(() => page.props.app?.site || {});
                 <div class="col-6 col-lg-2">
                     <h4 class="h6 fw-bold mb-3">{{ t('footer.legal') }}</h4>
                     <ul class="list-unstyled small vstack gap-2 mb-0">
-                        <li><Link href="/inscription" class="text-white-50 text-decoration-none">{{ t('nav.register') }}</Link></li>
+                        <li><Link href="/inscription" class="text-white fw-semibold text-decoration-none"><i class="bi bi-building-add me-1 text-primary"></i>Créer mon établissement</Link></li>
                         <li><Link href="/connexion" class="text-white-50 text-decoration-none">{{ t('nav.login') }}</Link></li>
                         <li><Link href="/contact" class="text-white-50 text-decoration-none">{{ t('nav.contact') }}</Link></li>
                         <li><Link href="/conditions-utilisation" class="text-white-50 text-decoration-none">{{ t('footer.terms') }}</Link></li>

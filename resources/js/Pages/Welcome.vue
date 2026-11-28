@@ -180,6 +180,12 @@ onUnmounted(() => {
                                 <span>Marketplace</span>
                             </Link>
                         </li>
+                        <li class="nav-item">
+                            <Link class="nav-link fw-semibold text-nowrap px-2 small d-inline-flex align-items-center gap-1" href="/sos-depannage" style="color: #fda4af;">
+                                <i class="bi bi-geo-alt-fill"></i>
+                                <span>SOS Dépannage</span>
+                            </Link>
+                        </li>
                     </ul>
                     <div class="d-flex flex-wrap flex-xl-nowrap align-items-center gap-2 flex-shrink-0">
                         <LanguageSwitcher variant="light" />
@@ -200,16 +206,10 @@ onUnmounted(() => {
                             </a>
                         </template>
                         <template v-else-if="isDemoSession">
-                            <a href="/demo/quitter?to=login" class="btn btn-outline-light btn-sm rounded-pill px-3 text-nowrap">{{ t('nav.login') }}</a>
-                            <a href="/demo/quitter?to=register" class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold shadow-sm text-nowrap">
-                                {{ t('nav.register') }}
-                            </a>
+                            <a href="/demo/quitter?to=login" class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold shadow-sm text-nowrap">{{ t('nav.login') }}</a>
                         </template>
                         <template v-else>
-                            <Link href="/connexion" class="btn btn-outline-light btn-sm rounded-pill px-3 text-nowrap">{{ t('nav.login') }}</Link>
-                            <Link href="/inscription" class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold shadow-sm text-nowrap">
-                                {{ t('nav.register') }}
-                            </Link>
+                            <Link href="/connexion" class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold shadow-sm text-nowrap">{{ t('nav.login') }}</Link>
                         </template>
                     </div>
                 </div>
