@@ -7,6 +7,7 @@ const props = defineProps({
     tenantType: { type: String, default: 'garage' },
     technicalKpis: { type: Object, default: null },
     insuranceKpis: { type: Object, default: null },
+    partsShopKpis: { type: Object, default: null },
     kpis: Object,
     revenueSeries: Array,
     ordersByStatus: Array,
@@ -45,13 +46,36 @@ const statusColors = [
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h1 class="h4 fw-bold mb-0">
-                    {{ tenantType === 'centre_technique' ? 'Tableau de bord — Centre Technique' : (tenantType === 'assurance' ? 'Tableau de bord — Assurance Auto' : 'Tableau de bord récapitulatif') }}
+                    {{
+                        tenantType === 'boutique_pieces'
+                            ? 'Tableau de bord — Boutique Pièces Détachées'
+                            : (tenantType === 'centre_technique'
+                                ? 'Tableau de bord — Centre Technique'
+                                : (tenantType === 'assurance' ? 'Tableau de bord — Assurance Auto' : 'Tableau de bord récapitulatif'))
+                    }}
                 </h1>
                 <p class="text-muted small mb-0">
-                    {{ tenantType === 'centre_technique' ? 'Suivi des visites techniques, contre-visites et encaissements' : (tenantType === 'assurance' ? 'Suivi des polices, dossiers sinistres et accords de prise en charge' : 'Vue d\'ensemble de l\'activité atelier, stock et finances') }}
+                    {{
+                        tenantType === 'boutique_pieces'
+                            ? 'Gérez votre catalogue de pièces publiées sur le Marketplace, vos commandes et vos ventes'
+                            : (tenantType === 'centre_technique'
+                                ? 'Suivi des visites techniques, contre-visites et encaissements'
+                                : (tenantType === 'assurance' ? 'Suivi des polices, dossiers sinistres et accords de prise en charge' : 'Vue d\'ensemble de l\'activité atelier, stock et finances'))
+                    }}
                 </p>
             </div>
-            <div v-if="tenantType === 'centre_technique'" class="d-flex gap-2">
+            <div v-if="tenantType === 'boutique_pieces'" class="d-flex flex-wrap gap-2">
+                <a href="/marketplace" target="_blank" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-shop me-1"></i>Voir le Marketplace
+                </a>
+                <Link href="/marketplace-gestion/commandes" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-bag-check me-1"></i>Commandes reçues
+                </Link>
+                <Link href="/marketplace-gestion/produits" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus-circle me-1"></i>Ajouter une pièce
+                </Link>
+            </div>
+            <div v-else-if="tenantType === 'centre_technique'" class="d-flex gap-2">
                 <Link href="/visite-technique" class="btn btn-primary btn-sm">
                     <i class="bi bi-clipboard2-check me-1"></i>Nouveau PV Visite
                 </Link>
@@ -68,6 +92,34 @@ const statusColors = [
                 <Link href="/ordres-reparation" class="btn btn-primary btn-sm">
                     <i class="bi bi-plus-circle me-1"></i>Nouvel OR
                 </Link>
+            </div>
+        </div>
+
+        <!-- KPIs Boutique Pièces Détachées -->
+        <div v-if="tenantType === 'boutique_pieces' && partsShopKpis" class="row g-3 mb-4">
+            <div class="col-6 col-md-3">
+                <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+                    <div class="small text-muted">Pièces publiées (Marketplace)</div>
+                    <div class="h4 fw-bold text-primary mb-0">{{ partsShopKpis.publishedProducts }} <span class="fs-6 fw-normal text-muted">/ {{ partsShopKpis.totalProducts }}</span></div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+                    <div class="small text-muted">Commandes à traiter</div>
+                    <div class="h4 fw-bold text-warning mb-0">{{ partsShopKpis.pendingOrders }}</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+                    <div class="small text-muted">Stock bas / Rupture</div>
+                    <div class="h4 fw-bold text-danger mb-0">{{ partsShopKpis.lowStockProducts }}</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+                    <div class="small text-muted">Volume ventes Marketplace</div>
+                    <div class="h4 fw-bold text-success mb-0">{{ fmt(partsShopKpis.marketplaceRevenue) }}</div>
+                </div>
             </div>
         </div>
 

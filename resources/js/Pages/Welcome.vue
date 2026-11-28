@@ -12,6 +12,7 @@ const props = defineProps({
     appName: { type: String, default: 'MboaCar' },
     trialDays: { type: Number, default: 7 },
     monthlyPrice: { type: Number, default: 10000 },
+    partsMonthlyPrice: { type: Number, default: 10000 },
     baseDomain: { type: String, default: 'mboacar.com' },
     testimonials: { type: Array, default: () => [] },
     partners: { type: Array, default: () => [] },
@@ -36,6 +37,7 @@ const marqueePartners = computed(() => {
 });
 
 const { t } = useI18n();
+const pricingTab = ref('pro'); // 'pro' | 'parts'
 const isScrolled = ref(false);
 const activeTestiIndex = ref(0);
 let observer = null;
@@ -592,12 +594,40 @@ onUnmounted(() => {
         <div class="pricing-glow pricing-glow-2" aria-hidden="true"></div>
 
         <div class="container py-4 position-relative" style="z-index: 1;">
-            <div class="text-center mx-auto mb-5 reveal-on-scroll" style="max-width: 640px;">
+            <div class="text-center mx-auto mb-4 reveal-on-scroll" style="max-width: 680px;">
                 <span class="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle px-3 py-2 fw-semibold small text-uppercase mb-2">
                     <i class="bi bi-tag-fill me-1"></i>{{ t('nav.pricing') }}
                 </span>
-                <h2 class="display-6 fw-bold text-dark mt-1 mb-2">{{ t('pricing.title') }}</h2>
-                <p class="text-muted mb-0">{{ t('pricing.subtitle', { days: trialDays }) }}</p>
+                <h2 class="display-6 fw-bold text-dark mt-1 mb-2">Des tarifs simples, transparents et sans surprise</h2>
+                <p class="text-muted mb-3">{{ t('pricing.subtitle', { days: trialDays }) }}</p>
+
+                <!-- Sélecteur d'offre : Suite Pro vs Vendeur de Pièces Détachées -->
+                <div class="d-inline-flex flex-wrap justify-content-center gap-2 p-1 rounded-pill bg-white border shadow-sm">
+                    <button
+                        type="button"
+                        class="btn btn-sm rounded-pill px-4 py-2 fw-semibold d-inline-flex align-items-center gap-2"
+                        :class="pricingTab === 'pro' ? 'btn-primary text-white shadow-sm' : 'btn-light text-dark border-0 bg-transparent'"
+                        @click="pricingTab = 'pro'"
+                    >
+                        <i class="bi bi-wrench-adjustable"></i>
+                        <span>Garages, Centres &amp; Assurances</span>
+                        <span class="badge rounded-pill" :class="pricingTab === 'pro' ? 'bg-white text-primary' : 'bg-primary-subtle text-primary'">
+                            {{ formatFcfa(monthlyPrice) }} F
+                        </span>
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-sm rounded-pill px-4 py-2 fw-semibold d-inline-flex align-items-center gap-2"
+                        :class="pricingTab === 'parts' ? 'btn-primary text-white shadow-sm' : 'btn-light text-dark border-0 bg-transparent'"
+                        @click="pricingTab = 'parts'"
+                    >
+                        <i class="bi bi-shop"></i>
+                        <span>Vendeurs de Pièces Détachées</span>
+                        <span class="badge rounded-pill" :class="pricingTab === 'parts' ? 'bg-white text-primary' : 'bg-success-subtle text-success'">
+                            {{ formatFcfa(partsMonthlyPrice) }} F
+                        </span>
+                    </button>
+                </div>
             </div>
 
             <div class="pricing-card-shell mx-auto reveal-on-scroll">
@@ -607,15 +637,16 @@ onUnmounted(() => {
                         <div>
                             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
                                 <span class="badge rounded-pill bg-primary px-3 py-2 fw-semibold">
-                                    <i class="bi bi-stars me-1"></i>{{ t('pricing.planName') }}
+                                    <i class="bi me-1" :class="pricingTab === 'parts' ? 'bi-shop' : 'bi-stars'"></i>
+                                    {{ pricingTab === 'parts' ? 'Offre Boutique Pièces Auto' : t('pricing.planName') }}
                                 </span>
                                 <span class="badge rounded-pill bg-white bg-opacity-10 text-white border border-white border-opacity-25 px-2 py-1" style="font-size: 0.72rem;">
-                                    Tout inclus
+                                    {{ pricingTab === 'parts' ? '1 boutique incluse' : 'Tout inclus' }}
                                 </span>
                             </div>
 
                             <div class="d-flex align-items-baseline flex-wrap gap-2 mb-2">
-                                <span class="pricing-amount fw-bold lh-1">{{ formatFcfa(monthlyPrice) }}</span>
+                                <span class="pricing-amount fw-bold lh-1">{{ formatFcfa(pricingTab === 'parts' ? partsMonthlyPrice : monthlyPrice) }}</span>
                                 <span class="text-white-50 fs-6">{{ t('pricing.perMonth') }}</span>
                             </div>
 
@@ -624,7 +655,13 @@ onUnmounted(() => {
                                 <span>{{ t('pricing.trialNote', { days: trialDays }) }}</span>
                             </div>
 
-                            <div class="d-flex flex-wrap gap-2 mb-4">
+                            <div v-if="pricingTab === 'parts'" class="d-flex flex-wrap gap-2 mb-4">
+                                <span class="pricing-space-chip"><i class="bi bi-shop me-1"></i>Vendeurs Pièces</span>
+                                <span class="pricing-space-chip"><i class="bi bi-box-seam me-1"></i>Marketplace Public</span>
+                                <span class="pricing-space-chip"><i class="bi bi-people me-1"></i>Réseau B2B Garages</span>
+                                <span class="pricing-space-chip" style="border-color: rgba(110, 231, 183, 0.45); color: #6ee7b7;"><i class="bi bi-whatsapp me-1"></i>Commandes WhatsApp</span>
+                            </div>
+                            <div v-else class="d-flex flex-wrap gap-2 mb-4">
                                 <span class="pricing-space-chip"><i class="bi bi-wrench-adjustable me-1"></i>Garages</span>
                                 <span class="pricing-space-chip"><i class="bi bi-clipboard2-check me-1"></i>Visite Technique</span>
                                 <span class="pricing-space-chip"><i class="bi bi-shield-check me-1"></i>Assurances</span>
@@ -651,10 +688,10 @@ onUnmounted(() => {
                             </a>
                             <Link
                                 v-else
-                                href="/inscription"
+                                :href="pricingTab === 'parts' ? '/inscription?type=boutique_pieces' : '/inscription'"
                                 class="btn btn-primary btn-lg w-100 py-3 fw-bold rounded-4 shadow pricing-cta-btn d-flex align-items-center justify-content-center gap-2"
                             >
-                                <span>{{ t('pricing.cta') }}</span>
+                                <span>{{ pricingTab === 'parts' ? 'Ouvrir ma boutique de pièces' : t('pricing.cta') }}</span>
                                 <i class="bi bi-arrow-right"></i>
                             </Link>
 
@@ -675,16 +712,73 @@ onUnmounted(() => {
                     <div class="col-lg-7 bg-white p-4 p-md-5 d-flex flex-column justify-content-between">
                         <div>
                             <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-                                <h3 class="h5 fw-bold text-dark mb-0">Tout est inclus dès le 1er jour</h3>
+                                <h3 class="h5 fw-bold text-dark mb-0">
+                                    {{ pricingTab === 'parts' ? 'Un espace 100 % dédié à la vente de pièces' : 'Tout est inclus dès le 1er jour' }}
+                                </h3>
                                 <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3 py-1 small">
                                     <i class="bi bi-check-circle-fill me-1"></i>0 frais cachés
                                 </span>
                             </div>
                             <p class="text-muted small mb-4">
-                                Aucune option payante supplémentaire : profitez de l'intégralité de la plateforme pour digitaliser votre activité.
+                                {{
+                                    pricingTab === 'parts'
+                                        ? 'Interface épurée sans les menus d\'atelier : publiez vos pièces par catégories & sous-catégories directement sur le Marketplace MboaCar.'
+                                        : 'Aucune option payante supplémentaire : profitez de l\'intégralité de la plateforme pour digitaliser votre activité.'
+                                }}
                             </p>
 
-                            <div class="row g-3 mb-4">
+                            <div v-if="pricingTab === 'parts'" class="row g-3 mb-4">
+                                <div class="col-sm-6">
+                                    <div class="pricing-feature-item">
+                                        <span class="pricing-check-icon"><i class="bi bi-check-lg"></i></span>
+                                        <span>Catalogue illimité de pièces (Neuf &amp; Occasion)</span>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="pricing-feature-item">
+                                        <span class="pricing-check-icon"><i class="bi bi-check-lg"></i></span>
+                                        <span>Catégories &amp; sous-catégories + publication Marketplace</span>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="pricing-feature-item">
+                                        <span class="pricing-check-icon"><i class="bi bi-check-lg"></i></span>
+                                        <span>Suivi des commandes clients &amp; garages en direct</span>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="pricing-feature-item">
+                                        <span class="pricing-check-icon"><i class="bi bi-check-lg"></i></span>
+                                        <span>Caisse &amp; Facturation comptoir PDF / WhatsApp</span>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="pricing-feature-item">
+                                        <span class="pricing-check-icon"><i class="bi bi-check-lg"></i></span>
+                                        <span>Réseau Pro B2B avec les garages voisins</span>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="pricing-feature-item">
+                                        <span class="pricing-check-icon"><i class="bi bi-check-lg"></i></span>
+                                        <span>Vitrine publique géolocalisée sur OpenStreetMap</span>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="pricing-feature-item">
+                                        <span class="pricing-check-icon"><i class="bi bi-check-lg"></i></span>
+                                        <span>1 boutique / agence dédiée + gestion équipe</span>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="pricing-feature-item">
+                                        <span class="pricing-check-icon"><i class="bi bi-check-lg"></i></span>
+                                        <span>Notifications temps réel &amp; Mode Hors Ligne PWA</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div v-else class="row g-3 mb-4">
                                 <div class="col-sm-6">
                                     <div class="pricing-feature-item">
                                         <span class="pricing-check-icon"><i class="bi bi-check-lg"></i></span>

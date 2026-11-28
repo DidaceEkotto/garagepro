@@ -243,6 +243,60 @@ function hasAnyPermission(perms) {
 
 const menuGroups = computed(() => {
     const currentType = tenant.value?.type || 'garage';
+
+    if (tenant.value?.isReadOnly) {
+        return [
+            {
+                title: t('layout.settings'),
+                items: [
+                    { label: t('layout.subscription'), href: '/abonnement', icon: 'bi-credit-card', permissions: [] },
+                ],
+            },
+        ];
+    }
+
+    // Espace ultra-épuré dédié aux Vendeurs de Pièces Détachées (1 seule agence, 100 % vente de pièces)
+    if (currentType === 'boutique_pieces') {
+        const partsGroups = [
+            {
+                title: 'Ma Boutique Pièces',
+                items: [
+                    { label: t('layout.dashboard'), href: '/tableau-de-bord', icon: 'bi-speedometer2', permissions: [] },
+                    { label: 'Mes Pièces (Produits)', href: '/marketplace-gestion/produits', icon: 'bi-box2-heart', permissions: ['stock.manage', 'settings.manage'] },
+                    { label: 'Catégories & Sous-catégories', href: '/marketplace-gestion/categories', icon: 'bi-tags', permissions: ['stock.manage', 'settings.manage'] },
+                    { label: 'Commandes reçues', href: '/marketplace-gestion/commandes', icon: 'bi-bag-check', permissions: ['stock.manage', 'settings.manage'] },
+                ],
+            },
+            {
+                title: 'Clients & Finances',
+                items: [
+                    { label: 'Clients & Garages', href: '/clients', icon: 'bi-people', permissions: ['clients.view', 'clients.manage'] },
+                    { label: t('layout.invoices'), href: '/factures', icon: 'bi-receipt', permissions: ['invoices.view', 'invoices.manage', 'payments.manage'] },
+                    { label: t('layout.accounting'), href: '/comptabilite', icon: 'bi-journal-bookmark', permissions: ['accounting.view', 'accounting.manage'] },
+                    { label: t('layout.reports'), href: '/rapports', icon: 'bi-graph-up', permissions: ['reports.view'] },
+                ],
+            },
+            {
+                title: t('layout.settings'),
+                items: [
+                    { label: t('layoutExtra.messaging'), href: '/messagerie', icon: 'bi-chat-dots', permissions: [] },
+                    { label: 'Ma Vitrine', href: '/vitrine-prestations', icon: 'bi-shop-window', permissions: [] },
+                    { label: t('layout.professionals'), href: '/professionnels', icon: 'bi-person-plus', permissions: ['users.view', 'users.manage'] },
+                    { label: t('layout.settings'), href: '/parametres-espace', icon: 'bi-gear', permissions: ['settings.manage'] },
+                    { label: t('layoutExtra.affiliation'), href: '/affiliation', icon: 'bi-ticket-perforated', permissions: ['settings.manage', 'payments.manage'] },
+                    { label: t('layout.subscription'), href: '/abonnement', icon: 'bi-credit-card', permissions: ['settings.manage', 'payments.manage'] },
+                ],
+            },
+        ];
+
+        return partsGroups
+            .map((group) => ({
+                ...group,
+                items: group.items.filter((item) => hasAnyPermission(item.permissions)),
+            }))
+            .filter((group) => group.items.length > 0);
+    }
+
     const rawGroups = [
         {
             title: t('layout.dashboard'),

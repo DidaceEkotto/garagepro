@@ -7,10 +7,13 @@ use App\Models\Customer;
 use App\Models\InsuranceClaim;
 use App\Models\InsurancePolicy;
 use App\Models\Invoice;
+use App\Models\MarketplaceOrderItem;
 use App\Models\Part;
 use App\Models\Payment;
+use App\Models\Product;
 use App\Models\RepairOrder;
 use App\Models\TechnicalInspection;
+use App\Models\Tenant;
 use App\Models\VehicleReception;
 use App\Services\TenantContext;
 use Illuminate\Http\Request;
@@ -109,10 +112,23 @@ class DashboardController extends Controller
                 ->sum('approved_amount'),
         ] : null;
 
+        $partsShopKpis = $tenantType === Tenant::TYPE_PARTS_SHOP ? [
+            'publishedProducts' => Product::where('tenant_id', $tenant->id)->where('is_published', true)->count(),
+            'totalProducts' => Product::where('tenant_id', $tenant->id)->count(),
+            'lowStockProducts' => Product::where('tenant_id', $tenant->id)->where('stock_quantity', '<=', 2)->count(),
+            'pendingOrders' => MarketplaceOrderItem::where('tenant_id', $tenant->id)
+                ->whereIn('status', ['pending', 'en_attente', 'confirmed'])
+                ->count(),
+            'marketplaceRevenue' => (int) MarketplaceOrderItem::where('tenant_id', $tenant->id)
+                ->whereNotIn('status', ['cancelled', 'annule'])
+                ->sum('total_price'),
+        ] : null;
+
         return Inertia::render('Tenant/Dashboard', [
             'tenantType' => $tenantType,
             'technicalKpis' => $technicalKpis,
             'insuranceKpis' => $insuranceKpis,
+            'partsShopKpis' => $partsShopKpis,
             'kpis' => [
                 'monthRevenue' => $monthRevenue,
                 'unpaidTotal' => $unpaidTotal,

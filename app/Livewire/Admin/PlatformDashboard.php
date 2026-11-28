@@ -38,6 +38,7 @@ class PlatformDashboard extends Component
     use WithFileUploads;
     public string $activeSection = 'overview';
     public int $subscriptionPrice = 10000;
+    public int $partsShopSubscriptionPrice = 10000;
     public int $trialDays = 7;
     public int $gracePeriodDays = 5;
     public string $structureEmail = 'jeannotgates@gmail.com';
@@ -172,6 +173,7 @@ class PlatformDashboard extends Component
     {
         $this->setSection($section);
         $this->subscriptionPrice = PlatformSetting::subscriptionPrice();
+        $this->partsShopSubscriptionPrice = PlatformSetting::partsShopSubscriptionPrice();
         $this->trialDays = max(1, min(30, PlatformSetting::trialDays()));
         $this->gracePeriodDays = PlatformSetting::gracePeriodDays();
         $this->structureEmail = PlatformSetting::structureEmail();
@@ -260,6 +262,7 @@ class PlatformDashboard extends Component
 
         $this->validate([
             'subscriptionPrice' => ['required', 'integer', 'min:1'],
+            'partsShopSubscriptionPrice' => ['required', 'integer', 'min:1'],
             'trialDays' => ['required', 'integer', 'min:1', 'max:30'],
             'gracePeriodDays' => ['required', 'integer', 'min:0', 'max:30'],
             'structureEmail' => ['required', 'email', 'max:150'],
@@ -284,6 +287,7 @@ class PlatformDashboard extends Component
         ]);
 
         PlatformSetting::setValue('subscription_price', $this->subscriptionPrice);
+        PlatformSetting::setValue('parts_shop_subscription_price', $this->partsShopSubscriptionPrice);
         PlatformSetting::setValue('trial_days', $this->trialDays);
         PlatformSetting::setValue('grace_period_days', $this->gracePeriodDays);
         PlatformSetting::setValue('structure_email', strtolower(trim($this->structureEmail)));

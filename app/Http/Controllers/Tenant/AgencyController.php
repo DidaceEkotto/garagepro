@@ -35,6 +35,11 @@ class AgencyController extends Controller
 
     public function store(StoreAgencyRequest $request, TenantContext $tenantContext): RedirectResponse
     {
+        $tenant = $tenantContext->getTenant();
+        if ($tenant && $tenant->type === \App\Models\Tenant::TYPE_PARTS_SHOP && Agency::count() >= 1) {
+            return back()->with('error', 'Les comptes Vendeur de Pièces Détachées sont limités à une seule agence.');
+        }
+
         $agency = Agency::create([
             ...$request->validated(),
             'tenant_id' => $tenantContext->id(),

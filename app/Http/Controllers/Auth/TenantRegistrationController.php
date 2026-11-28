@@ -50,6 +50,7 @@ class TenantRegistrationController extends Controller
             'baseDomain' => config('garagepro.tenant_base_domain', 'mboacar.com'),
             'trialDays' => PlatformSetting::trialDays(),
             'monthlyPrice' => PlatformSetting::subscriptionPrice(),
+            'partsMonthlyPrice' => PlatformSetting::partsShopSubscriptionPrice(),
             'countries' => Country::active()->orderBy('name')->get(['code', 'name', 'dial_code']),
             'promoCode' => $ref,
             'referralDiscount' => PlatformSetting::affiliateReferralDiscount(),

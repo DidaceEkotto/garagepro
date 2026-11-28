@@ -33,7 +33,7 @@ class PaymentController extends Controller
             ->get();
 
         $affiliateLink = AffiliateLink::where('tenant_id', $tenant->id)->first();
-        $monthlyPrice = PlatformSetting::subscriptionPrice();
+        $monthlyPrice = PlatformSetting::subscriptionPriceForTenant($tenant);
         $referralDiscount = min($monthlyPrice, AffiliateReferral::availableDiscountForTenant($tenant));
 
         return Inertia::render('Tenant/Subscription/Index', [
@@ -108,7 +108,7 @@ class PaymentController extends Controller
     ): BaseResponse {
         $tenant = $tenantContext->getTenant();
         $user = $request->user('web');
-        $price = PlatformSetting::subscriptionPrice();
+        $price = PlatformSetting::subscriptionPriceForTenant($tenant);
         $discount = min($price, AffiliateReferral::availableDiscountForTenant($tenant));
         $finalAmount = max(0, $price - $discount);
 

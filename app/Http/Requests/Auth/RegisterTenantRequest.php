@@ -24,6 +24,9 @@ class RegisterTenantRequest extends FormRequest
                 'slug' => Str::slug((string) $this->input('slug')),
             ]);
         }
+        if ($this->input('type') === 'boutique_pieces') {
+            $this->merge(['agencies_count' => 1]);
+        }
     }
 
     public function rules(): array
@@ -31,7 +34,7 @@ class RegisterTenantRequest extends FormRequest
         $reserved = config('garagepro.reserved_subdomains', []);
 
         return [
-            'type' => ['nullable', Rule::in(['garage', 'centre_technique', 'assurance'])],
+            'type' => ['nullable', Rule::in(['garage', 'centre_technique', 'assurance', 'boutique_pieces'])],
             'garage_name' => ['required', 'string', 'min:2', 'max:150'],
             'owner_last_name' => ['nullable', 'string', 'min:2', 'max:100'],
             'owner_first_name' => ['nullable', 'string', 'min:2', 'max:100'],

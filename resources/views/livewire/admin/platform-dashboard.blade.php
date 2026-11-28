@@ -1302,8 +1302,12 @@
             <div class="card border-0 shadow-sm rounded-4 p-4">
                 <form wire:submit="saveSettings" class="row g-3">
                     <div class="col-md-3">
-                        <label class="form-label small fw-semibold">Prix mensuel (FCFA)</label>
+                        <label class="form-label small fw-semibold">Prix mensuel Pro (FCFA)</label>
                         <input wire:model="subscriptionPrice" type="number" min="1" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold">Prix mensuel Vendeurs Pièces (FCFA)</label>
+                        <input wire:model="partsShopSubscriptionPrice" type="number" min="1" class="form-control form-control-sm">
                     </div>
                     <div class="col-md-3">
                         <label class="form-label small fw-semibold">Durée essai (1 à 30 jours)</label>

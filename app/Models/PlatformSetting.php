@@ -92,6 +92,23 @@ class PlatformSetting extends Model
         );
     }
 
+    public static function partsShopSubscriptionPrice(): int
+    {
+        return (int) static::getValue(
+            'parts_shop_subscription_price',
+            config('garagepro.default_parts_shop_subscription_price', 10000)
+        );
+    }
+
+    public static function subscriptionPriceForTenant(?Tenant $tenant): int
+    {
+        if ($tenant && $tenant->type === Tenant::TYPE_PARTS_SHOP) {
+            return static::partsShopSubscriptionPrice();
+        }
+
+        return static::subscriptionPrice();
+    }
+
     public static function trialDays(): int
     {
         return (int) static::getValue(

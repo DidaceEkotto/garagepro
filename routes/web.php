@@ -71,6 +71,7 @@ Route::get('/', function () {
         'appName' => config('app.name', 'MboaCar'),
         'trialDays' => PlatformSetting::trialDays(),
         'monthlyPrice' => PlatformSetting::subscriptionPrice(),
+        'partsMonthlyPrice' => PlatformSetting::partsShopSubscriptionPrice(),
         'baseDomain' => config('garagepro.tenant_base_domain', 'mboacar.com'),
         'testimonials' => Testimonial::published()->latest()->take(10)->get(),
         'partners' => Partner::active()->get(['id', 'name', 'logo_path', 'website_url']),

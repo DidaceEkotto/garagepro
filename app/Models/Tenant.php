@@ -17,6 +17,7 @@ class Tenant extends Model
     public const TYPE_GARAGE = 'garage';
     public const TYPE_TECHNICAL_CENTER = 'centre_technique';
     public const TYPE_INSURANCE = 'assurance';
+    public const TYPE_PARTS_SHOP = 'boutique_pieces';
 
     public const STATUS_TRIALING = 'trialing';
     public const STATUS_ACTIVE = 'active';

@@ -9,17 +9,28 @@ const props = defineProps({
     baseDomain: { type: String, default: 'mboacar.com' },
     trialDays: { type: Number, default: 7 },
     monthlyPrice: { type: Number, default: 10000 },
+    partsMonthlyPrice: { type: Number, default: 10000 },
     countries: { type: Array, default: () => [] },
     promoCode: { type: String, default: '' },
     referralDiscount: { type: Number, default: 5000 },
 });
+
+const initialType = (() => {
+    if (typeof window !== 'undefined') {
+        const qp = new URLSearchParams(window.location.search).get('type');
+        if (['garage', 'centre_technique', 'assurance', 'boutique_pieces'].includes(qp)) {
+            return qp;
+        }
+    }
+    return 'garage';
+})();
 
 const { t } = useI18n();
 const showPassword = ref(false);
 const showPasswordConfirmation = ref(false);
 
 const form = useForm({
-    type: 'garage',
+    type: initialType,
     garage_name: '',
     slug: '',
     owner_last_name: '',
@@ -36,6 +47,16 @@ const form = useForm({
     promo_code: props.promoCode || '',
     password: '',
     password_confirmation: '',
+});
+
+const activePlanPrice = computed(() =>
+    form.type === 'boutique_pieces' ? props.partsMonthlyPrice : props.monthlyPrice
+);
+
+watch(() => form.type, (val) => {
+    if (val === 'boutique_pieces') {
+        form.agencies_count = 1;
+    }
 });
 
 const selectedDialCode = computed(() => {
@@ -120,7 +141,7 @@ function submit() {
                     <ul class="list-unstyled vstack gap-3 small">
                         <li><i class="bi bi-check-circle-fill text-info me-2"></i>{{ t('auth.benefit1', { days: trialDays }) }}</li>
                         <li><i class="bi bi-check-circle-fill text-info me-2"></i>{{ t('auth.benefit2') }}</li>
-                        <li><i class="bi bi-check-circle-fill text-info me-2"></i>{{ t('auth.benefit3') }} ({{ new Intl.NumberFormat('fr-FR').format(monthlyPrice) }} FCFA / mois)</li>
+                        <li><i class="bi bi-check-circle-fill text-info me-2"></i>{{ t('auth.benefit3') }} ({{ new Intl.NumberFormat('fr-FR').format(activePlanPrice) }} FCFA / mois)</li>
                     </ul>
                     </div>
                 </div>
@@ -179,12 +200,34 @@ function submit() {
                                         <span class="opacity-75" style="font-size: 0.7rem;">{{ t('layoutExtra.typeInsuranceSub') }}</span>
                                     </button>
                                 </div>
+                                <div class="col-12">
+                                    <button
+                                        type="button"
+                                        class="btn w-100 text-start p-2 px-3 small border d-flex align-items-center justify-content-between gap-2"
+                                        :class="form.type === 'boutique_pieces' ? 'btn-primary text-white border-primary' : 'btn-light'"
+                                        @click="form.type = 'boutique_pieces'"
+                                    >
+                                        <div class="d-flex align-items-center gap-2">
+                                            <i class="bi bi-shop fs-5"></i>
+                                            <div>
+                                                <span class="fw-bold d-block">Vendeur de Pièces Détachées</span>
+                                                <span class="opacity-75" style="font-size: 0.72rem;">Boutique dédiée 100 % vente de pièces auto sur le Marketplace MboaCar (1 agence)</span>
+                                            </div>
+                                        </div>
+                                        <span
+                                            class="badge rounded-pill flex-shrink-0"
+                                            :class="form.type === 'boutique_pieces' ? 'bg-white text-primary' : 'bg-primary-subtle text-primary'"
+                                        >
+                                            {{ new Intl.NumberFormat('fr-FR').format(partsMonthlyPrice) }} FCFA/mois
+                                        </span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
                         <div class="mb-3">
                             <label for="garage_name" class="form-label small">
-                                {{ form.type === 'centre_technique' ? 'Nom du Centre Technique' : (form.type === 'assurance' ? 'Nom de l\'Assurance / Cabinet' : t('auth.garageName')) }}
+                                {{ form.type === 'centre_technique' ? 'Nom du Centre Technique' : (form.type === 'assurance' ? 'Nom de l\'Assurance / Cabinet' : (form.type === 'boutique_pieces' ? 'Nom de votre boutique de pièces' : t('auth.garageName'))) }}
                                 <span class="text-danger">*</span>
                             </label>
                             <input
@@ -284,11 +327,15 @@ function submit() {
                                     v-model.number="form.agencies_count"
                                     type="number"
                                     min="1"
-                                    max="20"
+                                    :max="form.type === 'boutique_pieces' ? 1 : 20"
+                                    :disabled="form.type === 'boutique_pieces'"
                                     class="form-control"
                                     :class="{ 'is-invalid': form.errors.agencies_count }"
                                     required
                                 />
+                                <div v-if="form.type === 'boutique_pieces'" class="form-text" style="font-size: 0.72rem;">
+                                    1 agence incluse pour les vendeurs de pièces.
+                                </div>
                                 <div v-if="form.errors.agencies_count" class="invalid-feedback">{{ form.errors.agencies_count }}</div>
                             </div>
                         </div>
