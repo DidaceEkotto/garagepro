@@ -130,6 +130,7 @@ const routeTitleMap = [
     ['/depannage-sos', 'SOS Dépannage'],
     ['/marketplace-gestion/categories', 'Marketplace — Catégories'],
     ['/marketplace-gestion/produits', 'Marketplace — Mes Produits'],
+    ['/marketplace-gestion/commandes/', 'Détails de la commande'],
     ['/marketplace-gestion/commandes', 'Marketplace — Commandes reçues'],
     ['/agences', 'Agences'],
     ['/professionnels', 'Professionnels & Équipe'],

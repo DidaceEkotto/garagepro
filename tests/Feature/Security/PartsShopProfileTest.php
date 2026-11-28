@@ -176,6 +176,11 @@ class PartsShopProfileTest extends TestCase
         $mockGreenApi = $this->mock(GreenApiService::class);
         $mockGreenApi->shouldReceive('sendMessage')->atLeast()->once()->andReturn(['ok' => true]);
 
+        // 0. Vendeur ouvre la page dédiée de détails de la commande
+        $this->actingAs($owner)
+            ->get("/marketplace-gestion/commandes/{$item->id}")
+            ->assertOk();
+
         // 1. Vendeur clique sur Départ -> statut passe en "expediee" + WhatsApp envoyé
         $this->actingAs($owner)
             ->post("/marketplace-gestion/commandes/{$item->id}/depart")

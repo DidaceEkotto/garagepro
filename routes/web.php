@@ -641,6 +641,7 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
         Route::delete('/produits/{product}', [MarketplaceManagementController::class, 'deleteProduct'])->name('products.delete');
 
         Route::get('/commandes', [MarketplaceManagementController::class, 'orders'])->name('orders');
+        Route::get('/commandes/{orderItem}', [MarketplaceManagementController::class, 'showOrder'])->name('orders.show');
         Route::patch('/commandes/{orderItem}/statut', [MarketplaceManagementController::class, 'updateOrderStatus'])->name('orders.status');
         Route::post('/commandes/{orderItem}/depart', [MarketplaceManagementController::class, 'departOrder'])->name('orders.depart');
         Route::get('/commandes/{orderItem}/messages', [MarketplaceManagementController::class, 'orderMessages'])->name('orders.messages');

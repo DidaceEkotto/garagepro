@@ -314,6 +314,67 @@ class MarketplaceManagementController extends Controller
         ]);
     }
 
+    public function showOrder(MarketplaceOrderItem $orderItem, TenantContext $tenantContext): Response
+    {
+        $tenant = $tenantContext->getTenant();
+        if ((int) $orderItem->tenant_id !== (int) $tenant->id) {
+            abort(403);
+        }
+
+        $orderItem->load(['order', 'product', 'messages']);
+
+        if (! $orderItem->is_seen_by_seller) {
+            $orderItem->update(['is_seen_by_seller' => true]);
+        }
+
+        MarketplaceOrderMessage::where('marketplace_order_item_id', $orderItem->id)
+            ->where('sender_type', MarketplaceOrderMessage::SENDER_BUYER)
+            ->where('is_read', false)
+            ->update(['is_read' => true]);
+
+        $token = $orderItem->order?->ensureTrackingToken();
+
+        return Inertia::render('Tenant/Marketplace/OrderShow', [
+            'orderItem' => [
+                'id' => $orderItem->id,
+                'product_id' => $orderItem->marketplace_product_id,
+                'product_title' => $orderItem->product_title,
+                'unit_price' => $orderItem->unit_price,
+                'quantity' => $orderItem->quantity,
+                'subtotal' => $orderItem->subtotal,
+                'seller_status' => $orderItem->seller_status,
+                'created_at_formatted' => $orderItem->created_at?->format('d/m/Y à H:i'),
+                'tracking_url' => $token ? url("/suivi-commande/{$token}") : null,
+                'order' => $orderItem->order ? [
+                    'id' => $orderItem->order->id,
+                    'order_number' => $orderItem->order->order_number,
+                    'buyer_name' => $orderItem->order->buyer_name,
+                    'buyer_email' => $orderItem->order->buyer_email,
+                    'country_code' => $orderItem->order->country_code,
+                    'dial_code' => $orderItem->order->dial_code,
+                    'buyer_whatsapp' => $orderItem->order->buyer_whatsapp,
+                    'delivery_address' => $orderItem->order->delivery_address,
+                    'delivery_latitude' => $orderItem->order->delivery_latitude ? (float) $orderItem->order->delivery_latitude : null,
+                    'delivery_longitude' => $orderItem->order->delivery_longitude ? (float) $orderItem->order->delivery_longitude : null,
+                    'notes' => $orderItem->order->notes,
+                ] : null,
+                'messages' => $orderItem->messages->map(fn (MarketplaceOrderMessage $m) => [
+                    'id' => $m->id,
+                    'sender_type' => $m->sender_type,
+                    'sender_name' => $m->sender_name,
+                    'body' => $m->body,
+                    'created_at' => $m->created_at?->format('d/m H:i'),
+                ])->values(),
+            ],
+            'tenantLocation' => [
+                'name' => $tenant->name,
+                'latitude' => $tenant->latitude ? (float) $tenant->latitude : null,
+                'longitude' => $tenant->longitude ? (float) $tenant->longitude : null,
+                'formatted_location' => $tenant->formatted_location ?: $tenant->city,
+            ],
+        ]);
+    }
+
     public function updateOrderStatus(Request $request, MarketplaceOrderItem $orderItem, TenantContext $tenantContext): RedirectResponse
     {
         if ((int) $orderItem->tenant_id !== (int) $tenantContext->id()) {
