@@ -1,7 +1,14 @@
 <script setup>
+import LandingFooter from '@/Components/LandingFooter.vue';
 import LocationAutocomplete from '@/Components/LocationAutocomplete.vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import OsmRouteMap from '@/Components/OsmRouteMap.vue';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, ref, watch } from 'vue';
+
+const page = usePage();
+const siteLogoUrl = computed(() => page.props.app?.site?.logo_url || '/assets/images/logo.png');
+const appName = computed(() => page.props.app?.name || 'MboaCar');
+const selectedEst = ref(null);
 
 const showGeoModal = ref(false);
 const locating = ref(false);
@@ -139,14 +146,22 @@ onMounted(async () => {
 <template>
     <Head title="SOS Dépannage &amp; Garages à proximité" />
     <div class="min-vh-100 bg-light">
-        <nav class="navbar navbar-dark bg-dark px-3 py-2 shadow-sm">
+        <nav class="navbar navbar-dark px-3 py-2 shadow-sm" style="background: #0f172a;">
             <div class="container d-flex justify-content-between align-items-center">
                 <Link href="/" class="navbar-brand fw-bold d-flex align-items-center gap-2">
-                    <i class="bi bi-geo-alt-fill text-danger"></i>MboaCar SOS Dépannage
+                    <img
+                        :src="siteLogoUrl"
+                        :alt="appName"
+                        class="bg-white rounded-3 px-2 py-1 shadow-sm"
+                        style="height: 36px; width: auto; object-fit: contain;"
+                    />
+                    <span class="badge bg-primary bg-opacity-25 text-info border border-info border-opacity-25 small fw-semibold d-none d-sm-inline">
+                        SOS Dépannage
+                    </span>
                 </Link>
                 <div class="d-flex gap-2">
-                    <Link href="/verifier-vehicule" class="btn btn-outline-light btn-sm">MboaCar Check</Link>
-                    <Link href="/connexion" class="btn btn-primary btn-sm">Espace Pro</Link>
+                    <Link href="/verifier-vehicule" class="btn btn-outline-light btn-sm rounded-pill px-3">MboaCar Check</Link>
+                    <Link href="/connexion" class="btn btn-primary btn-sm rounded-pill px-3">Connexion</Link>
                 </div>
             </div>
         </nav>
@@ -217,15 +232,19 @@ onMounted(async () => {
             </div>
 
             <div class="row g-4">
-                <!-- Colonne gauche : Carte OSM + Établissements à proximité -->
+                <!-- Colonne gauche : Carte interactive Leaflet OSM + Itinéraire + Établissements à proximité -->
                 <div class="col-lg-7">
-                    <div v-if="osmEmbedUrl" class="card border-0 shadow-sm mb-3 overflow-hidden">
-                        <iframe
-                            :src="osmEmbedUrl"
-                            style="width: 100%; height: 280px; border: 0;"
-                            loading="lazy"
-                            title="Carte OpenStreetMap"
-                        ></iframe>
+                    <div v-if="hasLocation && userLat !== null && userLon !== null" class="card border-0 shadow-sm mb-3 rounded-4 overflow-hidden">
+                        <OsmRouteMap
+                            :target-lat="userLat"
+                            :target-lon="userLon"
+                            :target-label="locationLabel || 'Votre position'"
+                            :origin-lat="selectedEst ? Number(selectedEst.latitude) : null"
+                            :origin-lon="selectedEst ? Number(selectedEst.longitude) : null"
+                            :origin-label="selectedEst?.name || ''"
+                            :extra-markers="establishments"
+                            height="310px"
+                        />
                     </div>
 
                     <div class="card border-0 shadow-sm">
@@ -255,13 +274,14 @@ onMounted(async () => {
                                         >
                                             <i class="bi bi-telephone-fill"></i>
                                         </a>
-                                        <a
-                                            :href="`https://www.openstreetmap.org/directions?from=${userLat},${userLon}&to=${est.latitude},${est.longitude}`"
-                                            target="_blank"
-                                            class="btn btn-outline-secondary btn-sm"
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm"
+                                            :class="selectedEst?.id === est.id ? 'btn-primary' : 'btn-outline-secondary'"
+                                            @click="selectedEst = est"
                                         >
                                             <i class="bi bi-sign-turn-right-fill me-1"></i>Itinéraire
-                                        </a>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -271,10 +291,10 @@ onMounted(async () => {
 
                 <!-- Colonne droite : Formulaire Alerte SOS Dépannage Express -->
                 <div class="col-lg-5">
-                    <div class="card border-0 shadow-sm border-top border-4 border-danger">
+                    <div class="card border-0 shadow-sm rounded-4 border-top border-4 border-primary">
                         <div class="card-header bg-white py-3">
-                            <h2 class="h6 fw-bold text-danger mb-0">
-                                <i class="bi bi-exclamation-octagon-fill me-2"></i>En panne ? Lancer un SOS Dépannage
+                            <h2 class="h6 fw-bold text-primary mb-0">
+                                <i class="bi bi-broadcast me-2"></i>En panne ? Lancer un SOS Dépannage
                             </h2>
                             <p class="text-muted small mb-0">Les garages proches reçoivent votre position GPS et vous envoient leur tarif + délai d'arrivée</p>
                         </div>
@@ -314,7 +334,7 @@ onMounted(async () => {
                                     <label class="form-label small fw-semibold">Photo de la panne (facultatif)</label>
                                     <input type="file" accept="image/jpeg,image/png,image/webp" class="form-control form-control-sm" @change="(e) => (sosForm.photo = e.target.files?.[0] || null)" />
                                 </div>
-                                <button type="submit" class="btn btn-danger w-100 py-2 fw-bold" :disabled="sosForm.processing">
+                                <button type="submit" class="btn btn-primary w-100 py-2 rounded-pill fw-bold" :disabled="sosForm.processing">
                                     <span v-if="sosForm.processing" class="spinner-border spinner-border-sm me-2"></span>
                                     <i v-else class="bi bi-broadcast me-2"></i>Envoyer mon SOS Dépannage
                                 </button>
@@ -324,5 +344,6 @@ onMounted(async () => {
                 </div>
             </div>
         </div>
+        <LandingFooter />
     </div>
 </template>

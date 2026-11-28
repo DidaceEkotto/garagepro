@@ -81,6 +81,9 @@ Route::get('/api/geocode/search', [GeocodeController::class, 'search'])
 Route::get('/api/geocode/reverse', [GeocodeController::class, 'reverse'])
     ->middleware('throttle:30,1')
     ->name('api.geocode.reverse');
+Route::get('/api/geocode/route', [GeocodeController::class, 'route'])
+    ->middleware('throttle:40,1')
+    ->name('api.geocode.route');
 
 // Page Contact
 Route::get('/contact', [ContactController::class, 'show'])->name('contact.show');

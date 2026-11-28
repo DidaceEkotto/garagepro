@@ -157,7 +157,7 @@ class PublicSosController extends Controller
     {
         $sos = RoadsideSosRequest::with([
             'acceptedTenant:id,name,phone,city,formatted_location,latitude,longitude',
-            'offers.tenant:id,name,phone,city,formatted_location',
+            'offers.tenant:id,name,phone,city,formatted_location,latitude,longitude',
         ])->where('token', $token)->firstOrFail();
 
         return Inertia::render('Public/SosTrack', [
@@ -185,6 +185,8 @@ class PublicSosController extends Controller
                     'garage_name' => $o->tenant?->name,
                     'garage_phone' => $o->tenant?->phone,
                     'garage_city' => $o->tenant?->city,
+                    'garage_lat' => $o->tenant?->latitude ? (float) $o->tenant->latitude : null,
+                    'garage_lon' => $o->tenant?->longitude ? (float) $o->tenant->longitude : null,
                 ])->values(),
             ],
         ]);

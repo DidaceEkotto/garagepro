@@ -150,6 +150,67 @@ class GeocodeController extends Controller
         return response()->json(['result' => $data]);
     }
 
+    /**
+     * Calcul d'itinéraire routier gratuit via OSRM (OpenStreetMap Routing Machine) + cache 30 min.
+     */
+    public function route(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'from_lat' => ['required', 'numeric', 'between:-90,90'],
+            'from_lon' => ['required', 'numeric', 'between:-180,180'],
+            'to_lat' => ['required', 'numeric', 'between:-90,90'],
+            'to_lon' => ['required', 'numeric', 'between:-180,180'],
+        ]);
+
+        $fLat = round((float) $validated['from_lat'], 5);
+        $fLon = round((float) $validated['from_lon'], 5);
+        $tLat = round((float) $validated['to_lat'], 5);
+        $tLon = round((float) $validated['to_lon'], 5);
+
+        $cacheKey = "osrm_route:{$fLat},{$fLon}:{$tLat},{$tLon}";
+
+        $route = Cache::remember($cacheKey, now()->addMinutes(30), function () use ($fLat, $fLon, $tLat, $tLon): array {
+            try {
+                $url = "https://router.project-osrm.org/route/v1/driving/{$fLon},{$fLat};{$tLon},{$tLat}";
+                $resp = Http::timeout(6)
+                    ->withHeaders(['User-Agent' => 'MboaCar-SaaS/2.0 (contact@mboacar.com)'])
+                    ->get($url, [
+                        'overview' => 'full',
+                        'geometries' => 'geojson',
+                    ]);
+
+                if ($resp->successful() && ! empty($resp->json('routes.0.geometry.coordinates'))) {
+                    $r = $resp->json('routes.0');
+                    // GeoJSON = [lon, lat] -> Leaflet = [lat, lon]
+                    $coords = collect($r['geometry']['coordinates'])
+                        ->map(fn ($pair) => [round((float) $pair[1], 6), round((float) $pair[0], 6)])
+                        ->values()
+                        ->all();
+
+                    return [
+                        'ok' => true,
+                        'distance_km' => round(((float) ($r['distance'] ?? 0)) / 1000, 1),
+                        'duration_min' => max(1, (int) round(((float) ($r['duration'] ?? 0)) / 60)),
+                        'coordinates' => $coords,
+                    ];
+                }
+            } catch (\Throwable) {
+                // fallback below
+            }
+
+            $dist = \App\Models\RoadsideSosRequest::haversineKm($fLat, $fLon, $tLat, $tLon);
+
+            return [
+                'ok' => true,
+                'distance_km' => $dist,
+                'duration_min' => max(5, (int) round($dist * 2.2)),
+                'coordinates' => [[$fLat, $fLon], [$tLat, $tLon]],
+            ];
+        });
+
+        return response()->json($route);
+    }
+
     private function resolveCountryCode(string $country): string
     {
         $clean = mb_strtolower(trim($country));

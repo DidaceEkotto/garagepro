@@ -1,39 +1,68 @@
 <script setup>
 import LandingFooter from '@/Components/LandingFooter.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import OsmRouteMap from '@/Components/OsmRouteMap.vue';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 const props = defineProps({
     sos: Object,
 });
 
+const page = usePage();
+const siteLogoUrl = computed(() => page.props.app?.site?.logo_url || '/assets/images/logo.png');
+const appName = computed(() => page.props.app?.name || 'MboaCar');
+
 const acceptingId = ref(null);
 const refreshing = ref(false);
 const copiedLink = ref(false);
+const selectedRouteOfferId = ref(null);
 let pollInterval = null;
 
 const breakdownMeta = computed(() => {
     const map = {
         batterie: { label: 'Batterie à plat / Démarrage', icon: 'bi-battery-charging', color: '#f59e0b' },
-        crevaison: { label: 'Crevaison / Roue', icon: 'bi-record-circle', color: '#0ea5e9' },
-        surchauffe: { label: 'Surchauffe moteur / Radiateur', icon: 'bi-thermometer-high', color: '#ef4444' },
-        moteur: { label: 'Panne moteur / Calage', icon: 'bi-gear-wide-connected', color: '#dc2626' },
-        accident: { label: 'Accident / Carrosserie', icon: 'bi-exclamation-triangle-fill', color: '#b91c1c' },
-        cle: { label: 'Clé bloquée / Serrure', icon: 'bi-key-fill', color: '#6366f1' },
-        remorquage: { label: 'Remorquage plateau', icon: 'bi-truck-flatbed', color: '#2563eb' },
+        crevaison: { label: 'Crevaison / Roue', icon: 'bi-record-circle', color: '#38bdf8' },
+        surchauffe: { label: 'Surchauffe moteur / Radiateur', icon: 'bi-thermometer-high', color: '#f59e0b' },
+        moteur: { label: 'Panne moteur / Calage', icon: 'bi-gear-wide-connected', color: '#60a5fa' },
+        accident: { label: 'Accident / Carrosserie', icon: 'bi-exclamation-triangle-fill', color: '#f59e0b' },
+        cle: { label: 'Clé bloquée / Serrure', icon: 'bi-key-fill', color: '#818cf8' },
+        remorquage: { label: 'Remorquage plateau', icon: 'bi-truck-flatbed', color: '#34d399' },
     };
-    return map[props.sos?.breakdown_type] || { label: props.sos?.breakdown_type || 'Dépannage', icon: 'bi-wrench-adjustable', color: '#dc2626' };
+    return map[props.sos?.breakdown_type] || { label: props.sos?.breakdown_type || 'Dépannage', icon: 'bi-wrench-adjustable', color: '#60a5fa' };
 });
 
 const statusMeta = computed(() => {
     const map = {
-        open: { label: 'En recherche de dépanneur', badge: 'bg-danger', step: props.sos?.offers?.length ? 2 : 1 },
+        open: { label: 'En recherche de dépanneur', badge: 'bg-warning text-dark', step: props.sos?.offers?.length ? 2 : 1 },
         accepted: { label: 'Dépanneur confirmé', badge: 'bg-primary', step: 3 },
         on_the_way: { label: 'Dépanneur en route', badge: 'bg-info text-dark', step: 3 },
         resolved: { label: 'Dépannage terminé', badge: 'bg-success', step: 4 },
         cancelled: { label: 'Demande annulée', badge: 'bg-secondary', step: 1 },
     };
     return map[props.sos?.status] || { label: props.sos?.status, badge: 'bg-secondary', step: 1 };
+});
+
+const activeRouteOrigin = computed(() => {
+    if (props.sos?.accepted_tenant?.latitude && props.sos?.accepted_tenant?.longitude) {
+        return {
+            lat: Number(props.sos.accepted_tenant.latitude),
+            lon: Number(props.sos.accepted_tenant.longitude),
+            label: props.sos.accepted_tenant.name,
+        };
+    }
+    const offers = props.sos?.offers || [];
+    const chosen = selectedRouteOfferId.value
+        ? offers.find((o) => o.id === selectedRouteOfferId.value && o.garage_lat && o.garage_lon)
+        : offers.find((o) => o.garage_lat && o.garage_lon);
+
+    if (chosen) {
+        return {
+            lat: Number(chosen.garage_lat),
+            lon: Number(chosen.garage_lon),
+            label: chosen.garage_name,
+        };
+    }
+    return null;
 });
 
 const steps = [
@@ -112,14 +141,19 @@ onBeforeUnmount(() => {
 <template>
     <Head :title="`Suivi SOS — ${breakdownMeta.label}`" />
     <div class="min-vh-100 d-flex flex-column sos-track-bg">
-        <!-- Navbar supérieure -->
+        <!-- Navbar supérieure avec logo officiel MboaCar (sans rouge) -->
         <nav class="navbar navbar-dark shadow-sm py-2" style="background: #0f172a;">
             <div class="container d-flex justify-content-between align-items-center gap-2">
                 <Link href="/" class="navbar-brand fw-bold d-flex align-items-center gap-2 mb-0">
-                    <span class="rounded-circle bg-danger d-inline-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
-                        <i class="bi bi-geo-alt-fill text-white small"></i>
+                    <img
+                        :src="siteLogoUrl"
+                        :alt="appName"
+                        class="bg-white rounded-3 px-2 py-1 shadow-sm"
+                        style="height: 36px; width: auto; object-fit: contain;"
+                    />
+                    <span class="badge bg-primary bg-opacity-25 text-info border border-info border-opacity-25 small fw-semibold d-none sm:inline">
+                        SOS Dépannage
                     </span>
-                    <span>MboaCar <span class="text-danger">SOS</span></span>
                 </Link>
                 <div class="d-flex align-items-center gap-2">
                     <Link href="/sos-depannage" class="btn btn-outline-light btn-sm rounded-pill px-3">
@@ -272,7 +306,7 @@ onBeforeUnmount(() => {
                             <!-- État d'attente animé -->
                             <div v-if="!sos.offers?.length" class="text-center py-5">
                                 <div class="sos-radar mx-auto mb-3">
-                                    <i class="bi bi-broadcast fs-2 text-danger"></i>
+                                    <i class="bi bi-broadcast fs-2 text-primary"></i>
                                 </div>
                                 <h3 class="h6 fw-bold mb-1">Alerte diffusée aux dépanneurs proches...</h3>
                                 <p class="small text-muted mb-0 mx-auto" style="max-width: 380px;">
@@ -297,7 +331,7 @@ onBeforeUnmount(() => {
                                                 <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
                                                     <h3 class="h6 fw-bold mb-0">{{ o.garage_name }}</h3>
                                                     <span v-if="o.distance_km !== null" class="badge bg-light text-dark border rounded-pill">
-                                                        <i class="bi bi-geo-alt-fill text-danger me-1"></i>{{ o.distance_km }} km
+                                                        <i class="bi bi-geo-alt-fill text-primary me-1"></i>{{ o.distance_km }} km
                                                     </span>
                                                     <span v-if="o.garage_city" class="small text-muted">{{ o.garage_city }}</span>
                                                 </div>
@@ -333,6 +367,14 @@ onBeforeUnmount(() => {
                                             >
                                                 {{ o.status === 'accepted' ? 'Offre retenue' : 'Non retenue' }}
                                             </span>
+                                            <button
+                                                v-if="o.garage_lat && o.garage_lon"
+                                                type="button"
+                                                class="btn btn-outline-primary btn-sm rounded-pill px-3"
+                                                @click="selectedRouteOfferId = o.id"
+                                            >
+                                                <i class="bi bi-sign-turn-right me-1"></i>Voir l'itinéraire
+                                            </button>
                                             <a
                                                 v-if="o.garage_phone"
                                                 :href="`tel:${o.garage_phone}`"
@@ -348,13 +390,15 @@ onBeforeUnmount(() => {
                     </div>
                 </div>
 
-                <!-- Colonne droite : Carte OpenStreetMap + Consignes de sécurité -->
+                <!-- Colonne droite : Carte interactive OpenStreetMap + Itinéraire tracé + Consignes -->
                 <div class="col-lg-5">
-                    <div v-if="osmEmbedUrl" class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+                    <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
                         <div class="card-header bg-white py-3 px-4 d-flex justify-content-between align-items-center">
-                            <span class="fw-bold small"><i class="bi bi-map-fill text-primary me-2"></i>Position de la panne (GPS)</span>
+                            <span class="fw-bold small"><i class="bi bi-map-fill text-primary me-2"></i>Position de la panne &amp; Itinéraire</span>
                             <a
-                                :href="`https://www.openstreetmap.org/?mlat=${sos.latitude}&mlon=${sos.longitude}#map=16/${sos.latitude}/${sos.longitude}`"
+                                :href="activeRouteOrigin
+                                    ? `https://www.openstreetmap.org/directions?from=${activeRouteOrigin.lat},${activeRouteOrigin.lon}&to=${sos.latitude},${sos.longitude}`
+                                    : `https://www.openstreetmap.org/?mlat=${sos.latitude}&mlon=${sos.longitude}#map=16/${sos.latitude}/${sos.longitude}`"
                                 target="_blank"
                                 class="btn btn-outline-primary btn-sm rounded-pill py-0 px-2"
                                 style="font-size: 0.74rem;"
@@ -362,12 +406,15 @@ onBeforeUnmount(() => {
                                 Ouvrir OSM <i class="bi bi-box-arrow-up-right ms-1"></i>
                             </a>
                         </div>
-                        <iframe
-                            :src="osmEmbedUrl"
-                            style="width: 100%; height: 270px; border: 0;"
-                            loading="lazy"
-                            title="Carte GPS de la panne"
-                        ></iframe>
+                        <OsmRouteMap
+                            :target-lat="Number(sos.latitude)"
+                            :target-lon="Number(sos.longitude)"
+                            :target-label="sos.location_label || 'Position de la panne'"
+                            :origin-lat="activeRouteOrigin?.lat ?? null"
+                            :origin-lon="activeRouteOrigin?.lon ?? null"
+                            :origin-label="activeRouteOrigin?.label || 'Garage dépanneur'"
+                            height="300px"
+                        />
                         <div class="card-footer bg-white small text-muted py-2 px-3 d-flex justify-content-between">
                             <span><i class="bi bi-crosshair me-1"></i>{{ Number(sos.latitude).toFixed(5) }}, {{ Number(sos.longitude).toFixed(5) }}</span>
                             <span>OpenStreetMap</span>
@@ -427,7 +474,7 @@ onBeforeUnmount(() => {
     width: 72px;
     height: 72px;
     border-radius: 999px;
-    background: rgba(220, 38, 38, 0.1);
+    background: rgba(37, 99, 235, 0.1);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -445,9 +492,9 @@ onBeforeUnmount(() => {
 }
 
 @keyframes sosRadarPulse {
-    0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.35); }
-    70% { box-shadow: 0 0 0 18px rgba(220, 38, 38, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+    0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.35); }
+    70% { box-shadow: 0 0 0 18px rgba(37, 99, 235, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
 }
 
 @keyframes sosSpin {
