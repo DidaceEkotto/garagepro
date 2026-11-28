@@ -16,6 +16,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -303,8 +304,27 @@ class MarketplaceManagementController extends Controller
             ->where('is_seen_by_seller', false)
             ->update(['is_seen_by_seller' => true]);
 
+        $shopStats = [
+            'pendingOrders' => MarketplaceOrderItem::where('tenant_id', $tenantId)
+                ->whereIn('seller_status', ['nouvelle', 'confirmee', 'expediee'])
+                ->count(),
+            'deliveredOrders' => MarketplaceOrderItem::where('tenant_id', $tenantId)
+                ->where('seller_status', 'livree')
+                ->count(),
+            'cancelledOrders' => MarketplaceOrderItem::where('tenant_id', $tenantId)
+                ->where('seller_status', 'annulee')
+                ->count(),
+            'soldUnits' => (int) MarketplaceOrderItem::where('tenant_id', $tenantId)
+                ->where('seller_status', 'livree')
+                ->sum('quantity'),
+            'soldRevenue' => (int) MarketplaceOrderItem::where('tenant_id', $tenantId)
+                ->where('seller_status', 'livree')
+                ->sum('subtotal'),
+        ];
+
         return Inertia::render('Tenant/Marketplace/Orders', [
             'orderItems' => $orderItems,
+            'shopStats' => $shopStats,
             'tenantLocation' => [
                 'name' => $tenant->name,
                 'latitude' => $tenant->latitude ? (float) $tenant->latitude : null,
@@ -375,20 +395,158 @@ class MarketplaceManagementController extends Controller
         ]);
     }
 
-    public function updateOrderStatus(Request $request, MarketplaceOrderItem $orderItem, TenantContext $tenantContext): RedirectResponse
-    {
-        if ((int) $orderItem->tenant_id !== (int) $tenantContext->id()) {
+    public function updateOrderStatus(
+        Request $request,
+        MarketplaceOrderItem $orderItem,
+        TenantContext $tenantContext,
+        GreenApiService $greenApi
+    ): RedirectResponse {
+        $tenant = $tenantContext->getTenant();
+        if ((int) $orderItem->tenant_id !== (int) $tenant->id) {
             abort(403);
         }
 
         $data = $request->validate([
-            'seller_status' => ['required', Rule::in(['nouvelle', 'confirmee', 'expediee', 'livree', 'annulee'])],
+            'seller_status' => ['required', Rule::in(['confirmee', 'expediee', 'livree', 'annulee'])],
         ]);
 
-        $orderItem->update([
-            'seller_status' => $data['seller_status'],
-            'is_seen_by_seller' => true,
-        ]);
+        $nextStatus = $data['seller_status'];
+
+        $result = DB::transaction(function () use ($orderItem, $tenant, $nextStatus) {
+            /** @var MarketplaceOrderItem $lockedItem */
+            $lockedItem = MarketplaceOrderItem::whereKey($orderItem->id)->lockForUpdate()->firstOrFail();
+
+            if (in_array($lockedItem->seller_status, ['livree', 'annulee'], true)) {
+                return ['locked' => true, 'item' => $lockedItem];
+            }
+
+            if ($lockedItem->seller_status === $nextStatus) {
+                return ['unchanged' => true, 'item' => $lockedItem];
+            }
+
+            $lockedItem->update([
+                'seller_status' => $nextStatus,
+                'is_seen_by_seller' => true,
+            ]);
+
+            // Si la commande est annulée : restituer la quantité commandée au stock du produit
+            if ($nextStatus === 'annulee' && $lockedItem->marketplace_product_id) {
+                Product::where('id', $lockedItem->marketplace_product_id)
+                    ->where('tenant_id', $tenant->id)
+                    ->increment('stock_quantity', (int) $lockedItem->quantity);
+            }
+
+            return ['locked' => false, 'unchanged' => false, 'item' => $lockedItem->fresh('order')];
+        });
+
+        if (! empty($result['locked'])) {
+            return back()->with('error', 'Cette commande est déjà clôturée (livrée ou annulée) et ne peut plus être modifiée.');
+        }
+
+        if (! empty($result['unchanged'])) {
+            return back();
+        }
+
+        /** @var MarketplaceOrderItem $item */
+        $item = $result['item'];
+        $order = $item->order;
+        $token = $order?->ensureTrackingToken();
+        $trackingUrl = $token ? url("/suivi-commande/{$token}") : url('/marketplace');
+        $buyerPhone = $this->formatBuyerWhatsapp($order);
+        $buyerName = $order?->buyer_name ?: 'Client';
+        $orderNumber = $order?->order_number ?: ('#'.$item->id);
+        $amountFmt = number_format((int) $item->subtotal, 0, ',', ' ');
+
+        if ($nextStatus === 'confirmee') {
+            MarketplaceOrderMessage::create([
+                'marketplace_order_item_id' => $item->id,
+                'sender_type' => MarketplaceOrderMessage::SENDER_SELLER,
+                'sender_name' => $tenant->name,
+                'body' => "✅ Commande confirmée ! {$tenant->name} prépare votre article ({$item->product_title} × {$item->quantity}).",
+                'is_read' => false,
+            ]);
+
+            if ($buyerPhone !== '') {
+                try {
+                    $wa = "✅ *COMMANDE CONFIRMÉE SUR MBOACAR !*\n\n"
+                        ."Bonjour {$buyerName},\n"
+                        ."Bonne nouvelle ! *{$tenant->name}* vient de confirmer votre commande *{$orderNumber}*.\n\n"
+                        ."📦 *Article :* {$item->product_title} (x{$item->quantity})\n"
+                        ."💰 *Montant :* {$amountFmt} FCFA\n"
+                        ."📍 *Livraison :* ".($order?->delivery_address ?: 'Votre adresse')."\n\n"
+                        ."💬 Suivez votre commande et échangez directement avec le vendeur ici :\n{$trackingUrl}";
+                    $greenApi->sendMessage($buyerPhone, $wa);
+                } catch (\Throwable) {
+                    // non-blocking
+                }
+            }
+
+            AuditLog::record('marketplace.order_confirmed', subject: $item, actor: $request->user('web'), tenantId: $tenant->id, request: $request);
+
+            return back()->with('success', 'Commande confirmée ! Un message WhatsApp de confirmation a été envoyé au client.');
+        }
+
+        if ($nextStatus === 'annulee') {
+            MarketplaceOrderMessage::create([
+                'marketplace_order_item_id' => $item->id,
+                'sender_type' => MarketplaceOrderMessage::SENDER_SELLER,
+                'sender_name' => $tenant->name,
+                'body' => "❌ Commande annulée par {$tenant->name}. Le stock du produit a été remis à jour.",
+                'is_read' => false,
+            ]);
+
+            if ($buyerPhone !== '') {
+                try {
+                    $wa = "❌ *ANNULATION DE COMMANDE MBOACAR*\n\n"
+                        ."Bonjour {$buyerName},\n"
+                        ."Votre commande *{$orderNumber}* ({$item->product_title} × {$item->quantity}) auprès de *{$tenant->name}* a été annulée.\n\n"
+                        ."Vous pouvez consulter d'autres pièces disponibles sur le Marketplace :\n".url('/marketplace');
+                    $greenApi->sendMessage($buyerPhone, $wa);
+                } catch (\Throwable) {
+                    // non-blocking
+                }
+            }
+
+            AuditLog::record('marketplace.order_cancelled', subject: $item, actor: $request->user('web'), tenantId: $tenant->id, metadata: [
+                'restored_quantity' => $item->quantity,
+                'product_id' => $item->marketplace_product_id,
+            ], request: $request);
+
+            return back()->with('success', "Commande annulée et +{$item->quantity} unité(s) remise(s) en stock sur le produit.");
+        }
+
+        if ($nextStatus === 'livree') {
+            MarketplaceOrderMessage::create([
+                'marketplace_order_item_id' => $item->id,
+                'sender_type' => MarketplaceOrderMessage::SENDER_SELLER,
+                'sender_name' => $tenant->name,
+                'body' => "🎉 Commande livrée ! Merci infiniment pour votre achat et votre confiance chez {$tenant->name}.",
+                'is_read' => false,
+            ]);
+
+            if ($buyerPhone !== '') {
+                try {
+                    $wa = "🎉 *MERCI POUR VOTRE ACHAT CHEZ {$tenant->name} !*\n\n"
+                        ."Bonjour {$buyerName},\n"
+                        ."Votre commande *{$orderNumber}* a bien été livrée :\n"
+                        ."📦 *Article :* {$item->product_title} (x{$item->quantity})\n"
+                        ."💰 *Total :* {$amountFmt} FCFA\n\n"
+                        ."Toute l'équipe de *{$tenant->name}* vous remercie chaleureusement pour votre confiance ! 🙏\n"
+                        ."N'hésitez pas à revenir vers nous pour vos prochains besoins automobiles.\n\n"
+                        ."👉 Récapitulatif de votre commande :\n{$trackingUrl}";
+                    $greenApi->sendMessage($buyerPhone, $wa);
+                } catch (\Throwable) {
+                    // non-blocking
+                }
+            }
+
+            AuditLog::record('marketplace.order_delivered', subject: $item, actor: $request->user('web'), tenantId: $tenant->id, metadata: [
+                'subtotal' => $item->subtotal,
+                'quantity' => $item->quantity,
+            ], request: $request);
+
+            return back()->with('success', 'Commande marquée comme livrée & vendue ! Un message de remerciement a été envoyé au client et la vente est comptabilisée dans vos statistiques.');
+        }
 
         return back()->with('success', 'Statut de la commande mis à jour.');
     }
@@ -405,6 +563,10 @@ class MarketplaceManagementController extends Controller
         $tenant = $tenantContext->getTenant();
         if ((int) $orderItem->tenant_id !== (int) $tenant->id) {
             abort(403);
+        }
+
+        if (in_array($orderItem->seller_status, ['livree', 'annulee'], true)) {
+            return back()->with('error', 'Cette commande est déjà clôturée (livrée ou annulée) et ne peut plus être modifiée.');
         }
 
         $orderItem->load('order');

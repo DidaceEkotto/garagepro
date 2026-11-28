@@ -117,8 +117,51 @@ const statusColors = [
             </div>
             <div class="col-6 col-md-3">
                 <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
-                    <div class="small text-muted">Volume ventes Marketplace</div>
+                    <div class="small text-muted">Ventes Marketplace (livrées)</div>
                     <div class="h4 fw-bold text-success mb-0">{{ fmt(partsShopKpis.marketplaceRevenue) }}</div>
+                    <div class="small text-muted">{{ partsShopKpis.deliveredOrders ?? 0 }} livrée(s) • {{ partsShopKpis.soldUnits ?? 0 }} article(s)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Résumé Boutique Marketplace pour Garage Auto & Centre Technique -->
+        <div
+            v-if="(tenantType === 'garage' || tenantType === 'centre_technique') && partsShopKpis && (partsShopKpis.totalProducts > 0 || partsShopKpis.pendingOrders > 0 || partsShopKpis.deliveredOrders > 0)"
+            class="card border-0 shadow-sm rounded-4 p-3 mb-4"
+        >
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                <div class="fw-bold small text-dark">
+                    <i class="bi bi-shop text-primary me-2"></i>Statistiques Boutique Marketplace
+                </div>
+                <div class="d-flex gap-2">
+                    <Link href="/marketplace-gestion/produits" class="btn btn-outline-secondary btn-sm rounded-pill px-3">Mes produits</Link>
+                    <Link href="/marketplace-gestion/commandes" class="btn btn-outline-primary btn-sm rounded-pill px-3">Commandes</Link>
+                </div>
+            </div>
+            <div class="row g-2 small">
+                <div class="col-6 col-md-3">
+                    <div class="p-2 bg-light rounded-3">
+                        <div class="text-muted">Produits publiés</div>
+                        <div class="fw-bold text-primary fs-6">{{ partsShopKpis.publishedProducts }} / {{ partsShopKpis.totalProducts }}</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-2 bg-light rounded-3">
+                        <div class="text-muted">Commandes en cours</div>
+                        <div class="fw-bold text-warning fs-6">{{ partsShopKpis.pendingOrders }}</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-2 bg-light rounded-3">
+                        <div class="text-muted">Livrées &amp; vendues</div>
+                        <div class="fw-bold text-success fs-6">{{ partsShopKpis.deliveredOrders ?? 0 }} ({{ partsShopKpis.soldUnits ?? 0 }} u.)</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-2 bg-light rounded-3">
+                        <div class="text-muted">CA Marketplace encaissé</div>
+                        <div class="fw-bold text-success fs-6">{{ fmt(partsShopKpis.marketplaceRevenue) }}</div>
+                    </div>
                 </div>
             </div>
         </div>

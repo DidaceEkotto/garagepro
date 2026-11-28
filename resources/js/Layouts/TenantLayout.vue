@@ -454,7 +454,7 @@ function resetDemo() {
                 </div>
 
                 <!-- Menu déroulant Marketplace -->
-                <div v-if="!tenant?.isReadOnly && (tenant?.type === 'garage' || !tenant?.type)" class="mb-3">
+                <div v-if="!tenant?.isReadOnly && (tenant?.type === 'garage' || tenant?.type === 'centre_technique' || !tenant?.type)" class="mb-3">
                     <button
                         type="button"
                         class="tenant-sidebar-link w-100 border-0 bg-transparent d-flex align-items-center justify-content-between py-2 px-3 small fw-semibold"
@@ -754,7 +754,7 @@ function resetDemo() {
                         </ul>
                     </div>
 
-                    <div v-if="!tenant?.isReadOnly && (tenant?.type === 'garage' || !tenant?.type)" class="mb-3">
+                    <div v-if="!tenant?.isReadOnly && (tenant?.type === 'garage' || tenant?.type === 'centre_technique' || !tenant?.type)" class="mb-3">
                         <div class="tenant-sidebar-group-title px-2 mb-1">
                             {{ t('layoutExtra.marketplace') }}
                         </div>

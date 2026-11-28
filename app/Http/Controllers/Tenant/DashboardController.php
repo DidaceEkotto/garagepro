@@ -112,15 +112,27 @@ class DashboardController extends Controller
                 ->sum('approved_amount'),
         ] : null;
 
-        $partsShopKpis = $tenantType === Tenant::TYPE_PARTS_SHOP ? [
+        $isMarketplaceSeller = in_array($tenantType, [
+            Tenant::TYPE_PARTS_SHOP,
+            Tenant::TYPE_GARAGE,
+            Tenant::TYPE_TECHNICAL_CENTER,
+        ], true);
+
+        $partsShopKpis = $isMarketplaceSeller ? [
             'publishedProducts' => Product::where('tenant_id', $tenant->id)->where('is_published', true)->count(),
             'totalProducts' => Product::where('tenant_id', $tenant->id)->count(),
             'lowStockProducts' => Product::where('tenant_id', $tenant->id)->where('stock_quantity', '<=', 2)->count(),
             'pendingOrders' => MarketplaceOrderItem::where('tenant_id', $tenant->id)
-                ->whereIn('seller_status', ['nouveau', 'en_attente', 'pending', 'en_preparation', 'confirmed'])
+                ->whereIn('seller_status', ['nouvelle', 'confirmee', 'expediee'])
                 ->count(),
+            'deliveredOrders' => MarketplaceOrderItem::where('tenant_id', $tenant->id)
+                ->where('seller_status', 'livree')
+                ->count(),
+            'soldUnits' => (int) MarketplaceOrderItem::where('tenant_id', $tenant->id)
+                ->where('seller_status', 'livree')
+                ->sum('quantity'),
             'marketplaceRevenue' => (int) MarketplaceOrderItem::where('tenant_id', $tenant->id)
-                ->whereNotIn('seller_status', ['cancelled', 'annule'])
+                ->where('seller_status', 'livree')
                 ->sum('subtotal'),
         ] : null;
 

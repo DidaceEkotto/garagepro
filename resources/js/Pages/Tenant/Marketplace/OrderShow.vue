@@ -1,17 +1,29 @@
 <script setup>
 import OsmRouteMap from '@/Components/OsmRouteMap.vue';
 import TenantLayout from '@/Layouts/TenantLayout.vue';
+import { useConfirm } from '@/composables/useConfirm';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 const props = defineProps({
     orderItem: { type: Object, required: true },
     tenantLocation: { type: Object, default: () => ({}) },
 });
 
+const { askConfirm } = useConfirm();
+
 const status = ref(props.orderItem.seller_status);
+watch(() => props.orderItem.seller_status, (val) => {
+    status.value = val;
+});
+
+const isDelivered = computed(() => status.value === 'livree');
+const isCancelled = computed(() => status.value === 'annulee');
+const isLocked = computed(() => isDelivered.value || isCancelled.value);
+
 const deliveryCoords = ref(null);
 const geocodingFallback = ref(false);
+const actionProcessing = ref(false);
 const departProcessing = ref(false);
 const copiedTracking = ref(false);
 
@@ -21,13 +33,59 @@ const chatSendWhatsapp = ref(true);
 const chatSending = ref(false);
 let chatPollTimer = null;
 
+const statusSteps = [
+    { key: 'nouvelle', label: 'Nouvelle', icon: 'bi-clock-history' },
+    { key: 'confirmee', label: 'Confirmée', icon: 'bi-check-circle' },
+    { key: 'expediee', label: 'En livraison', icon: 'bi-truck' },
+    { key: 'livree', label: 'Livrée & Vendue', icon: 'bi-patch-check-fill' },
+];
+
+const currentStepIndex = computed(() => {
+    const idx = statusSteps.findIndex((s) => s.key === status.value);
+    return idx >= 0 ? idx : -1;
+});
+
 function csrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 }
 
-function updateStatus(nextStatus) {
-    status.value = nextStatus;
-    router.patch(`/marketplace-gestion/commandes/${props.orderItem.id}/statut`, { seller_status: nextStatus }, { preserveScroll: true });
+function submitStatusChange(nextStatus) {
+    if (isLocked.value || actionProcessing.value) return;
+    actionProcessing.value = true;
+    router.patch(`/marketplace-gestion/commandes/${props.orderItem.id}/statut`, { seller_status: nextStatus }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            status.value = nextStatus;
+            fetchMessages();
+        },
+        onFinish: () => {
+            actionProcessing.value = false;
+        },
+    });
+}
+
+function confirmOrder() {
+    submitStatusChange('confirmee');
+}
+
+function requestMarkDelivered() {
+    askConfirm({
+        title: 'Confirmer la livraison & finaliser la vente',
+        message: `Marquer la commande ${props.orderItem.order?.order_number} comme livrée et vendue ? Un message WhatsApp de remerciement sera envoyé au client, la vente (${fmt(props.orderItem.subtotal)}) sera ajoutée aux statistiques de la boutique et la commande sera définitivement verrouillée.`,
+        confirmLabel: 'Oui, marquer comme livrée',
+        confirmClass: 'btn-success',
+        onConfirm: () => submitStatusChange('livree'),
+    });
+}
+
+function requestCancelOrder() {
+    askConfirm({
+        title: 'Annuler cette commande',
+        message: `Voulez-vous vraiment annuler la commande ${props.orderItem.order?.order_number} ? La quantité commandée (+${props.orderItem.quantity} unité(s)) sera automatiquement remise en stock sur le produit « ${props.orderItem.product_title} » et la commande sera définitivement clôturée.`,
+        confirmLabel: 'Oui, annuler et restaurer le stock',
+        confirmClass: 'btn-danger',
+        onConfirm: () => submitStatusChange('annulee'),
+    });
 }
 
 async function resolveDeliveryCoords() {
@@ -75,7 +133,7 @@ async function fetchMessages() {
 }
 
 function triggerDepart() {
-    if (departProcessing.value) return;
+    if (isLocked.value || departProcessing.value) return;
     departProcessing.value = true;
     router.post(`/marketplace-gestion/commandes/${props.orderItem.id}/depart`, {}, {
         preserveScroll: true,
@@ -90,7 +148,7 @@ function triggerDepart() {
 }
 
 async function sendSellerMessage() {
-    if (!chatBody.value.trim() || chatSending.value) return;
+    if (isLocked.value || !chatBody.value.trim() || chatSending.value) return;
     chatSending.value = true;
     try {
         const resp = await fetch(`/marketplace-gestion/commandes/${props.orderItem.id}/messages`, {
@@ -143,7 +201,7 @@ function fmt(n) {
     <Head :title="`Commande ${orderItem.order?.order_number} — Détails`" />
     <TenantLayout>
         <!-- En-tête -->
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
             <div>
                 <div class="mb-1">
                     <Link href="/marketplace-gestion/commandes" class="text-decoration-none small fw-semibold text-primary">
@@ -159,28 +217,48 @@ function fmt(n) {
             </div>
 
             <div class="d-flex flex-wrap align-items-center gap-2">
-                <select
-                    :value="status"
-                    class="form-select form-select-sm rounded-pill px-3 fw-semibold"
-                    style="width: auto;"
-                    @change="updateStatus($event.target.value)"
-                >
-                    <option value="nouvelle">Nouvelle</option>
-                    <option value="confirmee">Confirmée</option>
-                    <option value="expediee">En route / Expédiée</option>
-                    <option value="livree">Livrée</option>
-                    <option value="annulee">Annulée</option>
-                </select>
+                <!-- Actions disponibles uniquement si la commande n'est ni livrée ni annulée -->
+                <template v-if="!isLocked">
+                    <button
+                        v-if="status === 'nouvelle'"
+                        type="button"
+                        class="btn btn-primary btn-sm rounded-pill px-3 fw-bold shadow-sm"
+                        :disabled="actionProcessing"
+                        @click="confirmOrder"
+                    >
+                        <span v-if="actionProcessing" class="spinner-border spinner-border-sm me-1"></span>
+                        <i v-else class="bi bi-check-circle me-1"></i>Confirmer la commande
+                    </button>
 
-                <button
-                    type="button"
-                    class="btn btn-success btn-sm rounded-pill px-3 fw-bold shadow-sm"
-                    :disabled="departProcessing"
-                    @click="triggerDepart"
-                >
-                    <span v-if="departProcessing" class="spinner-border spinner-border-sm me-1"></span>
-                    <i v-else class="bi bi-truck me-1"></i>Départ (Notifier WhatsApp)
-                </button>
+                    <button
+                        v-if="status === 'nouvelle' || status === 'confirmee'"
+                        type="button"
+                        class="btn btn-info text-white btn-sm rounded-pill px-3 fw-bold shadow-sm"
+                        :disabled="departProcessing"
+                        @click="triggerDepart"
+                    >
+                        <span v-if="departProcessing" class="spinner-border spinner-border-sm me-1"></span>
+                        <i v-else class="bi bi-truck me-1"></i>Départ (Notifier WhatsApp)
+                    </button>
+
+                    <button
+                        type="button"
+                        class="btn btn-success btn-sm rounded-pill px-3 fw-bold shadow-sm"
+                        :disabled="actionProcessing"
+                        @click="requestMarkDelivered"
+                    >
+                        <i class="bi bi-patch-check-fill me-1"></i>Marquer comme livrée
+                    </button>
+
+                    <button
+                        type="button"
+                        class="btn btn-outline-danger btn-sm rounded-pill px-3 fw-semibold"
+                        :disabled="actionProcessing"
+                        @click="requestCancelOrder"
+                    >
+                        <i class="bi bi-x-circle me-1"></i>Annuler
+                    </button>
+                </template>
 
                 <button
                     v-if="orderItem.tracking_url"
@@ -191,6 +269,48 @@ function fmt(n) {
                     <i class="bi me-1" :class="copiedTracking ? 'bi-check2 text-success' : 'bi-link-45deg'"></i>
                     {{ copiedTracking ? 'Lien copié' : 'Copier lien suivi client' }}
                 </button>
+            </div>
+        </div>
+
+        <!-- Bannière verrouillée si Livrée ou Annulée -->
+        <div v-if="isDelivered" class="alert alert-success border-0 shadow-sm rounded-4 d-flex align-items-center gap-3 mb-4">
+            <i class="bi bi-patch-check-fill fs-3"></i>
+            <div>
+                <div class="fw-bold">Commande livrée &amp; marquée comme vendue (verrouillée)</div>
+                <div class="small">
+                    Le client a reçu son message de remerciement sur WhatsApp, la vente ({{ fmt(orderItem.subtotal) }}) est comptabilisée dans les statistiques de votre boutique et aucune modification n'est plus possible.
+                </div>
+            </div>
+        </div>
+
+        <div v-else-if="isCancelled" class="alert alert-danger border-0 shadow-sm rounded-4 d-flex align-items-center gap-3 mb-4">
+            <i class="bi bi-x-octagon-fill fs-3"></i>
+            <div>
+                <div class="fw-bold">Commande annulée (verrouillée)</div>
+                <div class="small">
+                    Cette commande a été annulée et la quantité commandée (+{{ orderItem.quantity }} unité(s)) a été remise en stock sur le produit. Aucune modification n'est plus possible.
+                </div>
+            </div>
+        </div>
+
+        <!-- Barre de progression du statut -->
+        <div v-else class="card border-0 shadow-sm rounded-4 p-3 mb-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div
+                    v-for="(step, idx) in statusSteps"
+                    :key="step.key"
+                    class="d-flex align-items-center gap-2 small fw-semibold"
+                    :class="idx <= currentStepIndex ? 'text-primary' : 'text-muted opacity-50'"
+                >
+                    <span
+                        class="rounded-circle d-inline-flex align-items-center justify-content-center"
+                        style="width: 28px; height: 28px;"
+                        :class="idx <= currentStepIndex ? 'bg-primary text-white' : 'bg-light border text-muted'"
+                    >
+                        <i class="bi" :class="step.icon"></i>
+                    </span>
+                    <span>{{ step.label }}</span>
+                </div>
             </div>
         </div>
 
@@ -273,14 +393,16 @@ function fmt(n) {
                             </div>
                             <div class="text-muted" style="font-size: 0.72rem;">Actualisation automatique toutes les 5s</div>
                         </div>
-                        <span class="badge bg-success-subtle text-success rounded-pill px-2 py-1">En direct</span>
+                        <span class="badge rounded-pill px-2 py-1" :class="isLocked ? 'bg-secondary-subtle text-secondary' : 'bg-success-subtle text-success'">
+                            {{ isLocked ? 'Clôturée' : 'En direct' }}
+                        </span>
                     </div>
 
                     <div class="card-body p-3 bg-light flex-grow-1 overflow-auto d-flex flex-column gap-2">
                         <div v-if="!chatMessages.length" class="text-center text-muted small my-auto py-4">
                             <i class="bi bi-chat-square-text fs-2 d-block mb-2 opacity-50"></i>
                             Aucun message échangé pour le moment.<br />
-                            Cliquez sur <strong>Départ</strong> ou écrivez ci-dessous pour démarrer la conversation avec le client.
+                            Confirmez la commande, cliquez sur <strong>Départ</strong> ou écrivez ci-dessous pour discuter avec le client.
                         </div>
                         <div
                             v-for="m in chatMessages"
@@ -302,7 +424,11 @@ function fmt(n) {
                     </div>
 
                     <div class="card-footer bg-white p-3 border-top">
-                        <form @submit.prevent="sendSellerMessage">
+                        <div v-if="isLocked" class="text-center small text-muted py-2">
+                            <i class="bi bi-lock-fill me-1"></i>
+                            Commande {{ isDelivered ? 'livrée & vendue' : 'annulée' }} — la discussion est en lecture seule.
+                        </div>
+                        <form v-else @submit.prevent="sendSellerMessage">
                             <div class="input-group mb-2">
                                 <input
                                     v-model="chatBody"

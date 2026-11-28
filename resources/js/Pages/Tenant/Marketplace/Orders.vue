@@ -1,13 +1,31 @@
 <script setup>
 import TenantLayout from '@/Layouts/TenantLayout.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 
 defineProps({
     orderItems: Object,
+    shopStats: {
+        type: Object,
+        default: () => ({
+            pendingOrders: 0,
+            deliveredOrders: 0,
+            cancelledOrders: 0,
+            soldUnits: 0,
+            soldRevenue: 0,
+        }),
+    },
 });
 
-function updateStatus(id, status) {
-    router.patch(`/marketplace-gestion/commandes/${id}/statut`, { seller_status: status }, { preserveScroll: true });
+const statusMeta = {
+    nouvelle: { label: 'Nouvelle', badge: 'bg-warning-subtle text-warning-emphasis border border-warning-subtle', icon: 'bi-clock-history' },
+    confirmee: { label: 'Confirmée', badge: 'bg-primary-subtle text-primary border border-primary-subtle', icon: 'bi-check-circle' },
+    expediee: { label: 'En route / Expédiée', badge: 'bg-info-subtle text-info-emphasis border border-info-subtle', icon: 'bi-truck' },
+    livree: { label: 'Livrée & Vendue', badge: 'bg-success text-white', icon: 'bi-patch-check-fill' },
+    annulee: { label: 'Annulée', badge: 'bg-danger-subtle text-danger border border-danger-subtle', icon: 'bi-x-circle' },
+};
+
+function getStatus(code) {
+    return statusMeta[code] || { label: code || 'Inconnu', badge: 'bg-secondary-subtle text-secondary', icon: 'bi-circle' };
 }
 
 function fmt(n) {
@@ -18,9 +36,48 @@ function fmt(n) {
 <template>
     <Head title="Marketplace — Commandes reçues" />
     <TenantLayout>
-        <div class="mb-4">
-            <h1 class="h4 fw-bold mb-0">Commandes reçues du Marketplace</h1>
-            <p class="text-muted small mb-0">Suivez vos commandes, ouvrez la page détails pour tracer l'itinéraire, signaler le départ sur WhatsApp et discuter avec le client</p>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+            <div>
+                <h1 class="h4 fw-bold mb-0">Commandes reçues du Marketplace</h1>
+                <p class="text-muted small mb-0">
+                    Ouvrez les détails d'une commande pour la confirmer, notifier le départ sur WhatsApp, la marquer comme livrée ou l'annuler.
+                </p>
+            </div>
+            <Link href="/marketplace-gestion/produits" class="btn btn-outline-primary btn-sm rounded-pill px-3">
+                <i class="bi bi-box2-heart me-1"></i>Gérer mes produits
+            </Link>
+        </div>
+
+        <!-- Statistiques boutique Marketplace -->
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-lg-3">
+                <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+                    <div class="small text-muted">Commandes en cours</div>
+                    <div class="h4 fw-bold text-warning mb-0">{{ shopStats.pendingOrders }}</div>
+                    <div class="small text-muted">Nouvelles, confirmées ou en route</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+                    <div class="small text-muted">Commandes livrées &amp; vendues</div>
+                    <div class="h4 fw-bold text-success mb-0">{{ shopStats.deliveredOrders }}</div>
+                    <div class="small text-muted">{{ shopStats.soldUnits }} unité(s) vendue(s)</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+                    <div class="small text-muted">Chiffre d'affaires encaissé</div>
+                    <div class="h4 fw-bold text-primary mb-0">{{ fmt(shopStats.soldRevenue) }}</div>
+                    <div class="small text-muted">Uniquement les ventes livrées</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+                    <div class="small text-muted">Commandes annulées</div>
+                    <div class="h4 fw-bold text-danger mb-0">{{ shopStats.cancelledOrders }}</div>
+                    <div class="small text-muted">Stock automatiquement restauré</div>
+                </div>
+            </div>
         </div>
 
         <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
@@ -62,19 +119,11 @@ function fmt(n) {
                             <td class="text-end fw-bold text-primary text-nowrap">
                                 {{ fmt(item.subtotal) }}
                             </td>
-                            <td>
-                                <select
-                                    :value="item.seller_status"
-                                    class="form-select form-select-sm"
-                                    style="min-width: 130px;"
-                                    @change="updateStatus(item.id, $event.target.value)"
-                                >
-                                    <option value="nouvelle">Nouvelle</option>
-                                    <option value="confirmee">Confirmée</option>
-                                    <option value="expediee">En route / Expédiée</option>
-                                    <option value="livree">Livrée</option>
-                                    <option value="annulee">Annulée</option>
-                                </select>
+                            <td class="text-nowrap">
+                                <span class="badge rounded-pill px-3 py-2 fw-semibold" :class="getStatus(item.seller_status).badge">
+                                    <i class="bi me-1" :class="getStatus(item.seller_status).icon"></i>
+                                    {{ getStatus(item.seller_status).label }}
+                                </span>
                             </td>
                             <td class="text-end text-nowrap">
                                 <Link
