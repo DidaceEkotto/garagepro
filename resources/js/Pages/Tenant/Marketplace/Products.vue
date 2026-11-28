@@ -60,6 +60,14 @@ function createProduct() {
 }
 
 const { askConfirm } = useConfirm();
+const selectedProduct = ref(null);
+const deletingProduct = ref(null);
+const deletingBusy = ref(false);
+
+function openProductDetails(product) {
+    selectedProduct.value = product;
+    window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalProductDetails'))?.show();
+}
 
 function toggleProduct(id) {
     askConfirm({
@@ -71,13 +79,21 @@ function toggleProduct(id) {
     });
 }
 
-function deleteProduct(id) {
-    askConfirm({
-        title: 'Supprimer le produit',
-        message: 'Voulez-vous vraiment supprimer définitivement ce produit de votre catalogue Marketplace ?',
-        confirmLabel: 'Supprimer',
-        confirmClass: 'btn-danger',
-        onConfirm: () => router.delete(`/marketplace-gestion/produits/${id}`),
+function requestDeleteProduct(product) {
+    deletingProduct.value = product;
+    window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalConfirmDeleteProduct'))?.show();
+}
+
+function confirmDeleteProduct() {
+    if (!deletingProduct.value) return;
+    deletingBusy.value = true;
+    router.delete(`/marketplace-gestion/produits/${deletingProduct.value.id}`, {
+        preserveScroll: true,
+        onFinish: () => {
+            deletingBusy.value = false;
+            deletingProduct.value = null;
+            window.bootstrap?.Modal.getInstance(document.getElementById('modalConfirmDeleteProduct'))?.hide();
+        },
     });
 }
 </script>
@@ -146,10 +162,13 @@ function deleteProduct(id) {
                                 </span>
                             </td>
                             <td class="text-end text-nowrap">
+                                <button type="button" class="btn btn-outline-primary btn-sm me-1" @click="openProductDetails(p)">
+                                    <i class="bi bi-eye me-1"></i>Détails
+                                </button>
                                 <button type="button" class="btn btn-outline-secondary btn-sm me-1" @click="toggleProduct(p.id)">
                                     {{ p.is_published ? 'Masquer' : 'Publier' }}
                                 </button>
-                                <button type="button" class="btn btn-outline-danger btn-sm" @click="deleteProduct(p.id)">
+                                <button type="button" class="btn btn-outline-danger btn-sm" title="Supprimer le produit" @click="requestDeleteProduct(p)">
                                     <i class="bi bi-trash"></i>
                                 </button>
                             </td>
@@ -300,6 +319,97 @@ function deleteProduct(id) {
                     <button type="submit" class="btn btn-primary px-4" :disabled="form.processing">Publier le produit</button>
                 </div>
             </form>
+        </StaticModal>
+
+        <!-- Static Modal Détails du produit -->
+        <StaticModal id="modalProductDetails" :title="selectedProduct ? selectedProduct.title : 'Détails du produit'" size="modal-lg">
+            <div v-if="selectedProduct" class="vstack gap-3">
+                <div v-if="selectedProduct.image_urls?.length" class="d-flex flex-wrap gap-2">
+                    <img
+                        v-for="(url, i) in selectedProduct.image_urls"
+                        :key="url"
+                        :src="url"
+                        :alt="selectedProduct.title"
+                        class="rounded-3 border shadow-sm"
+                        style="width: 110px; height: 90px; object-fit: cover; cursor: zoom-in;"
+                        @click="openLightbox(selectedProduct.image_urls, i, selectedProduct.title)"
+                    />
+                </div>
+
+                <div class="row g-3 small">
+                    <div class="col-6 col-md-4">
+                        <div class="text-muted">Prix de vente</div>
+                        <div class="fw-bold fs-5 text-primary">{{ new Intl.NumberFormat('fr-FR').format(selectedProduct.price) }} FCFA</div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="text-muted">Stock disponible</div>
+                        <div class="fw-bold">{{ selectedProduct.stock_quantity }} unité(s)</div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="text-muted">Statut &amp; Vues</div>
+                        <div>
+                            <span class="badge me-1" :class="selectedProduct.is_published ? 'bg-success' : 'bg-secondary'">
+                                {{ selectedProduct.is_published ? 'Publié' : 'Masqué' }}
+                            </span>
+                            <span class="text-muted">{{ selectedProduct.views_count ?? 0 }} vue(s)</span>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="text-muted">Catégorie</div>
+                        <div class="fw-semibold">
+                            {{ selectedProduct.category?.name || '-' }}
+                            <span v-if="selectedProduct.sub_category"> / {{ selectedProduct.sub_category.name }}</span>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="text-muted">Marque &amp; État</div>
+                        <div class="fw-semibold text-capitalize">{{ selectedProduct.brand || 'Générique' }} • {{ selectedProduct.condition }}</div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="text-muted">Référence (SKU)</div>
+                        <div class="fw-semibold">{{ selectedProduct.sku || '-' }}</div>
+                    </div>
+                    <div class="col-12" v-if="selectedProduct.vehicle_compatibility || selectedProduct.vehicle_brand">
+                        <div class="text-muted">Compatibilité véhicule</div>
+                        <div class="fw-semibold">
+                            {{ selectedProduct.vehicle_compatibility || `${selectedProduct.vehicle_brand || ''} ${selectedProduct.vehicle_model || ''}`.trim() }}
+                            <span v-if="selectedProduct.vehicle_year_from || selectedProduct.vehicle_year_to">
+                                ({{ selectedProduct.vehicle_year_from || '...' }} - {{ selectedProduct.vehicle_year_to || '...' }})
+                            </span>
+                        </div>
+                    </div>
+                    <div class="col-12" v-if="selectedProduct.description">
+                        <div class="text-muted mb-1">Description</div>
+                        <div class="p-3 bg-light rounded-3 border" style="white-space: pre-wrap;">{{ selectedProduct.description }}</div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+                    <a :href="`/marketplace/produit/${selectedProduct.id}`" target="_blank" class="btn btn-outline-primary btn-sm rounded-pill px-3">
+                        <i class="bi bi-box-arrow-up-right me-1"></i>Voir sur le Marketplace
+                    </a>
+                    <button type="button" class="btn btn-dark btn-sm rounded-pill px-4" data-bs-dismiss="modal">Fermer</button>
+                </div>
+            </div>
+        </StaticModal>
+
+        <!-- Static Modal de confirmation de suppression -->
+        <StaticModal id="modalConfirmDeleteProduct" title="Confirmer la suppression du produit">
+            <div v-if="deletingProduct">
+                <p class="mb-3">
+                    Êtes-vous sûr de vouloir supprimer définitivement la pièce <strong>« {{ deletingProduct.title }} »</strong> de votre catalogue Marketplace ?
+                </p>
+                <p class="small text-muted mb-4">Cette action est irréversible et retirera immédiatement l'article du Marketplace public.</p>
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-3" data-bs-dismiss="modal" :disabled="deletingBusy">
+                        Annuler
+                    </button>
+                    <button type="button" class="btn btn-danger rounded-pill px-4 fw-semibold" :disabled="deletingBusy" @click="confirmDeleteProduct">
+                        <span v-if="deletingBusy" class="spinner-border spinner-border-sm me-2"></span>
+                        <i v-else class="bi bi-trash me-1"></i>Supprimer définitivement
+                    </button>
+                </div>
+            </div>
         </StaticModal>
     </TenantLayout>
 </template>

@@ -799,6 +799,8 @@ class MarketplaceController extends Controller
             'country_code' => ['required', 'string', 'size:2', Rule::exists('countries', 'code')->where('is_active', true)],
             'buyer_whatsapp' => ['required', 'string', 'min:6', 'max:35'],
             'delivery_address' => ['required', 'string', 'min:5', 'max:255'],
+            'delivery_latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'delivery_longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -831,12 +833,15 @@ class MarketplaceController extends Controller
 
             $order = MarketplaceOrder::create([
                 'order_number' => 'CMD-'.strtoupper(Str::random(7)),
+                'tracking_token' => Str::random(36),
                 'buyer_name' => $data['buyer_name'],
                 'buyer_email' => strtolower($data['buyer_email']),
                 'country_code' => $country->code,
                 'dial_code' => $country->dial_code,
                 'buyer_whatsapp' => trim($data['buyer_whatsapp']),
                 'delivery_address' => $data['delivery_address'],
+                'delivery_latitude' => isset($data['delivery_latitude']) ? (float) $data['delivery_latitude'] : null,
+                'delivery_longitude' => isset($data['delivery_longitude']) ? (float) $data['delivery_longitude'] : null,
                 'notes' => $data['notes'] ?? null,
                 'total_amount' => $total,
                 'status' => 'nouvelle',

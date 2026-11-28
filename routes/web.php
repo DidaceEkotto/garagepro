@@ -11,6 +11,7 @@ use App\Http\Controllers\GeocodeController;
 use App\Http\Controllers\MarketplaceController;
 use App\Http\Controllers\PublicAppointmentController;
 use App\Http\Controllers\PublicGarageController;
+use App\Http\Controllers\PublicOrderTrackingController;
 use App\Http\Controllers\PublicQuoteController;
 use App\Http\Controllers\PublicReviewController;
 use App\Http\Controllers\PublicSosController;
@@ -116,6 +117,13 @@ Route::get('/commander', [MarketplaceController::class, 'checkout'])->name('mark
 Route::post('/commander', [MarketplaceController::class, 'placeOrder'])
     ->middleware('throttle:15,1')
     ->name('marketplace.order.place');
+Route::get('/suivi-commande/{token}', [PublicOrderTrackingController::class, 'show'])->name('public.order.track');
+Route::get('/suivi-commande/{token}/articles/{orderItem}/messages', [PublicOrderTrackingController::class, 'messages'])
+    ->middleware('throttle:60,1')
+    ->name('public.order.messages');
+Route::post('/suivi-commande/{token}/articles/{orderItem}/messages', [PublicOrderTrackingController::class, 'sendMessage'])
+    ->middleware('throttle:20,1')
+    ->name('public.order.messages.send');
 
 Route::get('/conditions-utilisation', function () {
     return Inertia::render('Legal/Show', [
@@ -634,6 +642,9 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
 
         Route::get('/commandes', [MarketplaceManagementController::class, 'orders'])->name('orders');
         Route::patch('/commandes/{orderItem}/statut', [MarketplaceManagementController::class, 'updateOrderStatus'])->name('orders.status');
+        Route::post('/commandes/{orderItem}/depart', [MarketplaceManagementController::class, 'departOrder'])->name('orders.depart');
+        Route::get('/commandes/{orderItem}/messages', [MarketplaceManagementController::class, 'orderMessages'])->name('orders.messages');
+        Route::post('/commandes/{orderItem}/messages', [MarketplaceManagementController::class, 'sendOrderMessage'])->name('orders.messages.send');
     });
 });
 

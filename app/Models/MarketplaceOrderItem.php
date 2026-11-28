@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MarketplaceOrderItem extends Model
 {
@@ -42,5 +43,10 @@ class MarketplaceOrderItem extends Model
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    public function messages(): HasMany
+    {
+        return $this->hasMany(MarketplaceOrderMessage::class, 'marketplace_order_item_id')->orderBy('id');
     }
 }

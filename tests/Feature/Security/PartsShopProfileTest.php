@@ -5,10 +5,13 @@ namespace Tests\Feature\Security;
 use App\Models\Agency;
 use App\Models\Category;
 use App\Models\Country;
+use App\Models\MarketplaceOrder;
+use App\Models\MarketplaceOrderItem;
 use App\Models\PlatformSetting;
 use App\Models\Product;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\GreenApiService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -103,5 +106,103 @@ class PartsShopProfileTest extends TestCase
         ]);
 
         $this->get('/marketplace')->assertOk()->assertSee('Plaquettes de frein Toyota Corolla');
+    }
+
+    public function test_seller_depart_sends_whatsapp_and_buyer_seller_order_chat_works(): void
+    {
+        $tenant = Tenant::create([
+            'name' => 'Pièces Express Douala',
+            'slug' => 'pieces-express-douala',
+            'type' => Tenant::TYPE_PARTS_SHOP,
+            'email' => 'shop@example.com',
+            'phone' => '+237690000888',
+            'latitude' => 4.0511,
+            'longitude' => 9.7679,
+            'status' => Tenant::STATUS_ACTIVE,
+            'subscription_ends_at' => now()->addMonth(),
+        ]);
+
+        $owner = User::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Vendeur Pro',
+            'email' => 'vendeur@example.com',
+            'password' => bcrypt('Secret123@'),
+            'role' => 'gerant',
+            'is_active' => true,
+        ]);
+        app(\App\Services\TenantRoleService::class)->provisionForTenant($tenant);
+        setPermissionsTeamId($tenant->id);
+        $owner->assignRole('gerant');
+
+        $cat = Category::create(['name' => 'Moteur', 'slug' => 'moteur-chat-test', 'is_active' => true]);
+        $product = Product::create([
+            'tenant_id' => $tenant->id,
+            'category_id' => $cat->id,
+            'title' => 'Alternateur 12V',
+            'slug' => 'alternateur-12v-test',
+            'price' => 45000,
+            'stock_quantity' => 3,
+            'condition' => 'neuf',
+            'country_code' => 'CM',
+            'is_published' => true,
+        ]);
+
+        $order = MarketplaceOrder::create([
+            'order_number' => 'CMD-TEST999',
+            'buyer_name' => 'Moussa Client',
+            'buyer_email' => 'moussa@example.com',
+            'country_code' => 'CM',
+            'dial_code' => '+237',
+            'buyer_whatsapp' => '677000111',
+            'delivery_address' => 'Bonapriso, Douala',
+            'delivery_latitude' => 4.0320,
+            'delivery_longitude' => 9.7010,
+            'total_amount' => 45000,
+            'status' => 'nouvelle',
+        ]);
+
+        $item = MarketplaceOrderItem::create([
+            'marketplace_order_id' => $order->id,
+            'marketplace_product_id' => $product->id,
+            'tenant_id' => $tenant->id,
+            'product_title' => $product->title,
+            'unit_price' => 45000,
+            'quantity' => 1,
+            'subtotal' => 45000,
+            'seller_status' => 'nouvelle',
+            'is_seen_by_seller' => false,
+        ]);
+
+        $mockGreenApi = $this->mock(GreenApiService::class);
+        $mockGreenApi->shouldReceive('sendMessage')->atLeast()->once()->andReturn(['ok' => true]);
+
+        // 1. Vendeur clique sur Départ -> statut passe en "expediee" + WhatsApp envoyé
+        $this->actingAs($owner)
+            ->post("/marketplace-gestion/commandes/{$item->id}/depart")
+            ->assertRedirect();
+
+        $item->refresh();
+        $this->assertSame('expediee', $item->seller_status);
+
+        // 2. Client ouvre sa page de suivi /suivi-commande/{token} et répond au vendeur
+        $this->get("/suivi-commande/{$order->tracking_token}")->assertOk();
+
+        $this->postJson("/suivi-commande/{$order->tracking_token}/articles/{$item->id}/messages", [
+            'body' => 'Je suis juste devant la pharmacie de Bonapriso.',
+        ])->assertOk()->assertJsonPath('ok', true);
+
+        // 3. Vendeur consulte le chat et répond au client
+        $this->actingAs($owner)
+            ->getJson("/marketplace-gestion/commandes/{$item->id}/messages")
+            ->assertOk()
+            ->assertJsonCount(2, 'messages');
+
+        $this->actingAs($owner)
+            ->postJson("/marketplace-gestion/commandes/{$item->id}/messages", [
+                'body' => 'Parfait, j\'arrive dans 5 minutes !',
+                'send_whatsapp' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('ok', true);
     }
 }

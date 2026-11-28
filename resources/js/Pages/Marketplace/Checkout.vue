@@ -16,6 +16,8 @@ const form = useForm({
     country_code: props.countries?.[0]?.code ?? 'CM',
     buyer_whatsapp: '',
     delivery_address: '',
+    delivery_latitude: null,
+    delivery_longitude: null,
     notes: '',
 });
 
@@ -25,7 +27,9 @@ function onDeliveryLocationSelected(payload) {
     if (!payload) return;
     form.delivery_address = payload.formatted_location || payload.city || form.delivery_address;
     if (payload.latitude && payload.longitude) {
-        deliveryGps.value = { lat: Number(payload.latitude), lon: Number(payload.longitude) };
+        form.delivery_latitude = Number(payload.latitude);
+        form.delivery_longitude = Number(payload.longitude);
+        deliveryGps.value = { lat: form.delivery_latitude, lon: form.delivery_longitude };
     }
 }
 

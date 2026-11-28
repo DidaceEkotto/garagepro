@@ -7,9 +7,12 @@ use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Country;
 use App\Models\MarketplaceOrderItem;
+use App\Models\MarketplaceOrderMessage;
 use App\Models\Product;
 use App\Models\SubCategory;
+use App\Services\GreenApiService;
 use App\Services\TenantContext;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -278,12 +281,23 @@ class MarketplaceManagementController extends Controller
 
     public function orders(TenantContext $tenantContext): Response
     {
-        $tenantId = $tenantContext->id();
+        $tenant = $tenantContext->getTenant();
+        $tenantId = $tenant->id;
 
-        $orderItems = MarketplaceOrderItem::with(['order', 'product'])
+        $orderItems = MarketplaceOrderItem::with(['order', 'product', 'messages'])
             ->where('tenant_id', $tenantId)
             ->latest('id')
-            ->paginate(25);
+            ->paginate(25)
+            ->through(function (MarketplaceOrderItem $item) {
+                $token = $item->order?->ensureTrackingToken();
+                $item->setAttribute('tracking_url', $token ? url("/suivi-commande/{$token}") : null);
+                $item->setAttribute('unread_buyer_messages', $item->messages
+                    ->where('sender_type', MarketplaceOrderMessage::SENDER_BUYER)
+                    ->where('is_read', false)
+                    ->count());
+
+                return $item;
+            });
 
         MarketplaceOrderItem::where('tenant_id', $tenantId)
             ->where('is_seen_by_seller', false)
@@ -291,6 +305,12 @@ class MarketplaceManagementController extends Controller
 
         return Inertia::render('Tenant/Marketplace/Orders', [
             'orderItems' => $orderItems,
+            'tenantLocation' => [
+                'name' => $tenant->name,
+                'latitude' => $tenant->latitude ? (float) $tenant->latitude : null,
+                'longitude' => $tenant->longitude ? (float) $tenant->longitude : null,
+                'formatted_location' => $tenant->formatted_location ?: $tenant->city,
+            ],
         ]);
     }
 
@@ -310,5 +330,156 @@ class MarketplaceManagementController extends Controller
         ]);
 
         return back()->with('success', 'Statut de la commande mis à jour.');
+    }
+
+    /**
+     * Bouton "Départ" : passe la commande en "expediee" (en route) et notifie immédiatement le client sur WhatsApp
+     * avec le lien de suivi et de chat direct Client ↔ Vendeur.
+     */
+    public function departOrder(
+        MarketplaceOrderItem $orderItem,
+        TenantContext $tenantContext,
+        GreenApiService $greenApi
+    ): RedirectResponse {
+        $tenant = $tenantContext->getTenant();
+        if ((int) $orderItem->tenant_id !== (int) $tenant->id) {
+            abort(403);
+        }
+
+        $orderItem->load('order');
+        $order = $orderItem->order;
+
+        $orderItem->update([
+            'seller_status' => 'expediee',
+            'is_seen_by_seller' => true,
+        ]);
+
+        $token = $order?->ensureTrackingToken();
+        $trackingUrl = $token ? url("/suivi-commande/{$token}") : url('/marketplace');
+
+        MarketplaceOrderMessage::create([
+            'marketplace_order_item_id' => $orderItem->id,
+            'sender_type' => MarketplaceOrderMessage::SENDER_SELLER,
+            'sender_name' => $tenant->name,
+            'body' => '🚚 Départ confirmé ! Je suis déjà en chemin pour vous livrer votre commande.',
+            'is_read' => false,
+        ]);
+
+        $buyerPhone = $this->formatBuyerWhatsapp($order);
+        if ($buyerPhone !== '') {
+            try {
+                $msg = "🚚 *VOTRE COMMANDE MBOACAR EST EN CHEMIN !*\n\n"
+                    ."🏪 *Vendeur :* {$tenant->name}\n"
+                    ."📦 *Article :* {$orderItem->product_title} (x{$orderItem->quantity})\n"
+                    ."📍 *Destination :* ".($order?->delivery_address ?: 'Votre adresse')."\n\n"
+                    ."Le vendeur vient de lancer le départ vers vous.\n"
+                    ."💬 Suivez votre livraison et discutez directement avec lui ici :\n{$trackingUrl}";
+                $greenApi->sendMessage($buyerPhone, $msg);
+            } catch (\Throwable) {
+                // non-blocking
+            }
+        }
+
+        return back()->with('success', 'Départ signalé ! Le client vient de recevoir un message WhatsApp avec son lien de suivi et de chat.');
+    }
+
+    /**
+     * Envoie un message personnalisé au client (chat commande + WhatsApp optionnel).
+     */
+    public function sendOrderMessage(
+        Request $request,
+        MarketplaceOrderItem $orderItem,
+        TenantContext $tenantContext,
+        GreenApiService $greenApi
+    ): JsonResponse {
+        $tenant = $tenantContext->getTenant();
+        if ((int) $orderItem->tenant_id !== (int) $tenant->id) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'body' => ['required', 'string', 'min:1', 'max:1500'],
+            'send_whatsapp' => ['nullable', 'boolean'],
+        ]);
+
+        $orderItem->load('order');
+        $order = $orderItem->order;
+        $token = $order?->ensureTrackingToken();
+        $trackingUrl = $token ? url("/suivi-commande/{$token}") : url('/marketplace');
+
+        $message = MarketplaceOrderMessage::create([
+            'marketplace_order_item_id' => $orderItem->id,
+            'sender_type' => MarketplaceOrderMessage::SENDER_SELLER,
+            'sender_name' => $tenant->name,
+            'body' => trim($validated['body']),
+            'is_read' => false,
+        ]);
+
+        if (! empty($validated['send_whatsapp'])) {
+            $buyerPhone = $this->formatBuyerWhatsapp($order);
+            if ($buyerPhone !== '') {
+                try {
+                    $wa = "💬 *Message de {$tenant->name} (Commande {$order?->order_number})*\n\n"
+                        .trim($validated['body'])
+                        ."\n\nRépondez directement ici : {$trackingUrl}";
+                    $greenApi->sendMessage($buyerPhone, $wa);
+                } catch (\Throwable) {
+                    // non-blocking
+                }
+            }
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => [
+                'id' => $message->id,
+                'sender_type' => $message->sender_type,
+                'sender_name' => $message->sender_name,
+                'body' => $message->body,
+                'created_at' => $message->created_at?->format('d/m H:i'),
+            ],
+        ]);
+    }
+
+    /**
+     * Flux JSON des messages d'une commande (interrogé toutes les 5s dans le modal Détails).
+     */
+    public function orderMessages(MarketplaceOrderItem $orderItem, TenantContext $tenantContext): JsonResponse
+    {
+        if ((int) $orderItem->tenant_id !== (int) $tenantContext->id()) {
+            abort(403);
+        }
+
+        MarketplaceOrderMessage::where('marketplace_order_item_id', $orderItem->id)
+            ->where('sender_type', MarketplaceOrderMessage::SENDER_BUYER)
+            ->where('is_read', false)
+            ->update(['is_read' => true]);
+
+        $messages = $orderItem->messages()
+            ->get()
+            ->map(fn (MarketplaceOrderMessage $m) => [
+                'id' => $m->id,
+                'sender_type' => $m->sender_type,
+                'sender_name' => $m->sender_name,
+                'body' => $m->body,
+                'created_at' => $m->created_at?->format('d/m H:i'),
+            ])
+            ->values();
+
+        return response()->json(['ok' => true, 'messages' => $messages]);
+    }
+
+    private function formatBuyerWhatsapp(?\App\Models\MarketplaceOrder $order): string
+    {
+        if (! $order || empty($order->buyer_whatsapp)) {
+            return '';
+        }
+        $raw = preg_replace('/\s+/', '', (string) $order->buyer_whatsapp);
+        if (str_starts_with($raw, '+')) {
+            return $raw;
+        }
+        $dial = trim((string) ($order->dial_code ?: '+237'));
+
+        return $dial.$raw;
     }
 }
