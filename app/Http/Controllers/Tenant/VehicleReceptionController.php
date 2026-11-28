@@ -149,6 +149,38 @@ class VehicleReceptionController extends Controller
             ->with('success', 'Réception du véhicule enregistrée avec succès.');
     }
 
+    public function edit(VehicleReception $reception, SecureUploadService $uploadService): Response
+    {
+        $this->authorize('update', $reception);
+
+        $reception->load(['customer:id,name,first_name,phone', 'vehicle:id,license_plate,brand,model,year,mileage', 'agency:id,name', 'courtesyVehicle:id,name,license_plate']);
+
+        $photoUrls = collect($reception->photos ?? [])
+            ->map(fn ($path) => $uploadService->signedUrl($path, 60))
+            ->values()
+            ->all();
+
+        return Inertia::render('Tenant/Receptions/Edit', [
+            'reception' => [
+                'id' => $reception->id,
+                'agency_id' => $reception->agency_id,
+                'customer' => $reception->customer,
+                'vehicle' => $reception->vehicle,
+                'courtesy_vehicle' => $reception->courtesyVehicle,
+                'courtesy_deposit_amount' => (int) ($reception->courtesy_deposit_amount ?? 0),
+                'visit_reason' => $reception->visit_reason,
+                'mileage_in' => (int) $reception->mileage_in,
+                'fuel_level' => (int) $reception->fuel_level,
+                'belongings_left' => $reception->belongings_left ?? '',
+                'damage_markers' => is_array($reception->damage_markers) ? array_values($reception->damage_markers) : [],
+                'notes' => $reception->notes ?? '',
+                'received_at_formatted' => $reception->received_at?->format('d/m/Y à H:i'),
+                'photo_urls' => $photoUrls,
+            ],
+            'agencies' => Agency::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+        ]);
+    }
+
     public function update(
         Request $request,
         VehicleReception $reception,
@@ -163,6 +195,7 @@ class VehicleReceptionController extends Controller
             'mileage_in' => ['required', 'integer', 'min:0'],
             'fuel_level' => ['required', 'integer', 'min:0', 'max:100'],
             'belongings_left' => ['nullable', 'string', 'max:1000'],
+            'damage_markers' => ['nullable', 'array', 'max:60'],
             'courtesy_deposit_amount' => ['nullable', 'integer', 'min:0'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'photos' => ['nullable', 'array'],
@@ -183,6 +216,7 @@ class VehicleReceptionController extends Controller
             'mileage_in' => $data['mileage_in'],
             'fuel_level' => $data['fuel_level'],
             'belongings_left' => $data['belongings_left'] ?? null,
+            'damage_markers' => array_key_exists('damage_markers', $data) ? ($data['damage_markers'] ?? []) : $reception->damage_markers,
             'courtesy_deposit_amount' => $data['courtesy_deposit_amount'] ?? $reception->courtesy_deposit_amount,
             'notes' => $data['notes'] ?? null,
             'photos' => $photoPaths,
@@ -194,7 +228,7 @@ class VehicleReceptionController extends Controller
 
         AuditLog::record('reception.updated', subject: $reception, actor: $request->user('web'), tenantId: $tenantId, request: $request);
 
-        return back()->with('success', 'Fiche de réception mise à jour avec succès.');
+        return redirect()->route('tenant.receptions.index')->with('success', 'Fiche de réception mise à jour avec succès.');
     }
 
     public function returnCourtesy(Request $request, VehicleReception $reception): RedirectResponse

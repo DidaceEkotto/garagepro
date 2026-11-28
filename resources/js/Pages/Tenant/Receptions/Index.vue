@@ -433,9 +433,9 @@ function returnCourtesy(id) {
                                     <span v-else class="text-muted small">{{ r.courtesy_vehicle?.license_plate ?? '-' }}</span>
                                 </td>
                                 <td class="text-end text-nowrap">
-                                    <button type="button" class="btn btn-outline-secondary btn-sm me-1" @click="openEditReception(r)">
+                                    <Link :href="`/receptions/${r.id}/modifier`" class="btn btn-outline-secondary btn-sm me-1">
                                         <i class="bi bi-pencil-square me-1"></i>Modifier
-                                    </button>
+                                    </Link>
                                     <button type="button" class="btn btn-outline-primary btn-sm" @click="openReceptionDetails(r)">
                                         <i class="bi bi-eye me-1"></i>Détails
                                     </button>

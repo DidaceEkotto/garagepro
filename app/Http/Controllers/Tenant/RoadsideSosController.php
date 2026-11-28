@@ -7,6 +7,7 @@ use App\Models\RoadsideSosOffer;
 use App\Models\RoadsideSosRequest;
 use App\Services\GreenApiService;
 use App\Services\TenantContext;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -19,6 +20,26 @@ use Inertia\Response;
 class RoadsideSosController extends Controller
 {
     public function index(TenantContext $tenantContext): Response
+    {
+        return Inertia::render('Tenant/Sos/Index', $this->buildDashboardPayload($tenantContext));
+    }
+
+    /**
+     * Flux JSON léger pour l'actualisation automatique en direct de /depannage-sos
+     * (détecte immédiatement quand un conducteur valide une offre ou envoie un nouveau SOS).
+     */
+    public function feed(TenantContext $tenantContext): JsonResponse
+    {
+        return response()->json([
+            'ok' => true,
+            ...$this->buildDashboardPayload($tenantContext),
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildDashboardPayload(TenantContext $tenantContext): array
     {
         $tenant = $tenantContext->getTenant();
         $lat = $tenant->latitude;
@@ -59,7 +80,7 @@ class RoadsideSosController extends Controller
             ->take(20)
             ->get();
 
-        return Inertia::render('Tenant/Sos/Index', [
+        return [
             'openRequests' => $openRequests,
             'myMissions' => $myMissions,
             'tenantLocation' => [
@@ -69,7 +90,7 @@ class RoadsideSosController extends Controller
                 'sos_enabled' => (bool) $tenant->sos_enabled,
                 'sos_radius_km' => $radius,
             ],
-        ]);
+        ];
     }
 
     public function sendOffer(

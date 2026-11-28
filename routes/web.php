@@ -33,6 +33,7 @@ use App\Http\Controllers\Tenant\InspectionController;
 use App\Http\Controllers\Tenant\InsuranceController;
 use App\Http\Controllers\Tenant\InventoryController;
 use App\Http\Controllers\Tenant\InvoiceController;
+use App\Http\Controllers\Tenant\LiveBadgesController;
 use App\Http\Controllers\Tenant\MaintenanceReminderController;
 use App\Http\Controllers\Tenant\MarketplaceManagementController;
 use App\Http\Controllers\Tenant\MessageController;
@@ -303,8 +304,14 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
 
     // SOS Dépannage côté Garage
     Route::get('/depannage-sos', [RoadsideSosController::class, 'index'])->name('tenant.sos.index');
+    Route::get('/depannage-sos/feed', [RoadsideSosController::class, 'feed'])->name('tenant.sos.feed');
     Route::post('/depannage-sos/{sosRequest}/offre', [RoadsideSosController::class, 'sendOffer'])->name('tenant.sos.offer');
     Route::patch('/depannage-sos/{sosRequest}/statut', [RoadsideSosController::class, 'updateMissionStatus'])->name('tenant.sos.status');
+
+    // Badges de notification temps réel de la sidebar (polling silencieux 10s)
+    Route::get('/api/tenant/live-badges', LiveBadgesController::class)
+        ->middleware('throttle:120,1')
+        ->name('tenant.live_badges');
 
     // Ma Vitrine & Prestations (photos établissement + services avec image facultative)
     Route::get('/vitrine-prestations', [ShowcaseController::class, 'index'])->name('tenant.showcase.index');
@@ -387,7 +394,9 @@ Route::middleware(['tenant.auth', 'tenant.writable'])->group(function () {
         Route::get('/receptions', [VehicleReceptionController::class, 'index'])->name('tenant.receptions.index');
         Route::get('/receptions/nouvelle', [VehicleReceptionController::class, 'create'])->name('tenant.receptions.create');
         Route::post('/receptions', [VehicleReceptionController::class, 'store'])->name('tenant.receptions.store');
+        Route::get('/receptions/{reception}/modifier', [VehicleReceptionController::class, 'edit'])->name('tenant.receptions.edit');
         Route::put('/receptions/{reception}', [VehicleReceptionController::class, 'update'])->name('tenant.receptions.update');
+        Route::post('/receptions/{reception}', [VehicleReceptionController::class, 'update'])->name('tenant.receptions.update_post');
         Route::post('/receptions/{reception}/retour-courtoisie', [VehicleReceptionController::class, 'returnCourtesy'])->name('tenant.receptions.return_courtesy');
         Route::post('/receptions/vehicules-courtoisie', [VehicleReceptionController::class, 'storeCourtesyVehicle'])->name('tenant.receptions.courtesy.store');
         Route::patch('/receptions/vehicules-courtoisie/{courtesyVehicle}/statut', [VehicleReceptionController::class, 'updateCourtesyStatus'])->name('tenant.receptions.courtesy.status');

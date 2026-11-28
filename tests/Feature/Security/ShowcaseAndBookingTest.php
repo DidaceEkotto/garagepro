@@ -244,4 +244,43 @@ class ShowcaseAndBookingTest extends TestCase
         $this->assertSame('CE 456 XY', $sos->vehicle_plate);
         $this->assertCount(2, $sos->photos ?? []);
     }
+
+    public function test_tenant_live_badges_and_sos_feed_endpoints_return_real_time_counts(): void
+    {
+        [$tenant, $owner] = $this->createTenantWithOwner('garage-live', 'Garage Live', 4.0511, 9.7679);
+
+        PlatformMessage::create([
+            'tenant_id' => $tenant->id,
+            'sender_type' => PlatformMessage::TYPE_CUSTOMER,
+            'sender_name' => 'Client Test',
+            'recipient_type' => PlatformMessage::TYPE_TENANT,
+            'recipient_id' => $tenant->id,
+            'subject' => 'Test notif',
+            'body' => 'Bonjour',
+            'is_read' => false,
+        ]);
+
+        RoadsideSosRequest::create([
+            'token' => 'tok-live-sos-1234567890',
+            'driver_name' => 'Jean',
+            'driver_phone' => '+237690000222',
+            'breakdown_type' => 'batterie',
+            'latitude' => 4.0520,
+            'longitude' => 9.7685,
+            'status' => RoadsideSosRequest::STATUS_OPEN,
+        ]);
+
+        $this->actingAs($owner)
+            ->getJson('/api/tenant/live-badges')
+            ->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('badges./messagerie', 1)
+            ->assertJsonPath('badges./depannage-sos', 1);
+
+        $this->actingAs($owner)
+            ->getJson('/depannage-sos/feed')
+            ->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonCount(1, 'openRequests');
+    }
 }

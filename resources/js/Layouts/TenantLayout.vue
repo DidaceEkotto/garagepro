@@ -47,12 +47,55 @@ const auth = computed(() => page.props.auth);
 const flash = computed(() => page.props.flash);
 const payrollAlert = computed(() => page.props.payrollAlert);
 const affiliateAlert = computed(() => page.props.affiliateAlert ?? null);
-const unreadMessagesCount = computed(() => page.props.unreadMessagesCount ?? 0);
-const pendingMarketplaceOrdersCount = computed(() => page.props.pendingMarketplaceOrdersCount ?? 0);
-const pendingAppointmentRequestsCount = computed(() => page.props.pendingAppointmentRequestsCount ?? 0);
+const unreadMessagesCount = computed(() => liveBadges.value['/messagerie'] ?? (page.props.unreadMessagesCount ?? 0));
+const pendingMarketplaceOrdersCount = computed(() => liveBadges.value['/marketplace-gestion/commandes'] ?? (page.props.pendingMarketplaceOrdersCount ?? 0));
+const pendingAppointmentRequestsCount = computed(() => liveBadges.value['/rendez-vous'] ?? (page.props.pendingAppointmentRequestsCount ?? 0));
+const openSosCount = computed(() => liveBadges.value['/depannage-sos'] ?? 0);
+const unreadB2bCount = computed(() => liveBadges.value['/reseau-pro'] ?? 0);
 const recentNotifications = computed(() => page.props.recentNotifications ?? []);
 const currentUrl = computed(() => page.url);
 const marketplaceMenuOpen = ref(currentUrl.value.startsWith('/marketplace-gestion'));
+
+// Actualisation discrète toutes les 10 secondes des badges de la sidebar (sans bloquer la navigation)
+const liveBadges = ref({});
+let badgesPollTimer = null;
+let badgesAbort = null;
+
+async function fetchLiveBadges() {
+    if (typeof document !== 'undefined' && document.hidden) return;
+    if (!offlineIsOnline.value || !tenant.value?.id) return;
+    try {
+        if (badgesAbort) badgesAbort.abort();
+        badgesAbort = new AbortController();
+        const resp = await fetch('/api/tenant/live-badges', {
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            signal: badgesAbort.signal,
+        });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data?.ok && data?.badges) {
+            liveBadges.value = data.badges;
+        }
+    } catch {
+        // Silencieux : ne perturbe jamais la navigation
+    }
+}
+
+function badgeCountFor(href) {
+    if (href === '/messagerie') return unreadMessagesCount.value;
+    if (href === '/rendez-vous') return pendingAppointmentRequestsCount.value;
+    if (href === '/depannage-sos') return openSosCount.value;
+    if (href === '/reseau-pro') return unreadB2bCount.value;
+    if (href === '/marketplace-gestion/commandes') return pendingMarketplaceOrdersCount.value;
+    return 0;
+}
+
+function badgeColorClass(href) {
+    if (href === '/rendez-vous') return 'bg-warning text-dark';
+    if (href === '/depannage-sos') return 'bg-danger text-white';
+    if (href === '/messagerie') return 'bg-primary text-white';
+    return 'bg-danger text-white';
+}
 
 const routeTitleMap = [
     ['/tableau-de-bord', 'Tableau de bord'],
@@ -151,10 +194,14 @@ onMounted(() => {
     timerId = setInterval(() => {
         nowTs.value = Date.now();
     }, 1000);
+    fetchLiveBadges();
+    badgesPollTimer = setInterval(fetchLiveBadges, 10000);
 });
 
 onBeforeUnmount(() => {
     if (timerId) clearInterval(timerId);
+    if (badgesPollTimer) clearInterval(badgesPollTimer);
+    if (badgesAbort) badgesAbort.abort();
 });
 
 const subscriptionCountdown = computed(() => {
@@ -294,277 +341,85 @@ function resetDemo() {
 </script>
 
 <template>
-    <div class="min-vh-100 d-flex flex-column bg-light">
-        <!-- Top Navbar -->
-        <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top shadow-sm px-3" style="z-index: 1030;">
-            <div class="container-fluid">
-                <div class="d-flex align-items-center gap-2">
-                    <button
-                        class="btn btn-outline-light btn-sm d-lg-none"
-                        type="button"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#mobileSidebar"
-                    >
-                        <i class="bi bi-list"></i>
-                    </button>
-                    <Link class="navbar-brand fw-bold d-flex align-items-center gap-2 mb-0" href="/tableau-de-bord">
-                        <img
-                            v-if="tenant?.logoUrl"
-                            :src="tenant.logoUrl"
-                            alt="Logo"
-                            class="rounded bg-white p-1"
-                            style="height: 32px; width: 32px; object-fit: contain;"
-                        />
-                        <img
-                            v-else
-                            :src="page.props.app?.site?.logo_url || '/assets/images/logo.png'"
-                            alt="MboaCar"
-                            class="rounded bg-white px-2 py-1"
-                            style="height: 32px; width: auto; object-fit: contain;"
-                        />
-                        <span>{{ tenant?.name ?? 'MboaCar' }}</span>
-                    </Link>
-                    <span class="text-white-50 d-none d-xl-inline">|</span>
-                    <span class="small fw-semibold text-white d-none d-xl-inline text-truncate" style="max-width: 240px;">
-                        {{ currentPageTitle }}
-                    </span>
-                </div>
-
-                <div class="d-flex align-items-center gap-2 text-white">
-                    <span v-if="subscriptionCountdown" class="badge bg-warning text-dark d-none d-md-inline">
-                        <i class="bi bi-hourglass-split me-1"></i>{{ subscriptionCountdown }}
-                    </span>
-                    <span class="badge bg-light text-primary d-none d-sm-inline">{{ tenant?.status }}</span>
-                    <button
-                        v-if="tenant?.slug === 'demo-douala'"
-                        type="button"
-                        class="btn btn-warning btn-sm text-dark fw-semibold"
-                        @click="resetDemo"
-                    >
-                        <i class="bi bi-arrow-clockwise me-1"></i>{{ t('layout.resetDemo') }}
-                    </button>
-
-                    <LanguageSwitcher variant="light" />
-
-                    <!-- Icône Messages / Notifications avec compteur -->
-                    <div class="dropdown">
-                        <button
-                            class="btn btn-outline-light btn-sm position-relative rounded-pill px-2"
-                            type="button"
-                            data-bs-toggle="dropdown"
-                            aria-expanded="false"
-                            title="Messages & Notifications"
-                        >
-                            <i class="bi bi-chat-dots-fill"></i>
-                            <span
-                                v-if="unreadMessagesCount > 0"
-                                class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                                style="font-size: 0.65rem;"
-                            >
-                                {{ unreadMessagesCount }}
-                            </span>
-                        </button>
-                        <div class="dropdown-menu dropdown-menu-end shadow-lg border-0 p-0" style="width: 340px; max-width: 92vw;">
-                            <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-light rounded-top">
-                                <span class="fw-bold small text-dark">Notifications &amp; Messages</span>
-                                <span v-if="unreadMessagesCount > 0" class="badge bg-danger">{{ unreadMessagesCount }} nouveau(x)</span>
-                            </div>
-                            <div v-if="!recentNotifications.length" class="p-3 text-center text-muted small">
-                                Aucune nouvelle notification.
-                            </div>
-                            <div v-else class="list-group list-group-flush" style="max-height: 290px; overflow-y: auto;">
-                                <div
-                                    v-for="notif in recentNotifications"
-                                    :key="notif.id"
-                                    class="list-group-item list-group-item-action p-3"
-                                    :class="{ 'bg-primary-subtle bg-opacity-25': !notif.is_read }"
-                                >
-                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <span class="fw-bold small text-dark">
-                                            {{ notif.sender_name }}
-                                            <span v-if="notif.sender_type === 'admin'" class="badge bg-dark ms-1" style="font-size: 0.62rem;">Admin</span>
-                                        </span>
-                                        <span v-if="!notif.is_read" class="badge bg-primary rounded-pill" style="font-size: 0.6rem;">Nouveau</span>
-                                    </div>
-                                    <div class="small fw-semibold text-primary text-truncate">{{ notif.subject }}</div>
-                                    <div class="small text-muted text-truncate mb-2">{{ notif.body }}</div>
-                                    <button
-                                        type="button"
-                                        class="btn btn-outline-primary btn-sm py-0 px-2"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#modalQuickReplyNotification"
-                                        @click="openQuickReply(notif)"
-                                    >
-                                        <i class="bi bi-reply me-1"></i>Répondre
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="p-2 border-top text-center bg-light rounded-bottom">
-                                <Link href="/messagerie" class="btn btn-link btn-sm text-decoration-none fw-semibold">
-                                    Ouvrir toute la messagerie <i class="bi bi-arrow-right ms-1"></i>
-                                </Link>
-                            </div>
-                        </div>
+    <div class="tenant-shell min-vh-100 d-flex bg-light">
+        <!-- Desktop Vertical Sidebar (FIXE à gauche) -->
+        <aside class="tenant-sidebar-fixed d-none d-lg-flex flex-column">
+            <!-- Marque / Établissement en haut de la Sidebar -->
+            <div class="tenant-sidebar-brand px-3 py-3 border-bottom border-white border-opacity-10">
+                <Link class="d-flex align-items-center gap-2 text-decoration-none text-white" href="/tableau-de-bord">
+                    <img
+                        v-if="tenant?.logoUrl"
+                        :src="tenant.logoUrl"
+                        alt="Logo"
+                        class="rounded-3 bg-white p-1 flex-shrink-0"
+                        style="height: 36px; width: 36px; object-fit: contain;"
+                    />
+                    <img
+                        v-else
+                        :src="page.props.app?.site?.logo_url || '/assets/images/logo.png'"
+                        alt="MboaCar"
+                        class="rounded-3 bg-white px-2 py-1 flex-shrink-0"
+                        style="height: 36px; width: auto; max-width: 96px; object-fit: contain;"
+                    />
+                    <div class="overflow-hidden">
+                        <div class="fw-bold text-truncate" style="font-size: 0.92rem; line-height: 1.2;">{{ tenant?.name ?? 'MboaCar' }}</div>
+                        <div class="text-white-50 text-truncate" style="font-size: 0.7rem;">Espace Professionnel</div>
                     </div>
-
-                    <!-- Statut Réseau & Mode Hors Ligne -->
-                    <OfflineStatusBar />
-
-                    <!-- Menu déroulant Profil Utilisateur -->
-                    <div class="dropdown">
-                        <button
-                            class="btn btn-link text-white text-decoration-none dropdown-toggle d-flex align-items-center gap-2 py-1 px-2"
-                            type="button"
-                            data-bs-toggle="dropdown"
-                            aria-expanded="false"
-                        >
-                            <img
-                                v-if="auth?.user?.photoUrl"
-                                :src="auth.user.photoUrl"
-                                alt="Profil"
-                                class="rounded-circle border border-light"
-                                style="width: 32px; height: 32px; object-fit: cover;"
-                            />
-                            <span
-                                v-else
-                                class="rounded-circle bg-white text-primary fw-bold d-inline-flex align-items-center justify-content-center"
-                                style="width: 32px; height: 32px; font-size: 0.8rem;"
-                            >
-                                {{ userInitials }}
-                            </span>
-                            <span class="small d-none d-md-inline">{{ auth?.user?.name }}</span>
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end shadow border-0">
-                            <li>
-                                <Link class="dropdown-item small" href="/mon-profil">
-                                    <i class="bi bi-person-circle me-2"></i>{{ t('layout.profile') }}
-                                </Link>
-                            </li>
-                            <li>
-                                <Link class="dropdown-item small" href="/parametres-espace">
-                                    <i class="bi bi-gear me-2"></i>{{ t('layout.settings') }}
-                                </Link>
-                            </li>
-                            <li><hr class="dropdown-divider" /></li>
-                            <li>
-                                <button
-                                    type="button"
-                                    class="dropdown-item small text-danger"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#modalConfirmLogout"
-                                >
-                                    <i class="bi bi-box-arrow-right me-2"></i>{{ t('layout.logout') }}
-                                </button>
-                            </li>
-                        </ul>
-                    </div>
-                </div>
+                </Link>
             </div>
-        </nav>
 
-        <!-- Bannière d'alerte Mode Hors Ligne / Synchro / Bail 14 jours -->
-        <div
-            v-if="!offlineIsOnline || offlineNotice"
-            class="px-3 py-2 small fw-semibold d-flex flex-wrap align-items-center justify-content-between gap-2"
-            :class="
-                leaseExpired
-                    ? 'bg-danger text-white'
-                    : offlineNotice?.type === 'success'
-                        ? 'bg-success text-white'
-                        : offlineNotice?.type === 'danger'
-                            ? 'bg-danger text-white'
-                            : 'bg-warning text-dark'
-            "
-        >
-            <div>
-                <i
-                    class="bi me-2"
-                    :class="
-                        leaseExpired
-                            ? 'bi-lock-fill'
-                            : offlineNotice?.type === 'success'
-                                ? 'bi-cloud-check-fill'
-                                : offlineNotice?.type === 'danger'
-                                    ? 'bi-exclamation-triangle-fill'
-                                    : 'bi-wifi-off'
-                    "
-                ></i>
-                <span v-if="leaseExpired">
-                    {{
-                        clockTampered
-                            ? 'Horloge système modifiée : reconnectez-vous à Internet pour réactiver les saisies hors ligne.'
-                            : 'Période hors ligne (14 jours) expirée — Mode lecture seule. Connectez-vous à Internet pour synchroniser et prolonger.'
-                    }}
-                </span>
-                <span v-else-if="offlineNotice">{{ offlineNotice.message }}</span>
-                <span v-else-if="leaseWarning">
-                    Mode Hors Ligne actif — Attention : il reste {{ leaseDaysRemaining }} jour(s) avant reconnexion obligatoire
-                    <template v-if="offlinePendingCount > 0"> ({{ offlinePendingCount }} en attente)</template>.
-                </span>
-                <span v-else>
-                    Mode Hors Ligne actif (tous modules sauf IA Auto • WhatsApp envoyé au retour du réseau • bail {{ leaseDaysRemaining }} j)
-                    <template v-if="offlinePendingCount > 0"> — {{ offlinePendingCount }} saisie(s) en attente</template>.
-                </span>
-            </div>
-            <button
-                type="button"
-                class="btn btn-sm py-0 px-2 fw-semibold"
-                :class="leaseExpired || offlineNotice?.type === 'success' || offlineNotice?.type === 'danger' ? 'btn-light' : 'btn-dark'"
-                data-bs-toggle="modal"
-                data-bs-target="#modalOfflineSyncCenter"
-            >
-                Centre de synchro
-            </button>
-        </div>
-
-        <div class="d-flex flex-grow-1">
-            <!-- Desktop Vertical Sidebar -->
-            <aside class="bg-white border-end shadow-sm d-none d-lg-flex flex-column p-3" style="width: 260px; min-width: 260px;">
+            <!-- Navigation scrollable interne -->
+            <div class="tenant-sidebar-scroll flex-grow-1 px-3 py-3">
                 <div v-for="group in menuGroups" :key="group.title" class="mb-3">
-                    <div class="text-uppercase text-muted fw-bold px-2 mb-1" style="font-size: 0.7rem; letter-spacing: 0.05em;">
+                    <div class="tenant-sidebar-group-title px-2 mb-1">
                         {{ group.title }}
                     </div>
-                    <ul class="nav nav-pills flex-column gap-1">
+                    <ul class="nav flex-column gap-1">
                         <li v-for="item in group.items" :key="item.href" class="nav-item">
                             <Link
                                 :href="item.href"
-                                class="nav-link sidebar-link d-flex align-items-center justify-content-between py-2 px-3 small"
-                                :class="{ active: isActive(item.href) }"
+                                class="tenant-sidebar-link d-flex align-items-center justify-content-between py-2 px-3 small text-decoration-none"
+                                :class="{ 'is-active': isActive(item.href) }"
                             >
-                                <span class="d-flex align-items-center gap-2">
+                                <span class="d-flex align-items-center gap-2 text-truncate">
                                     <i :class="`bi ${item.icon}`"></i>
-                                    <span>{{ item.label }}</span>
+                                    <span class="text-truncate">{{ item.label }}</span>
                                 </span>
-                                <span v-if="item.href === '/rendez-vous' && pendingAppointmentRequestsCount > 0" class="badge bg-warning text-dark rounded-pill">
-                                    {{ pendingAppointmentRequestsCount }}
+                                <span
+                                    v-if="badgeCountFor(item.href) > 0"
+                                    class="badge rounded-pill flex-shrink-0 ms-2"
+                                    :class="badgeColorClass(item.href)"
+                                    style="font-size: 0.68rem;"
+                                >
+                                    {{ badgeCountFor(item.href) }}
                                 </span>
                             </Link>
                         </li>
                     </ul>
                 </div>
 
-                <!-- Menu déroulant Marketplace (avant Tutoriel & Guide) -->
+                <!-- Menu déroulant Marketplace -->
                 <div v-if="!tenant?.isReadOnly && (tenant?.type === 'garage' || !tenant?.type)" class="mb-3">
                     <button
                         type="button"
-                        class="btn btn-light w-100 d-flex align-items-center justify-content-between py-2 px-3 small fw-semibold border"
+                        class="tenant-sidebar-link w-100 border-0 bg-transparent d-flex align-items-center justify-content-between py-2 px-3 small fw-semibold"
                         @click="marketplaceMenuOpen = !marketplaceMenuOpen"
                     >
                         <span class="d-flex align-items-center gap-2">
-                            <i class="bi bi-shop text-primary"></i>
+                            <i class="bi bi-shop text-info"></i>
                             <span>{{ t('layoutExtra.marketplace') }}</span>
-                            <span v-if="pendingMarketplaceOrdersCount > 0" class="badge bg-danger rounded-pill">
+                            <span v-if="pendingMarketplaceOrdersCount > 0" class="badge bg-danger rounded-pill" style="font-size: 0.68rem;">
                                 {{ pendingMarketplaceOrdersCount }}
                             </span>
                         </span>
                         <i class="bi" :class="marketplaceMenuOpen ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
                     </button>
-                    <ul v-show="marketplaceMenuOpen" class="nav nav-pills flex-column gap-1 mt-1 ps-2">
+                    <ul v-show="marketplaceMenuOpen" class="nav flex-column gap-1 mt-1 ps-2">
                         <li class="nav-item">
                             <Link
                                 href="/marketplace-gestion/produits"
-                                class="nav-link sidebar-link d-flex align-items-center gap-2 py-2 px-3 small"
-                                :class="{ active: isActive('/marketplace-gestion/produits') }"
+                                class="tenant-sidebar-link d-flex align-items-center gap-2 py-2 px-3 small text-decoration-none"
+                                :class="{ 'is-active': isActive('/marketplace-gestion/produits') }"
                             >
                                 <i class="bi bi-box2-heart"></i><span>{{ t('layoutExtra.myProducts') }}</span>
                             </Link>
@@ -572,82 +427,303 @@ function resetDemo() {
                         <li class="nav-item">
                             <Link
                                 href="/marketplace-gestion/commandes"
-                                class="nav-link sidebar-link d-flex align-items-center justify-content-between py-2 px-3 small"
-                                :class="{ active: isActive('/marketplace-gestion/commandes') }"
+                                class="tenant-sidebar-link d-flex align-items-center justify-content-between py-2 px-3 small text-decoration-none"
+                                :class="{ 'is-active': isActive('/marketplace-gestion/commandes') }"
                             >
                                 <span class="d-flex align-items-center gap-2"><i class="bi bi-bag-check"></i><span>{{ t('layoutExtra.orders') }}</span></span>
-                                <span v-if="pendingMarketplaceOrdersCount > 0" class="badge bg-danger rounded-pill">
+                                <span v-if="pendingMarketplaceOrdersCount > 0" class="badge bg-danger rounded-pill" style="font-size: 0.68rem;">
                                     {{ pendingMarketplaceOrdersCount }}
                                 </span>
                             </Link>
                         </li>
                     </ul>
                 </div>
+            </div>
 
-                <!-- Tutoriel & Guide toujours en dernier lieu -->
-                <div v-if="!tenant?.isReadOnly" class="mt-auto pt-2 border-top">
-                    <ul class="nav nav-pills flex-column gap-1">
-                        <li class="nav-item">
-                            <Link
-                                href="/tutoriel"
-                                class="nav-link sidebar-link d-flex align-items-center gap-2 py-2 px-3 small"
-                                :class="{ active: isActive('/tutoriel') }"
+            <!-- Pied de Sidebar : Tutoriel -->
+            <div v-if="!tenant?.isReadOnly" class="px-3 py-2 border-top border-white border-opacity-10">
+                <Link
+                    href="/tutoriel"
+                    class="tenant-sidebar-link d-flex align-items-center gap-2 py-2 px-3 small text-decoration-none"
+                    :class="{ 'is-active': isActive('/tutoriel') }"
+                >
+                    <i class="bi bi-book"></i>
+                    <span>{{ t('layoutExtra.tutorial') }}</span>
+                </Link>
+            </div>
+        </aside>
+
+        <!-- Colonne principale droite : Navbar NON-FIXE + Contenu -->
+        <div class="tenant-main-column d-flex flex-column flex-grow-1" style="min-width: 0;">
+            <!-- Top Navbar moderne (NON FIXE : défile naturellement avec la page) -->
+            <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom px-3 px-md-4 py-2">
+                <div class="container-fluid px-0">
+                    <div class="d-flex align-items-center gap-2">
+                        <button
+                            class="btn btn-outline-secondary btn-sm d-lg-none rounded-3"
+                            type="button"
+                            data-bs-toggle="offcanvas"
+                            data-bs-target="#mobileSidebar"
+                        >
+                            <i class="bi bi-list fs-5"></i>
+                        </button>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="fw-bold text-dark" style="font-size: 0.98rem;">
+                                {{ currentPageTitle }}
+                            </span>
+                            <span v-if="tenant?.status" class="badge bg-primary-subtle text-primary rounded-pill d-none d-sm-inline" style="font-size: 0.7rem;">
+                                {{ tenant.status }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2">
+                        <span v-if="subscriptionCountdown" class="badge bg-warning-subtle text-dark border border-warning-subtle rounded-pill px-2 py-1 d-none d-xl-inline small">
+                            <i class="bi bi-hourglass-split me-1 text-warning"></i>{{ subscriptionCountdown }}
+                        </span>
+                        <button
+                            v-if="tenant?.slug === 'demo-douala'"
+                            type="button"
+                            class="btn btn-warning btn-sm text-dark fw-semibold rounded-pill px-3"
+                            @click="resetDemo"
+                        >
+                            <i class="bi bi-arrow-clockwise me-1"></i>{{ t('layout.resetDemo') }}
+                        </button>
+
+                        <LanguageSwitcher variant="dark" />
+
+                        <!-- Icône Messages / Notifications avec compteur temps réel -->
+                        <div class="dropdown">
+                            <button
+                                class="btn btn-light border btn-sm position-relative rounded-circle p-0 d-inline-flex align-items-center justify-content-center"
+                                style="width: 36px; height: 36px;"
+                                type="button"
+                                data-bs-toggle="dropdown"
+                                aria-expanded="false"
+                                title="Messages & Notifications"
                             >
-                                <i class="bi bi-book"></i>
-                                <span>{{ t('layoutExtra.tutorial') }}</span>
-                            </Link>
-                        </li>
-                    </ul>
+                                <i class="bi bi-bell-fill text-dark"></i>
+                                <span
+                                    v-if="unreadMessagesCount > 0"
+                                    class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                                    style="font-size: 0.65rem;"
+                                >
+                                    {{ unreadMessagesCount }}
+                                </span>
+                            </button>
+                            <div class="dropdown-menu dropdown-menu-end shadow-lg border-0 p-0" style="width: 340px; max-width: 92vw;">
+                                <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-light rounded-top">
+                                    <span class="fw-bold small text-dark">Notifications &amp; Messages</span>
+                                    <span v-if="unreadMessagesCount > 0" class="badge bg-danger">{{ unreadMessagesCount }} nouveau(x)</span>
+                                </div>
+                                <div v-if="!recentNotifications.length" class="p-3 text-center text-muted small">
+                                    Aucune nouvelle notification.
+                                </div>
+                                <div v-else class="list-group list-group-flush" style="max-height: 290px; overflow-y: auto;">
+                                    <div
+                                        v-for="notif in recentNotifications"
+                                        :key="notif.id"
+                                        class="list-group-item list-group-item-action p-3"
+                                        :class="{ 'bg-primary-subtle bg-opacity-25': !notif.is_read }"
+                                    >
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <span class="fw-bold small text-dark">
+                                                {{ notif.sender_name }}
+                                                <span v-if="notif.sender_type === 'admin'" class="badge bg-dark ms-1" style="font-size: 0.62rem;">Admin</span>
+                                            </span>
+                                            <span v-if="!notif.is_read" class="badge bg-primary rounded-pill" style="font-size: 0.6rem;">Nouveau</span>
+                                        </div>
+                                        <div class="small fw-semibold text-primary text-truncate">{{ notif.subject }}</div>
+                                        <div class="small text-muted text-truncate mb-2">{{ notif.body }}</div>
+                                        <button
+                                            type="button"
+                                            class="btn btn-outline-primary btn-sm py-0 px-2"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalQuickReplyNotification"
+                                            @click="openQuickReply(notif)"
+                                        >
+                                            <i class="bi bi-reply me-1"></i>Répondre
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="p-2 border-top text-center bg-light rounded-bottom">
+                                    <Link href="/messagerie" class="btn btn-link btn-sm text-decoration-none fw-semibold">
+                                        Ouvrir toute la messagerie <i class="bi bi-arrow-right ms-1"></i>
+                                    </Link>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Statut Réseau & Mode Hors Ligne -->
+                        <OfflineStatusBar />
+
+                        <!-- Menu déroulant Profil Utilisateur -->
+                        <div class="dropdown">
+                            <button
+                                class="btn btn-light border rounded-pill dropdown-toggle d-flex align-items-center gap-2 py-1 px-2 text-dark"
+                                type="button"
+                                data-bs-toggle="dropdown"
+                                aria-expanded="false"
+                            >
+                                <img
+                                    v-if="auth?.user?.photoUrl"
+                                    :src="auth.user.photoUrl"
+                                    alt="Profil"
+                                    class="rounded-circle border"
+                                    style="width: 28px; height: 28px; object-fit: cover;"
+                                />
+                                <span
+                                    v-else
+                                    class="rounded-circle bg-primary text-white fw-bold d-inline-flex align-items-center justify-content-center"
+                                    style="width: 28px; height: 28px; font-size: 0.75rem;"
+                                >
+                                    {{ userInitials }}
+                                </span>
+                                <span class="small fw-semibold d-none d-md-inline">{{ auth?.user?.name }}</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+                                <li>
+                                    <Link class="dropdown-item small" href="/mon-profil">
+                                        <i class="bi bi-person-circle me-2"></i>{{ t('layout.profile') }}
+                                    </Link>
+                                </li>
+                                <li>
+                                    <Link class="dropdown-item small" href="/parametres-espace">
+                                        <i class="bi bi-gear me-2"></i>{{ t('layout.settings') }}
+                                    </Link>
+                                </li>
+                                <li><hr class="dropdown-divider" /></li>
+                                <li>
+                                    <button
+                                        type="button"
+                                        class="dropdown-item small text-danger"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#modalConfirmLogout"
+                                    >
+                                        <i class="bi bi-box-arrow-right me-2"></i>{{ t('layout.logout') }}
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
                 </div>
-            </aside>
+            </nav>
+
+            <!-- Bannière d'alerte Mode Hors Ligne / Synchro / Bail 14 jours -->
+            <div
+                v-if="!offlineIsOnline || offlineNotice"
+                class="px-3 py-2 small fw-semibold d-flex flex-wrap align-items-center justify-content-between gap-2"
+                :class="
+                    leaseExpired
+                        ? 'bg-danger text-white'
+                        : offlineNotice?.type === 'success'
+                            ? 'bg-success text-white'
+                            : offlineNotice?.type === 'danger'
+                                ? 'bg-danger text-white'
+                                : 'bg-warning text-dark'
+                "
+            >
+                <div>
+                    <i
+                        class="bi me-2"
+                        :class="
+                            leaseExpired
+                                ? 'bi-lock-fill'
+                                : offlineNotice?.type === 'success'
+                                    ? 'bi-cloud-check-fill'
+                                    : offlineNotice?.type === 'danger'
+                                        ? 'bi-exclamation-triangle-fill'
+                                        : 'bi-wifi-off'
+                        "
+                    ></i>
+                    <span v-if="leaseExpired">
+                        {{
+                            clockTampered
+                                ? 'Horloge système modifiée : reconnectez-vous à Internet pour réactiver les saisies hors ligne.'
+                                : 'Période hors ligne (14 jours) expirée — Mode lecture seule. Connectez-vous à Internet pour synchroniser et prolonger.'
+                        }}
+                    </span>
+                    <span v-else-if="offlineNotice">{{ offlineNotice.message }}</span>
+                    <span v-else-if="leaseWarning">
+                        Mode Hors Ligne actif — Attention : il reste {{ leaseDaysRemaining }} jour(s) avant reconnexion obligatoire
+                        <template v-if="offlinePendingCount > 0"> ({{ offlinePendingCount }} en attente)</template>.
+                    </span>
+                    <span v-else>
+                        Mode Hors Ligne actif (tous modules sauf IA Auto • WhatsApp envoyé au retour du réseau • bail {{ leaseDaysRemaining }} j)
+                        <template v-if="offlinePendingCount > 0"> — {{ offlinePendingCount }} saisie(s) en attente</template>.
+                    </span>
+                </div>
+                <button
+                    type="button"
+                    class="btn btn-sm py-0 px-2 fw-semibold"
+                    :class="leaseExpired || offlineNotice?.type === 'success' || offlineNotice?.type === 'danger' ? 'btn-light' : 'btn-dark'"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modalOfflineSyncCenter"
+                >
+                    Centre de synchro
+                </button>
+            </div>
 
             <!-- Mobile Offcanvas Sidebar -->
-            <div id="mobileSidebar" class="offcanvas offcanvas-start" tabindex="-1">
-                <div class="offcanvas-header border-bottom">
+            <div id="mobileSidebar" class="offcanvas offcanvas-start bg-dark text-white" tabindex="-1">
+                <div class="offcanvas-header border-bottom border-secondary">
                     <h5 class="offcanvas-title fw-bold">{{ tenant?.name ?? 'MboaCar' }}</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
                 </div>
                 <div class="offcanvas-body">
                     <div v-for="group in menuGroups" :key="group.title" class="mb-3">
-                        <div class="text-uppercase text-muted fw-bold px-2 mb-1" style="font-size: 0.7rem;">
+                        <div class="tenant-sidebar-group-title px-2 mb-1">
                             {{ group.title }}
                         </div>
-                        <ul class="nav nav-pills flex-column gap-1">
+                        <ul class="nav flex-column gap-1">
                             <li v-for="item in group.items" :key="item.href" class="nav-item">
                                 <Link
                                     :href="item.href"
-                                    class="nav-link sidebar-link d-flex align-items-center gap-2 py-2 px-3 small"
-                                    :class="{ active: isActive(item.href) }"
+                                    class="tenant-sidebar-link d-flex align-items-center justify-content-between py-2 px-3 small text-decoration-none"
+                                    :class="{ 'is-active': isActive(item.href) }"
                                 >
-                                    <i :class="`bi ${item.icon}`"></i>
-                                    <span>{{ item.label }}</span>
+                                    <span class="d-flex align-items-center gap-2">
+                                        <i :class="`bi ${item.icon}`"></i>
+                                        <span>{{ item.label }}</span>
+                                    </span>
+                                    <span
+                                        v-if="badgeCountFor(item.href) > 0"
+                                        class="badge rounded-pill"
+                                        :class="badgeColorClass(item.href)"
+                                        style="font-size: 0.68rem;"
+                                    >
+                                        {{ badgeCountFor(item.href) }}
+                                    </span>
                                 </Link>
                             </li>
                         </ul>
                     </div>
 
                     <div v-if="!tenant?.isReadOnly && (tenant?.type === 'garage' || !tenant?.type)" class="mb-3">
-                        <div class="text-uppercase text-muted fw-bold px-2 mb-1" style="font-size: 0.7rem;">
+                        <div class="tenant-sidebar-group-title px-2 mb-1">
                             {{ t('layoutExtra.marketplace') }}
                         </div>
-                        <ul class="nav nav-pills flex-column gap-1">
+                        <ul class="nav flex-column gap-1">
                             <li class="nav-item">
-                                <Link href="/marketplace-gestion/produits" class="nav-link sidebar-link d-flex align-items-center gap-2 py-2 px-3 small" :class="{ active: isActive('/marketplace-gestion/produits') }">
+                                <Link href="/marketplace-gestion/produits" class="tenant-sidebar-link d-flex align-items-center gap-2 py-2 px-3 small text-decoration-none" :class="{ 'is-active': isActive('/marketplace-gestion/produits') }">
                                     <i class="bi bi-box2-heart"></i><span>{{ t('layoutExtra.myProducts') }}</span>
                                 </Link>
                             </li>
                             <li class="nav-item">
-                                <Link href="/marketplace-gestion/commandes" class="nav-link sidebar-link d-flex align-items-center gap-2 py-2 px-3 small" :class="{ active: isActive('/marketplace-gestion/commandes') }">
-                                    <i class="bi bi-bag-check"></i><span>{{ t('layoutExtra.orders') }}</span>
+                                <Link href="/marketplace-gestion/commandes" class="tenant-sidebar-link d-flex align-items-center justify-content-between py-2 px-3 small text-decoration-none" :class="{ 'is-active': isActive('/marketplace-gestion/commandes') }">
+                                    <span class="d-flex align-items-center gap-2"><i class="bi bi-bag-check"></i><span>{{ t('layoutExtra.orders') }}</span></span>
+                                    <span v-if="pendingMarketplaceOrdersCount > 0" class="badge bg-danger rounded-pill" style="font-size: 0.68rem;">
+                                        {{ pendingMarketplaceOrdersCount }}
+                                    </span>
                                 </Link>
                             </li>
                         </ul>
                     </div>
 
-                    <div v-if="!tenant?.isReadOnly" class="pt-2 border-top">
-                        <ul class="nav nav-pills flex-column gap-1">
+                    <div v-if="!tenant?.isReadOnly" class="pt-2 border-top border-secondary">
+                        <ul class="nav flex-column gap-1">
                             <li class="nav-item">
-                                <Link href="/tutoriel" class="nav-link sidebar-link d-flex align-items-center gap-2 py-2 px-3 small" :class="{ active: isActive('/tutoriel') }">
+                                <Link href="/tutoriel" class="tenant-sidebar-link d-flex align-items-center gap-2 py-2 px-3 small text-decoration-none" :class="{ 'is-active': isActive('/tutoriel') }">
                                     <i class="bi bi-book"></i><span>{{ t('layoutExtra.tutorial') }}</span>
                                 </Link>
                             </li>
@@ -783,3 +859,68 @@ function resetDemo() {
         <BackToTop />
     </div>
 </template>
+
+<style scoped>
+/* Desktop Vertical Sidebar FIXE à gauche */
+.tenant-sidebar-fixed {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 264px;
+    height: 100vh;
+    z-index: 1030;
+    background: linear-gradient(180deg, #0f172a 0%, #111c33 100%);
+    color: #e2e8f0;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 4px 0 24px rgba(15, 23, 42, 0.14);
+}
+
+.tenant-sidebar-scroll {
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+
+.tenant-sidebar-scroll::-webkit-scrollbar {
+    width: 5px;
+}
+
+.tenant-sidebar-scroll::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.35);
+    border-radius: 999px;
+}
+
+.tenant-sidebar-group-title {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: rgba(148, 163, 184, 0.78);
+}
+
+.tenant-sidebar-link {
+    color: #cbd5e1;
+    border-radius: 10px;
+    font-weight: 500;
+    transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.tenant-sidebar-link:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+}
+
+.tenant-sidebar-link.is-active {
+    background: #2563eb;
+    color: #ffffff;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+}
+
+/* Décalage de la colonne principale droite sur desktop pour laisser place à la Sidebar fixe */
+@media (min-width: 992px) {
+    .tenant-main-column {
+        margin-left: 264px;
+    }
+}
+</style>
